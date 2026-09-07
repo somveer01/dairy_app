@@ -76,19 +76,23 @@ export const DailyRegisterScreen = () => {
     );
   }, [customers, searchFilter]);
 
+  const handleDeleteEntry = (entry: MilkEntry, customerName: string) => {
+    confirmAction(
+      'Delete Milk Entry (दूध एंट्री हटाएं)',
+      `Delete ${customerName}'s ${entry.quantityLitres}L (${entry.milkType === 'cow' ? 'Cow' : 'Buffalo'}) entry for ${entry.session} on ${entry.date}?`,
+      async () => {
+        await StorageService.deleteMilkEntry(entry.id);
+        await refreshMilkEntries();
+      },
+      'Delete (हटाएं)',
+      'Cancel'
+    );
+  };
+
   const handleQuickAddDefault = async (customer: Customer) => {
     const existing = sessionEntriesMap.get(customer.id);
     if (existing) {
-      confirmAction(
-        'Delivery Recorded',
-        `${customer.name} already has ${existing.quantityLitres}L marked. Remove it?`,
-        async () => {
-          await StorageService.deleteMilkEntry(existing.id);
-          await refreshMilkEntries();
-        },
-        'Remove',
-        'Keep'
-      );
+      handleDeleteEntry(existing, customer.name);
       return;
     }
 
@@ -359,9 +363,19 @@ export const DailyRegisterScreen = () => {
                         style={styles.editIconBtn}
                         onPress={() => openCustomEntryModal(item)}
                         activeOpacity={0.7}
-                        hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                       >
                         <Text style={styles.editIconText}>✏️</Text>
+                      </TouchableOpacity>
+
+                      {/* Delete Entry Button */}
+                      <TouchableOpacity
+                        style={styles.deleteIconBtn}
+                        onPress={() => handleDeleteEntry(entry, item.name)}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                      >
+                        <Text style={styles.deleteIconText}>🗑️</Text>
                       </TouchableOpacity>
                     </View>
                   ) : (
@@ -462,6 +476,22 @@ export const DailyRegisterScreen = () => {
               />
 
               <View style={styles.modalButtonRow}>
+                {selectedCustomer && sessionEntriesMap.has(selectedCustomer.id) && (
+                  <TouchableOpacity
+                    style={styles.modalDeleteBtn}
+                    onPress={() => {
+                      const existing = sessionEntriesMap.get(selectedCustomer.id);
+                      if (existing) {
+                        setModalVisible(false);
+                        handleDeleteEntry(existing, selectedCustomer.name);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.modalDeleteBtnText}>🗑️ Delete</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.modalCancelBtn}
                   onPress={() => setModalVisible(false)}
@@ -617,6 +647,13 @@ const styles = StyleSheet.create({
   paidBtnTextPending: { color: '#854d0e' },
   editIconBtn: { padding: 8, marginLeft: 2 },
   editIconText: { fontSize: 14 },
+  deleteIconBtn: {
+    padding: 8,
+    marginLeft: 2,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2'
+  },
+  deleteIconText: { fontSize: 14 },
   emptyContainer: { alignItems: 'center', marginTop: 50 },
   emptyEmoji: { fontSize: 36, marginBottom: 8 },
   emptyText: { color: '#94a3b8', fontSize: 14 },
@@ -669,5 +706,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#0284c7'
   },
-  modalSaveBtnText: { color: '#ffffff', fontWeight: 'bold' }
+  modalSaveBtnText: { color: '#ffffff', fontWeight: 'bold' },
+  modalDeleteBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5'
+  },
+  modalDeleteBtnText: { color: '#dc2626', fontWeight: 'bold', fontSize: 13 }
 });
