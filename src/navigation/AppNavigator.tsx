@@ -15,18 +15,9 @@ export const AppNavigator = () => {
   const { t } = useApp();
   const insets = useSafeAreaInsets();
 
-  const isWeb = Platform.OS === 'web';
-  const isMobileScreen = isWeb
-    ? (typeof window !== 'undefined' && (window.innerWidth <= 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')))
-    : true;
-
-  // Allocate 26px bottom clearance on phones so icons and labels float above Android Back and Home buttons
-  const phoneBottomPadding = 26;
-  const safeBottom = insets.bottom > 0
-    ? Math.max(insets.bottom, isMobileScreen ? phoneBottomPadding : 8)
-    : (isMobileScreen ? phoneBottomPadding : 8);
-
-  const barHeight = 56 + safeBottom;
+  // Calculate safe bottom padding ensuring plenty of vertical space for both icon AND full caption label
+  const safeBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 8 : 6);
+  const barHeight = Platform.OS === 'ios' ? (62 + insets.bottom) : 66;
 
   const renderTabIcon = (emoji: string, focused: boolean) => (
     <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
@@ -58,7 +49,7 @@ export const AppNavigator = () => {
         tabBarAllowFontScaling: false,
         tabBarStyle: {
           height: barHeight,
-          paddingTop: 6,
+          paddingTop: 4,
           paddingBottom: safeBottom,
           backgroundColor: '#ffffff',
           borderTopWidth: 1,
@@ -76,11 +67,11 @@ export const AppNavigator = () => {
           alignItems: 'center'
         },
         tabBarLabelStyle: {
-          fontSize: 10.5,
+          fontSize: 11,
           fontWeight: '600',
           letterSpacing: -0.2,
-          marginTop: 1,
-          marginBottom: Platform.OS === 'ios' ? 0 : 2
+          marginTop: 2,
+          lineHeight: 14
         }
       }}
     >
@@ -135,9 +126,9 @@ export const AppNavigator = () => {
 
 const styles = StyleSheet.create({
   tabIconWrap: {
-    paddingVertical: 2,
     paddingHorizontal: 10,
-    borderRadius: 14,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center'
   },
@@ -145,6 +136,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0f2fe'
   },
   tabIconEmoji: {
-    fontSize: 18
+    fontSize: 17,
+    lineHeight: 20
   }
 });
