@@ -2,21 +2,24 @@
   "short_name": "DairyApp",
   "name": "Dairy Milk Supplier Register",
   "description": "Daily milk register, billing, and customer management for milk suppliers",
+  "id": "/dairy_app/",
   "icons": [
     {
       "src": "/dairy_app/assets/icon.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "/dairy_app/assets/icon.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/dairy_app/",
-  "background_color": "#16a34a",
-  "theme_color": "#16a34a",
+  "background_color": "#ffffff",
+  "theme_color": "#0284c7",
   "display": "standalone",
   "orientation": "portrait",
   "scope": "/dairy_app/"
