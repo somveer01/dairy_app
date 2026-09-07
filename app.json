@@ -24,6 +24,9 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "experiments": {
+      "baseUrl": "/dairy_app"
+    },
     "plugins": [
       "expo-sharing",
       [
