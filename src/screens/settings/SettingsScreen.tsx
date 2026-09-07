@@ -42,18 +42,18 @@ export const SettingsScreen = () => {
     setIsSyncingCloud(true);
     const res = await FirebaseSyncService.testConnection();
     setIsSyncingCloud(false);
-    Alert.alert(res.success ? 'Firebase Connected' : 'Connection Notice', res.message);
+    showAlert(res.success ? 'Firebase Connected' : 'Connection Notice', res.message);
   };
 
   const handleCloudUpload = async () => {
     if (!supplier) {
-      Alert.alert('Notice', 'No active supplier profile.');
+      showAlert('Notice', 'No active supplier profile.');
       return;
     }
     setIsSyncingCloud(true);
     const res = await FirebaseSyncService.uploadAllToCloud(supplier);
     setIsSyncingCloud(false);
-    Alert.alert(res.success ? 'Cloud Backup Complete' : 'Sync Error', res.message);
+    showAlert(res.success ? 'Cloud Backup Complete' : 'Sync Error', res.message);
   };
 
   const handleCloudDownload = async () => {
