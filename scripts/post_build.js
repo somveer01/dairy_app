@@ -36,6 +36,9 @@ if (fs.existsSync('assets/icon.png')) {
   if (!fs.existsSync('dist/assets')) fs.mkdirSync('dist/assets', { recursive: true });
   fs.copyFileSync('assets/icon.png', 'dist/assets/icon.png');
 }
+if (fs.existsSync('assets/training.html')) {
+  fs.copyFileSync('assets/training.html', 'dist/training.html');
+}
 fs.writeFileSync('dist/.nojekyll', '');
 
 // 3. PWA Service Worker (dist/sw.js)
@@ -44,6 +47,7 @@ const CACHE_NAME = 'dairy-pwa-v3';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
+  '/dairy_app/training.html',
   '/dairy_app/manifest.json',
   '/dairy_app/favicon.ico',
   '/dairy_app/assets/icon.png'

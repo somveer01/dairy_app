@@ -10,7 +10,8 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
-  Platform
+  Platform,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
@@ -243,6 +244,36 @@ export const SettingsScreen = () => {
               <Text style={styles.shareBackupBtnText}>📤 Share Backup</Text>
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Staff Training Workflow Video */}
+        <Text style={styles.sectionHeader}>🎓 Staff Training Video (ट्रेनिंग वीडियो)</Text>
+        <View style={styles.trainingCard}>
+          <View style={styles.storageHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.storageTitle}>Complete Seller Training Video</Text>
+              <Text style={styles.trainingSubtitle}>7 Interactive Modules • Hindi & English</Text>
+            </View>
+            <View style={styles.trainingBadge}>
+              <Text style={styles.trainingBadgeText}>▶ Video</Text>
+            </View>
+          </View>
+          <Text style={styles.storageSubtext}>
+            Interactive step-by-step video training for milk sellers and staff. Covers customer setup, daily milk register, missing days audit, payments, and WhatsApp billing.
+          </Text>
+          <TouchableOpacity
+            style={styles.openTrainingBtn}
+            onPress={() => {
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                window.open('/dairy_app/training.html', '_blank');
+              } else {
+                Linking.openURL('https://somveer01.github.io/dairy_app/training.html');
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.openTrainingBtnText}>▶ Watch Training Video Guide</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Firebase Cloud Database Card */}
@@ -544,6 +575,34 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 14 },
+
+  // Training Video Card
+  trainingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  trainingSubtitle: { fontSize: 11, color: '#0284c7', fontWeight: '600', marginTop: 1 },
+  trainingBadge: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8
+  },
+  trainingBadgeText: { fontSize: 11, fontWeight: 'bold', color: '#1d4ed8' },
+  openTrainingBtn: {
+    backgroundColor: '#0284c7',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 10
+  },
+  openTrainingBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
 
   // Storage Status Card
   storageStatusCard: {
