@@ -18,6 +18,7 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { FirebaseSyncService } from '../../services/firebaseSyncService';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
+import { InstallAppModal } from '../../components/InstallAppModal';
 
 export const SettingsScreen = () => {
   const {
@@ -35,6 +36,7 @@ export const SettingsScreen = () => {
   } = useApp();
 
   const [inspectorVisible, setInspectorVisible] = useState(false);
+  const [installModalVisible, setInstallModalVisible] = useState(false);
   const [selectedJsonTab, setSelectedJsonTab] = useState<'overview' | 'customers' | 'entries' | 'payments'>('overview');
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
@@ -124,19 +126,17 @@ export const SettingsScreen = () => {
 
   const handleInstallPWA = () => {
     if (Platform.OS === 'web') {
-      const prompt = (window as any).pwaDeferredPrompt;
+      const prompt = typeof window !== 'undefined' ? (window as any).pwaDeferredPrompt : null;
       if (prompt) {
         prompt.prompt();
         prompt.userChoice.then((choiceResult: any) => {
           if (choiceResult.outcome === 'accepted') {
             showAlert('Success', 'Dairy App has been added to your phone screen!');
           }
+          (window as any).pwaDeferredPrompt = null;
         });
       } else {
-        showAlert(
-          'Install on Phone',
-          'To install Dairy App on your phone:\n\n1. Tap the 3 dots (⋮) in your Chrome browser (or Share icon ⎋ in Safari)\n2. Select "Install app" or "Add to Home screen"\n3. The Dairy App icon will appear on your phone screen!'
-        );
+        setInstallModalVisible(true);
       }
     } else {
       showAlert('Installed', 'You are already using the installed Dairy App.');
@@ -496,6 +496,12 @@ export const SettingsScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* App Installation Process Guide Modal */}
+      <InstallAppModal
+        visible={installModalVisible}
+        onClose={() => setInstallModalVisible(false)}
+      />
     </SafeAreaView>
   );
 };

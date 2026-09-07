@@ -151,15 +151,23 @@ const pwaBody = `
       e.preventDefault();
       window.pwaDeferredPrompt = e;
       var banner = document.getElementById('pwa-install-banner');
-      if (banner) {
+      if (banner && !sessionStorage.getItem('pwa_banner_dismissed')) {
         banner.style.display = 'flex';
       }
     });
 
-    document.addEventListener('DOMContentLoaded', function() {
+    function initPwaBanner() {
+      var isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                         window.navigator.standalone === true ||
+                         document.referrer.includes('android-app://');
+
+      var banner = document.getElementById('pwa-install-banner');
       var installBtn = document.getElementById('pwa-install-btn');
       var dismissBtn = document.getElementById('pwa-dismiss-btn');
-      var banner = document.getElementById('pwa-install-banner');
+
+      if (banner && !isStandalone && !sessionStorage.getItem('pwa_banner_dismissed')) {
+        banner.style.display = 'flex';
+      }
 
       if (installBtn) {
         installBtn.addEventListener('click', function() {
@@ -172,7 +180,7 @@ const pwaBody = `
               window.pwaDeferredPrompt = null;
             });
           } else {
-            alert('To install on your phone:\\n\\n1. Tap the 3 dots (⋮) in Chrome (or Share ⎋ in Safari)\\n2. Tap "Install app" or "Add to Home screen"\\n3. The Dairy App icon will appear on your phone home screen!');
+            alert('📲 Dairy App Installation Steps:\\n\\n🤖 Android (Chrome):\\n1. Tap 3 dots (⋮) in Chrome\\n2. Tap "Install app" or "Add to Home screen"\\n3. Confirm Install\\n\\n🍎 iPhone (Safari):\\n1. Tap Share (⎋) in Safari\\n2. Tap "Add to Home Screen"\\n3. Tap "Add"');
           }
         });
       }
@@ -180,6 +188,7 @@ const pwaBody = `
       if (dismissBtn) {
         dismissBtn.addEventListener('click', function() {
           if (banner) banner.style.display = 'none';
+          sessionStorage.setItem('pwa_banner_dismissed', '1');
         });
       }
 
@@ -187,7 +196,13 @@ const pwaBody = `
         if (banner) banner.style.display = 'none';
         window.pwaDeferredPrompt = null;
       });
-    });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initPwaBanner);
+    } else {
+      initPwaBanner();
+    }
 
     // Register Service Worker for PWA installability
     if ('serviceWorker' in navigator) {

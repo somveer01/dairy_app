@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Keyboard
+  Keyboard,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { InstallAppModal } from '../../components/InstallAppModal';
 
 export const DashboardScreen = ({ navigation }: any) => {
   const { t, supplier, setSupplier, customers, milkEntries, payments } = useApp();
@@ -86,6 +88,41 @@ export const DashboardScreen = ({ navigation }: any) => {
     setEditDairyModalVisible(false);
   };
 
+  // App Install Banner & Modal State
+  const [installModalVisible, setInstallModalVisible] = useState(false);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone === true ||
+        (typeof document !== 'undefined' && document.referrer.includes('android-app://'));
+
+      const isDismissed = sessionStorage.getItem('dairy_install_banner_dismissed') === 'true';
+      if (!isStandalone && !isDismissed) {
+        setShowInstallBanner(true);
+      }
+    }
+  }, []);
+
+  const handleOpenInstall = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const prompt = (window as any).pwaDeferredPrompt;
+      if (prompt) {
+        prompt.prompt();
+        prompt.userChoice.then((choice: any) => {
+          if (choice.outcome === 'accepted') {
+            setShowInstallBanner(false);
+          }
+          (window as any).pwaDeferredPrompt = null;
+        });
+        return;
+      }
+    }
+    setInstallModalVisible(true);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <ScrollView
@@ -122,6 +159,38 @@ export const DashboardScreen = ({ navigation }: any) => {
             <Text style={styles.profileBadgeText}>⚙️</Text>
           </TouchableOpacity>
         </View>
+
+        {/* App Installation Prompt Card (Web browser mode) */}
+        {showInstallBanner && (
+          <View style={styles.installBannerCard}>
+            <View style={styles.installBannerIconBox}>
+              <Text style={{ fontSize: 24 }}>📲</Text>
+            </View>
+            <View style={{ flex: 1, paddingHorizontal: 6 }}>
+              <Text style={styles.installBannerTitle}>Install App on Phone</Text>
+              <Text style={styles.installBannerSub}>मोबाइल पर ऐप इंस्टॉल करें (1-टैप में खोलें)</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.installBannerBtn}
+              onPress={handleOpenInstall}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.installBannerBtnText}>Install</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setShowInstallBanner(false);
+                if (typeof window !== 'undefined') {
+                  sessionStorage.setItem('dairy_install_banner_dismissed', 'true');
+                }
+              }}
+              style={styles.installBannerClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={styles.installBannerCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Total Outstanding Dues Card */}
         <View style={styles.dueCard}>
@@ -273,6 +342,12 @@ export const DashboardScreen = ({ navigation }: any) => {
           </View>
         </View>
       </Modal>
+
+      {/* App Installation Process Guide Modal */}
+      <InstallAppModal
+        visible={installModalVisible}
+        onClose={() => setInstallModalVisible(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -436,5 +511,58 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center'
   },
-  modalSaveBtnText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' }
+  modalSaveBtnText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' },
+  installBannerCard: {
+    backgroundColor: '#0284c7',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#0284c7',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  installBannerIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6
+  },
+  installBannerTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold'
+  },
+  installBannerSub: {
+    color: '#e0f2fe',
+    fontSize: 11,
+    marginTop: 2
+  },
+  installBannerBtn: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 6
+  },
+  installBannerBtnText: {
+    color: '#0284c7',
+    fontWeight: 'bold',
+    fontSize: 13
+  },
+  installBannerClose: {
+    marginLeft: 8,
+    padding: 4
+  },
+  installBannerCloseText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    opacity: 0.85
+  }
 });
