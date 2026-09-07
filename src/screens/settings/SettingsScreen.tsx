@@ -57,13 +57,16 @@ export const SettingsScreen = () => {
   };
 
   const handleCloudDownload = async () => {
-    if (!supplier) return;
     confirmAction(
       'Restore from Cloud',
-      'Download your latest records from Firebase Cloud Firestore to this device?',
+      'Download and restore your records from Firebase Cloud to this device?',
       async () => {
         setIsSyncingCloud(true);
-        const res = await FirebaseSyncService.downloadFromCloud(supplier.id);
+        const res = await FirebaseSyncService.downloadFromCloud(supplier?.id);
+        const restoredSupplier = await StorageService.getSupplier();
+        if (restoredSupplier) {
+          setSupplier(restoredSupplier);
+        }
         await refreshCustomers();
         await refreshMilkEntries();
         await refreshPayments();

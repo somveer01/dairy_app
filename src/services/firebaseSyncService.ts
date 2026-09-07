@@ -113,34 +113,68 @@ export const FirebaseSyncService = {
   },
 
   // Download records from Cloud to Device
-  async downloadFromCloud(supplierId: string): Promise<{
+  async downloadFromCloud(supplierId?: string): Promise<{
     success: boolean;
     message: string;
     counts?: { customers: number; entries: number; payments: number };
   }> {
     try {
-      const supplierRef = ref(rtdb, `suppliers/${supplierId}`);
-      const snapshot = await withTimeout(
-        get(supplierRef),
-        15000,
-        'Timed out downloading data from Firebase Cloud.'
-      );
+      let cloudData: any = null;
 
-      if (!snapshot.exists()) {
+      // 1. Try to fetch with specific supplierId if provided
+      if (supplierId) {
+        const supplierRef = ref(rtdb, `suppliers/${supplierId}`);
+        const snapshot = await withTimeout(
+          get(supplierRef),
+          15000,
+          'Timed out downloading data from Firebase Cloud.'
+        );
+        if (snapshot.exists()) {
+          cloudData = snapshot.val();
+        }
+      }
+
+      // 2. If no data found by ID, inspect the 'suppliers' root to find any existing backup
+      if (!cloudData) {
+        const allSuppliersRef = ref(rtdb, 'suppliers');
+        const allSnap = await withTimeout(
+          get(allSuppliersRef),
+          15000,
+          'Timed out searching backups on Firebase Cloud.'
+        );
+
+        if (allSnap.exists()) {
+          const allSuppliersObj = allSnap.val();
+          // Find the first supplier that has data
+          const keys = Object.keys(allSuppliersObj);
+          for (const key of keys) {
+            if (allSuppliersObj[key] && (allSuppliersObj[key].customers || allSuppliersObj[key].milkEntries || allSuppliersObj[key].profile)) {
+              cloudData = allSuppliersObj[key];
+              break;
+            }
+          }
+        }
+      }
+
+      if (!cloudData) {
         return {
           success: false,
-          message: 'No cloud backup found for this dairy profile.'
+          message: 'No cloud backup found on Firebase Cloud. Please click "☁️ Upload to Cloud" first to create a backup!'
         };
       }
 
-      const cloudData = snapshot.val();
+      // Restore supplier profile if found
+      if (cloudData.profile) {
+        await StorageService.saveSupplier(cloudData.profile);
+      }
+
       const cloudCustomersObj = cloudData.customers || {};
       const cloudEntriesObj = cloudData.milkEntries || {};
       const cloudPaymentsObj = cloudData.payments || {};
 
-      const cloudCustomers: Customer[] = Object.values(cloudCustomersObj);
-      const cloudEntries: MilkEntry[] = Object.values(cloudEntriesObj);
-      const cloudPayments: Payment[] = Object.values(cloudPaymentsObj);
+      const cloudCustomers: Customer[] = Array.isArray(cloudCustomersObj) ? cloudCustomersObj : Object.values(cloudCustomersObj);
+      const cloudEntries: MilkEntry[] = Array.isArray(cloudEntriesObj) ? cloudEntriesObj : Object.values(cloudEntriesObj);
+      const cloudPayments: Payment[] = Array.isArray(cloudPaymentsObj) ? cloudPaymentsObj : Object.values(cloudPaymentsObj);
 
       if (cloudCustomers.length > 0) {
         await StorageService.saveCustomersBatch(cloudCustomers);
@@ -154,7 +188,7 @@ export const FirebaseSyncService = {
 
       return {
         success: true,
-        message: `Downloaded from Firebase Cloud! (${cloudCustomers.length} customers, ${cloudEntries.length} entries, ${cloudPayments.length} payments)`,
+        message: `Restored successfully from Firebase Cloud!\n\n• ${cloudCustomers.length} Customers\n• ${cloudEntries.length} Milk Entries\n• ${cloudPayments.length} Payments`,
         counts: {
           customers: cloudCustomers.length,
           entries: cloudEntries.length,
