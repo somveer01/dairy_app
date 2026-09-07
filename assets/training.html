@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dairy Milk App — Staff Training Video Simulation</title>
+  <title>डेयरी सेलर ऐप — संपूर्ण हिंदी ट्रेनिंग वीडियो (Dairy App Training Video)</title>
   <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
   <style>
     @keyframes pulse-ring {
@@ -26,57 +26,66 @@
     }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100 antialiased p-3 sm:p-6 font-sans">
-  <div class="max-w-5xl mx-auto bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+<body class="bg-slate-950 text-slate-100 antialiased p-3 sm:p-6 font-sans">
+  <div class="max-w-5xl mx-auto bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden">
     
     <!-- Top Header Bar -->
-    <div class="bg-slate-950/80 px-4 sm:px-6 py-4 border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-3">
+    <div class="bg-slate-950 px-4 sm:px-6 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-400/30 flex items-center justify-center text-xl shadow-inner">
+        <div class="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-2xl shadow-inner">
           🥛
         </div>
         <div>
           <h1 class="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2">
-            Dairy Seller Training Workflow Video
-            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-              Interactive Training
+            डेयरी सेलर ऐप — ट्रेनिंग वीडियो (Hindi Voice)
+            <span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40">
+              🇮🇳 हिंदी आवाज़
             </span>
           </h1>
           <p class="text-xs text-slate-400" id="headerSubtitle">
-            डेयरी ऐप संपूर्ण प्रशिक्षण वीडियो — Step-by-Step Training Guide
+            दूध रजिस्टर, ग्राहक मैनेजमेंट, ड्यू रिपोर्ट व व्हाट्सएप बिलिंग की पूरी ट्रेनिंग
           </p>
         </div>
       </div>
 
-      <!-- Language & Voice Narration Toggles -->
-      <div class="flex items-center gap-2">
+      <!-- Action Buttons -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button id="downloadVideoBtn" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-700/30 transition transform active:scale-95">
+          <span>⬇️</span> <span id="downloadBtnText">वीडियो डाउनलोड करें (.webm)</span>
+        </button>
         <button id="langToggleBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold text-sky-400 transition">
-          🌐 Switch to हिंदी
+          🌐 Switch to English
         </button>
         <button id="voiceNarrationBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold text-emerald-400 flex items-center gap-1.5 transition">
-          <span id="voiceIcon">🔊</span> Voice Narration: <span id="voiceStatus">ON</span>
+          <span id="voiceIcon">🔊</span> हिंदी आवाज़: <span id="voiceStatus">चालू (ON)</span>
         </button>
       </div>
     </div>
 
-    <!-- Main Player Layout (Video Screen + Chapter Outline) -->
+    <!-- Main Player Layout -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-0">
       
       <!-- Video Screen Area (Left / Center) -->
-      <div class="lg:col-span-8 bg-slate-950 p-4 sm:p-6 flex flex-col justify-between relative min-h-[580px]">
+      <div class="lg:col-span-8 bg-slate-950 p-4 sm:p-6 flex flex-col justify-between relative min-h-[600px]">
         
         <!-- Live Chapter Badge & Timer -->
-        <div class="flex items-center justify-between mb-3 text-xs">
-          <span id="chapterBadge" class="bg-sky-500/20 text-sky-400 border border-sky-500/30 font-bold px-2.5 py-1 rounded-md">
-            MODULE 1 OF 7
+        <div class="flex items-center justify-between mb-2 text-xs">
+          <span id="chapterBadge" class="bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold px-3 py-1 rounded-md tracking-wider">
+            चरण 1 / 7
           </span>
-          <span id="videoTimer" class="font-mono text-slate-400 bg-slate-900 px-2 py-1 rounded border border-slate-800">
-            00:00 / 07:00
-          </span>
+          <div class="flex items-center gap-2">
+            <span id="recordingIndicator" class="hidden text-xs bg-red-600/30 text-red-400 border border-red-500/50 px-2 py-0.5 rounded-md font-bold animate-pulse">
+              ● Recording Video...
+            </span>
+            <span id="videoTimer" class="font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
+              00:00 / 07:00
+            </span>
+          </div>
         </div>
 
-        <!-- Simulated Mobile Display Viewport -->
-        <div class="flex-1 flex items-center justify-center py-2">
+        <!-- Simulated Mobile Display Viewport with Start Overlay -->
+        <div class="flex-1 flex items-center justify-center py-2 relative">
+          
           <!-- Smartphone Outer Frame -->
           <div class="w-[310px] sm:w-[340px] h-[480px] bg-slate-900 border-4 border-slate-700 rounded-[36px] shadow-2xl p-2.5 flex flex-col relative overflow-hidden ring-1 ring-white/10">
             
@@ -91,91 +100,121 @@
             </div>
 
             <!-- Animated Cursor Pointer -->
-            <div id="cursorPointer" class="absolute pointer-events-none transition-all duration-700 z-50 flex items-center gap-1 opacity-0" style="top: 50%; left: 50%;">
-              <div class="w-6 h-6 rounded-full bg-sky-500/30 border-2 border-sky-400 click-ripple flex items-center justify-center text-sm tap-anim">
+            <div id="cursorPointer" class="absolute pointer-events-none transition-all duration-700 z-40 flex items-center gap-1 opacity-0" style="top: 50%; left: 50%;">
+              <div class="w-6 h-6 rounded-full bg-amber-500/30 border-2 border-amber-400 click-ripple flex items-center justify-center text-sm tap-anim">
                 👆
               </div>
-              <span id="cursorLabel" class="bg-sky-950/90 text-sky-200 text-[10px] px-1.5 py-0.5 rounded shadow border border-sky-500/40 whitespace-nowrap">
-                Clicking...
+              <span id="cursorLabel" class="bg-slate-900 text-amber-300 text-[10px] px-2 py-0.5 rounded shadow border border-amber-500/40 whitespace-nowrap font-bold">
+                टच करें...
               </span>
+            </div>
+
+            <!-- Start Video with Hindi Voice Modal Overlay -->
+            <div id="startOverlay" class="absolute inset-0 bg-slate-950/90 backdrop-blur-sm z-50 rounded-[32px] p-6 flex flex-col items-center justify-center text-center">
+              <div class="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center text-3xl mb-3 shadow-xl animate-bounce">
+                ▶️
+              </div>
+              <h3 class="text-base font-bold text-white mb-1">
+                हिंदी ट्रेनिंग वीडियो शुरू करें
+              </h3>
+              <p class="text-xs text-slate-300 mb-5 leading-relaxed px-2">
+                डेयरी सेलर ऐप का पूरा काम हिंदी आवाज़ में समझने के लिए नीचे प्ले बटन दबाएं।
+              </p>
+              <button id="startHindiVideoBtn" class="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold text-sm rounded-xl shadow-xl shadow-amber-500/30 transform active:scale-95 transition">
+                ▶️ वीडियो शुरू करें (Play Hindi Video)
+              </button>
             </div>
 
           </div>
         </div>
 
-        <!-- Subtitles / Narration Caption Bar -->
-        <div class="mt-3 bg-slate-900/90 border border-slate-800 rounded-xl p-3 shadow text-center">
-          <div class="text-[11px] uppercase tracking-wider text-sky-400 font-bold mb-0.5" id="subtitleTitle">
-            TRAINING NARRATION
+        <!-- Hindi Narration Subtitles Bar -->
+        <div class="mt-3 bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-lg text-center">
+          <div class="text-[11px] uppercase tracking-wider text-amber-400 font-bold mb-1 flex items-center justify-center gap-1.5">
+            <span>📢</span> <span id="subtitleTitle">हिंदी आवाज़ एवं व्याख्या (Hindi Narration)</span>
           </div>
-          <p id="subtitleText" class="text-xs sm:text-sm text-slate-200 font-medium leading-relaxed">
-            Welcome to the Dairy Seller app training! Let's learn how to manage daily milk distribution effortlessly.
-          </p>
-          <p id="subtitleHindi" class="text-xs text-amber-300/90 mt-1 font-medium">
+          <p id="subtitleHindi" class="text-xs sm:text-sm text-amber-200 font-semibold leading-relaxed">
             डेयरी मिल्क सेलर ऐप ट्रेनिंग में आपका स्वागत है! आइए समझें कि रोजाना दूध वितरण कैसे मैनेज करें।
+          </p>
+          <p id="subtitleText" class="text-[11px] text-slate-400 mt-1 font-normal">
+            Welcome to the Dairy Seller app training! Let's learn how to manage daily milk distribution effortlessly.
           </p>
         </div>
 
         <!-- Video Player Bottom Controls -->
         <div class="mt-4 pt-3 border-t border-slate-800 flex flex-col gap-2.5">
           <!-- Scrubber Progress Bar -->
-          <div class="relative w-full h-2 bg-slate-800 rounded-full overflow-hidden cursor-pointer group" id="progressBarContainer">
-            <div id="progressBar" class="h-full bg-sky-500 rounded-full transition-all duration-300 w-[14%]"></div>
+          <div class="relative w-full h-2.5 bg-slate-800 rounded-full overflow-hidden cursor-pointer group" id="progressBarContainer">
+            <div id="progressBar" class="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-300 w-[14%]"></div>
           </div>
 
           <!-- Buttons Row -->
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
-              <button id="prevBtn" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition" title="Previous Step">
+              <button id="prevBtn" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition font-bold" title="पिछला चरण">
                 ⏮
               </button>
-              <button id="playPauseBtn" class="w-11 h-9 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold flex items-center justify-center transition shadow-lg shadow-sky-600/30">
-                ⏸ Pause
+              <button id="playPauseBtn" class="px-4 h-9 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold flex items-center justify-center gap-1.5 transition shadow-lg shadow-amber-500/20 text-xs">
+                ⏸ रोकें (Pause)
               </button>
-              <button id="nextBtn" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition" title="Next Step">
+              <button id="nextBtn" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition font-bold" title="अगला चरण">
                 ⏭
               </button>
-              <button id="restartBtn" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition" title="Restart from Beginning">
+              <button id="restartBtn" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition" title="दोबारा शुरू करें">
                 ↺
               </button>
             </div>
 
             <!-- Speed Controls -->
             <div class="flex items-center gap-1.5 text-xs">
-              <span class="text-slate-400">Speed:</span>
-              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-white" data-speed="1">1x</button>
-              <button class="speed-btn px-2 py-1 rounded bg-sky-600 text-white font-bold" data-speed="1.5">1.5x</button>
-              <button class="speed-btn px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-white" data-speed="2">2x</button>
+              <span class="text-slate-400">गति (Speed):</span>
+              <button class="speed-btn px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:text-white" data-speed="1">1x</button>
+              <button class="speed-btn px-2.5 py-1 rounded bg-amber-500 text-slate-950 font-bold" data-speed="1.3">1.3x</button>
+              <button class="speed-btn px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:text-white" data-speed="1.7">1.7x</button>
             </div>
           </div>
         </div>
 
       </div>
 
-      <!-- Chapter Outline & Key Takeaways (Right Sidebar) -->
-      <div class="lg:col-span-4 bg-slate-900/90 border-t lg:border-t-0 lg:border-l border-slate-700/80 p-4 sm:p-5 flex flex-col justify-between">
+      <!-- Chapter Outline & Curriculum (Right Sidebar) -->
+      <div class="lg:col-span-4 bg-slate-900/90 border-t lg:border-t-0 lg:border-l border-slate-800 p-4 sm:p-5 flex flex-col justify-between">
         <div>
           <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center justify-between">
-            <span>Training Curriculum</span>
-            <span class="text-[11px] font-normal text-slate-400">7 Modules</span>
+            <span id="curriculumHeading">प्रशिक्षण विषय सूची (Curriculum)</span>
+            <span class="text-[11px] font-normal text-amber-400">7 भाग</span>
           </h2>
 
           <div class="space-y-2" id="chapterList">
-            <!-- Rendered by JS -->
+            <!-- Rendered dynamically -->
           </div>
         </div>
 
-        <!-- Staff Quick Cheat Sheet -->
-        <div class="mt-6 bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs">
-          <div class="font-bold text-amber-400 mb-1 flex items-center gap-1.5">
-            <span>⭐</span> Dairy Staff Golden Rules
+        <!-- Download Video & Golden Rules Box -->
+        <div class="mt-6 space-y-3">
+          <div class="bg-gradient-to-br from-emerald-950/60 to-slate-950 border border-emerald-500/30 rounded-xl p-3 text-xs">
+            <div class="font-bold text-emerald-400 mb-1 flex items-center gap-1.5">
+              <span>📹</span> ऑफलाइन वीडियो डाउनलोड
+            </div>
+            <p class="text-slate-300 text-[11px] leading-relaxed mb-2">
+              इस पूरी ट्रेनिंग का वीडियो (.webm/.mp4) सीधे अपने फोन में सेव करके व्हाट्सएप पर डेयरी स्टाफ को भेज सकते हैं।
+            </p>
+            <button id="downloadVideoBtn2" class="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center justify-center gap-1">
+              ⬇️ वीडियो फाइल सेव करें
+            </button>
           </div>
-          <ul class="text-slate-400 space-y-1 text-[11px] list-disc list-inside">
-            <li>Mark <b>Morning</b> deliveries before 10 AM.</li>
-            <li>Use <b>"Mark All Deliveries"</b> for instant bulk logging.</li>
-            <li>Click customer in <b>Due Reports</b> to audit missing days.</li>
-            <li>Share <b>Date-wise WhatsApp bill</b> directly at month-end.</li>
-          </ul>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-xs">
+            <div class="font-bold text-amber-400 mb-1 flex items-center gap-1.5">
+              <span>⭐</span> डेयरी मालिक के जरूरी नियम
+            </div>
+            <ul class="text-slate-400 space-y-1 text-[11px] list-disc list-inside">
+              <li>सुबह का दूध <b>10 बजे</b> से पहले रजिस्टर में मार्क करें।</li>
+              <li><b>"Mark All Deliveries"</b> से 1 सेकंड में सबका दूध दर्ज करें।</li>
+              <li><b>Due Reports</b> में ग्राहक पर क्लिक करके छूटे दिन चेक करें।</li>
+              <li>महीने के अंत में <b>तारीखवार व्हाट्सएप बिल</b> 1-क्लिक में भेजें।</li>
+            </ul>
+          </div>
         </div>
       </div>
 
@@ -183,45 +222,48 @@
 
   </div>
 
+  <!-- Hidden Canvas for Video Recording and Export -->
+  <canvas id="videoCanvas" width="720" height="1280" class="hidden"></canvas>
+
   <script>
-    // --- Training Modules Data ---
+    // --- Training Modules with authentic spoken Hindi ---
     const modules = [
       {
         id: 1,
+        titleHi: "१. डेयरी का नाम व प्रोफाइल सेटअप",
         titleEn: "1. Dairy Name & Supplier Setup",
-        titleHi: "१. डेयरी का नाम और सेटअप",
-        badge: "STEP 1 OF 7",
-        narrationEn: "First, open the app. Enter your Dairy business name (e.g., 'Shree Krishna Dairy') and your phone number. This name will appear on all customer WhatsApp bills.",
-        narrationHi: "सबसे पहले ऐप खोलें। अपनी डेयरी का नाम दर्ज करें (जैसे 'श्री कृष्णा डेयरी')। यह नाम सभी ग्राहकों के व्हाट्सएप बिल पर दिखाई देगा।",
-        cursor: { top: "65%", left: "50%", label: "Save Dairy Name" },
+        badge: "चरण 1 / 7",
+        narrationHi: "नमस्ते! ऐप खोलते ही सबसे पहले अपनी डेयरी का नाम, जैसे 'श्री कृष्णा डेयरी', और अपना मोबाइल नंबर दर्ज करें। यह नाम आपके हर ग्राहक के व्हाट्सएप बिल पर सबसे ऊपर छप कर जाएगा।",
+        narrationEn: "First, open the app. Enter your Dairy business name and phone number. This name will automatically appear on all customer WhatsApp bills.",
+        cursor: { top: "65%", left: "50%", label: "डेयरी नाम सेव करें" },
         renderPhone: () => `
-          <div class="p-3 bg-sky-600 text-white flex justify-between items-center text-xs font-bold shadow">
-            <span>🥛 Shree Krishna Dairy</span>
-            <span class="bg-sky-700 px-2 py-0.5 rounded text-[10px]">Setup</span>
+          <div class="p-3 bg-amber-500 text-slate-950 flex justify-between items-center text-xs font-extrabold shadow">
+            <span>🥛 श्री कृष्णा डेयरी फार्म</span>
+            <span class="bg-slate-950 text-white px-2 py-0.5 rounded text-[10px]">सेटअप</span>
           </div>
           <div class="p-4 flex-1 flex flex-col justify-center">
             <div class="text-center mb-3">
-              <div class="w-14 h-14 bg-sky-100 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-1 shadow-sm">
+              <div class="w-14 h-14 bg-amber-100 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-1 shadow-sm border border-amber-300">
                 🥛
               </div>
-              <h3 class="font-bold text-sm text-slate-800">Welcome, Milk Seller!</h3>
-              <p class="text-[11px] text-slate-500">Enter your business details</p>
+              <h3 class="font-bold text-sm text-slate-900">डेयरी प्रोफाइल सेटअप</h3>
+              <p class="text-[11px] text-slate-500">डेयरी का नाम व संपर्क नंबर भरें</p>
             </div>
             <div class="space-y-2 text-xs">
               <div>
-                <label class="font-semibold text-slate-600">Dairy Name *</label>
-                <div class="p-2 border border-sky-400 rounded-lg bg-sky-50 font-bold text-sky-900 mt-0.5">
-                  Shree Krishna Dairy Farm
+                <label class="font-bold text-slate-700">डेयरी का नाम (Business Name) *</label>
+                <div class="p-2 border-2 border-amber-400 rounded-lg bg-amber-50/70 font-bold text-amber-950 mt-0.5">
+                  श्री कृष्णा डेयरी फार्म (Shree Krishna Dairy)
                 </div>
               </div>
               <div>
-                <label class="font-semibold text-slate-600">Supplier Phone *</label>
-                <div class="p-2 border border-slate-300 rounded-lg bg-white mt-0.5 text-slate-700">
+                <label class="font-bold text-slate-700">मोबाइल नंबर (+91) *</label>
+                <div class="p-2 border border-slate-300 rounded-lg bg-white mt-0.5 text-slate-800 font-semibold">
                   +91 98765 43210
                 </div>
               </div>
-              <button class="w-full bg-sky-600 text-white font-bold py-2.5 rounded-lg shadow mt-2">
-                Save & Continue ›
+              <button class="w-full bg-amber-500 text-slate-950 font-extrabold py-2.5 rounded-lg shadow-md mt-2">
+                सुरक्षित करें और आगे बढ़ें ›
               </button>
             </div>
           </div>
@@ -229,150 +271,144 @@
       },
       {
         id: 2,
+        titleHi: "२. ग्राहक जोड़ना व दूध का भाव सेट करना",
         titleEn: "2. Adding Customers & Milk Rates",
-        titleHi: "२. नए ग्राहक जोड़ना व भाव तय करना",
-        badge: "STEP 2 OF 7",
-        narrationEn: "Go to Customers tab. Tap '+ Add' or '📱 Contacts' to import numbers from your phone. Configure Cow (गाय) or Buffalo (भैंस) milk, default litres, and custom rate per litre.",
-        narrationHi: "ग्राहक (Customers) टैब पर जाएं। '+ Add' या '📱 Contacts' दबाकर फोन से नंबर जोड़ें। गाय या भैंस का दूध, रोजाना की मात्रा और प्रति लीटर भाव सेट करें।",
-        cursor: { top: "78%", left: "50%", label: "Save Customer" },
+        badge: "चरण 2 / 7",
+        narrationHi: "कस्टमर्स टैब में जाएँ। 'कॉन्टैक्ट्स' बटन दबाकर फोन से नंबर जोड़ें। गाय या भैंस का दूध चुनें, रोजाना की लीटर मात्रा और प्रति लीटर का भाव सेट करके ग्राहक को सुरक्षित करें।",
+        narrationEn: "Go to Customers tab. Tap 'Contacts' to import numbers from your phone. Configure Cow or Buffalo milk, default daily litres, and rate per litre.",
+        cursor: { top: "78%", left: "50%", label: "ग्राहक सुरक्षित करें" },
         renderPhone: () => `
-          <div class="p-3 bg-sky-600 text-white flex justify-between items-center text-xs font-bold shadow">
-            <span>👥 Customer Master</span>
-            <span class="bg-sky-700 px-2 py-0.5 rounded text-[10px]">+ Add</span>
+          <div class="p-3 bg-amber-500 text-slate-950 flex justify-between items-center text-xs font-extrabold shadow">
+            <span>👥 ग्राहक सूची (Customers)</span>
+            <span class="bg-slate-950 text-white px-2 py-0.5 rounded text-[10px]">+ नया ग्राहक</span>
           </div>
           <div class="p-3 flex-1 flex flex-col justify-between text-xs">
             <div class="space-y-2">
               <div class="p-2 bg-emerald-50 border border-emerald-300 rounded-lg">
-                <span class="font-bold text-emerald-800">👤 Customer: Ramesh Kumar</span>
-                <p class="text-[10px] text-emerald-600">📞 +91 98123 45678</p>
+                <span class="font-bold text-emerald-900">👤 ग्राहक: रमेश कुमार (Ramesh Kumar)</span>
+                <p class="text-[10px] text-emerald-700 font-medium">📞 +91 98123 45678</p>
               </div>
               <div>
-                <label class="font-semibold text-slate-600">Milk Type</label>
+                <label class="font-bold text-slate-700">दूध का प्रकार (Milk Type)</label>
                 <div class="grid grid-cols-2 gap-2 mt-1">
-                  <div class="p-1.5 border-2 border-amber-500 bg-amber-50 rounded text-center font-bold text-amber-800">
-                    🐄 Cow (गाय)
+                  <div class="p-1.5 border-2 border-amber-500 bg-amber-100/70 rounded text-center font-bold text-amber-900">
+                    🐄 गाय (Cow)
                   </div>
                   <div class="p-1.5 border border-slate-200 bg-white rounded text-center text-slate-500">
-                    🐃 Buffalo (भैंस)
+                    🐃 भैंस (Buffalo)
                   </div>
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <div>
-                  <label class="font-semibold text-slate-600">Daily Litres</label>
-                  <div class="p-1.5 border border-slate-300 rounded bg-white font-bold">2.0 L</div>
+                  <label class="font-bold text-slate-700">रोजाना लीटर</label>
+                  <div class="p-1.5 border border-slate-300 rounded bg-white font-bold text-slate-800">2.0 L</div>
                 </div>
                 <div>
-                  <label class="font-semibold text-slate-600">Rate / Litre</label>
-                  <div class="p-1.5 border border-slate-300 rounded bg-white font-bold">₹55 / L</div>
+                  <label class="font-bold text-slate-700">भाव प्रति लीटर</label>
+                  <div class="p-1.5 border border-slate-300 rounded bg-white font-bold text-slate-800">₹55 / L</div>
                 </div>
               </div>
-              <div class="p-2 bg-sky-50 rounded text-sky-800 font-bold text-center">
-                Estimated Daily: ₹110 / day
+              <div class="p-2 bg-amber-50 border border-amber-200 rounded text-amber-900 font-bold text-center">
+                रोजाना का बिल: ₹110 प्रतिदिन
               </div>
             </div>
-            <button class="w-full bg-sky-600 text-white font-bold py-2 rounded-lg shadow">
-              ✓ Save Customer
+            <button class="w-full bg-amber-500 text-slate-950 font-extrabold py-2 rounded-lg shadow">
+              ✓ ग्राहक सेव करें
             </button>
           </div>
         `
       },
       {
         id: 3,
+        titleHi: "३. सुबह का रजिस्टर व 1-क्लिक मार्क ऑल",
         titleEn: "3. Morning Register & 1-Tap Bulk Mark",
-        titleHi: "३. सुबह का रजिस्टर व 1-क्लिक एंट्री",
-        badge: "STEP 3 OF 7",
-        narrationEn: "On the Register tab, switch between Morning and Evening. Simply tap 'Mark All Deliveries' to log milk for all regular customers at once, or tap on any customer to customize litres.",
-        narrationHi: "रजिस्टर टैब पर सुबह (Morning) और शाम (Evening) चुनें। 'Mark All Deliveries' बटन दबाकर सभी ग्राहकों की दूध एंट्री एक साथ 1 सेकंड में दर्ज करें।",
-        cursor: { top: "34%", left: "50%", label: "1-Tap Mark All" },
+        badge: "चरण 3 / 7",
+        narrationHi: "डेली रजिस्टर में सुबह और शाम का दूध दर्ज करें। 'मार्क ऑल' बटन दबाते ही सभी ग्राहकों की दूध एंट्री सिर्फ एक सेकंड में हो जाएगी। किसी ने कम-ज्यादा लिया हो तो उसका अलग से बदल सकते हैं।",
+        narrationEn: "On the Register tab, switch between Morning and Evening. Simply tap 'Mark All Deliveries' to log milk for all regular customers at once in 1 second.",
+        cursor: { top: "34%", left: "50%", label: "1-क्लिक बल्क मार्क" },
         renderPhone: () => `
-          <div class="p-2.5 bg-sky-600 text-white text-xs font-bold flex justify-between items-center shadow">
-            <span>📋 Daily Milk Register</span>
-            <span class="bg-sky-700 px-2 py-0.5 rounded text-[10px]">07 Sep 2026</span>
+          <div class="p-2.5 bg-amber-500 text-slate-950 text-xs font-extrabold flex justify-between items-center shadow">
+            <span>📋 दैनिक दूध रजिस्टर</span>
+            <span class="bg-slate-950 text-white px-2 py-0.5 rounded text-[10px]">07 Sep 2026</span>
           </div>
-          <!-- Session Switcher -->
           <div class="grid grid-cols-2 p-1.5 bg-slate-200 text-xs font-bold text-center">
-            <div class="py-1 bg-white text-sky-700 rounded shadow-sm">🌅 Morning (सुबह)</div>
-            <div class="py-1 text-slate-600">🌇 Evening (शाम)</div>
+            <div class="py-1 bg-white text-amber-800 rounded shadow-sm">🌅 सुबह (Morning)</div>
+            <div class="py-1 text-slate-600">🌇 शाम (Evening)</div>
           </div>
-          <!-- 1-Tap Bulk Button -->
           <div class="p-2 bg-amber-50 border-b border-amber-200">
-            <button class="w-full bg-amber-500 text-white font-bold py-1.5 rounded-lg text-xs shadow flex items-center justify-center gap-1">
-              ⚡ Mark All Deliveries (20 Customers)
+            <button class="w-full bg-amber-500 text-slate-950 font-extrabold py-1.5 rounded-lg text-xs shadow flex items-center justify-center gap-1">
+              ⚡ Mark All Deliveries (सभी 20 ग्राहक)
             </button>
           </div>
-          <!-- Customer Entry Items -->
           <div class="p-2 flex-1 space-y-1.5 overflow-hidden text-xs">
             <div class="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex justify-between items-center">
               <div>
-                <div class="font-bold text-slate-800">1. Ramesh Kumar</div>
-                <div class="text-[10px] text-slate-500">🐄 Cow • 2.0 L @ ₹55</div>
+                <div class="font-bold text-slate-900">1. रमेश कुमार</div>
+                <div class="text-[10px] text-slate-500">🐄 गाय • 2.0 L @ ₹55</div>
               </div>
               <span class="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5 rounded">✓ ₹110</span>
             </div>
             <div class="p-2 bg-emerald-50 border border-emerald-200 rounded-lg flex justify-between items-center">
               <div>
-                <div class="font-bold text-slate-800">2. Suresh Sharma</div>
-                <div class="text-[10px] text-slate-500">🐃 Buffalo • 1.5 L @ ₹70</div>
+                <div class="font-bold text-slate-900">2. सुरेश शर्मा</div>
+                <div class="text-[10px] text-slate-500">🐃 भैंस • 1.5 L @ ₹70</div>
               </div>
               <span class="bg-emerald-600 text-white font-bold text-[10px] px-2 py-0.5 rounded">✓ ₹105</span>
             </div>
-            <div class="p-2 bg-slate-100 border border-slate-200 rounded-lg flex justify-between items-center opacity-75">
+            <div class="p-2 bg-slate-100 border border-slate-200 rounded-lg flex justify-between items-center opacity-80">
               <div>
-                <div class="font-bold text-slate-700">3. Anita Verma</div>
-                <div class="text-[10px] text-slate-500">🐄 Cow • 1.0 L @ ₹55</div>
+                <div class="font-bold text-slate-700">3. अनिता वर्मा</div>
+                <div class="text-[10px] text-slate-500">🐄 गाय • 1.0 L @ ₹55</div>
               </div>
-              <span class="bg-slate-300 text-slate-700 font-bold text-[10px] px-2 py-0.5 rounded">+ Add</span>
+              <span class="bg-slate-300 text-slate-700 font-bold text-[10px] px-2 py-0.5 rounded">+ जोड़ें</span>
             </div>
           </div>
         `
       },
       {
         id: 4,
+        titleHi: "४. ड्यू रिपोर्ट व 10/20/30 दिन का बकाया",
         titleEn: "4. Due Reports & Billing Summary",
-        titleHi: "४. बकाया रिपोर्ट और 10/20/30 दिन बिल",
-        badge: "STEP 4 OF 7",
-        narrationEn: "In Due Reports, choose 10 Days, 20 Days, or 30 Days. See Total Billed, Total Paid, and Net Due instantly. Red highlights show customers with pending balances.",
-        narrationHi: "ड्यू रिपोर्ट (Due Reports) में 10 दिन, 20 दिन या 30 दिन चुनें। कुल बिल, प्राप्त पेमेंट और बकाया राशि तुरंत देखें। लाल रंग में बकाया ग्राहक साफ दिखते हैं।",
-        cursor: { top: "58%", left: "50%", label: "Tap for Detail" },
+        badge: "चरण 4 / 7",
+        narrationHi: "ड्यू रिपोर्ट में 10 दिन, 20 दिन या महीने का कुल हिसाब देखें। कुल कितना दूध बिका, कितना पैसा जमा हुआ, और कितना बकाया बाकी है, यह लाल रंग में साफ दिखता है।",
+        narrationEn: "In Due Reports, choose 10 Days, 20 Days, or 30 Days. See Total Billed, Total Paid, and Net Due instantly with clear red highlighting for pending dues.",
+        cursor: { top: "58%", left: "50%", label: "तारीखवार रिपोर्ट खोलें" },
         renderPhone: () => `
-          <div class="p-2.5 bg-sky-600 text-white text-xs font-bold flex justify-between items-center shadow">
-            <span>💰 Due Reports (बकाया)</span>
-            <span class="bg-sky-700 px-2 py-0.5 rounded text-[10px]">Filter</span>
+          <div class="p-2.5 bg-amber-500 text-slate-950 text-xs font-extrabold flex justify-between items-center shadow">
+            <span>💰 ड्यू रिपोर्ट (बकाया हिसाब)</span>
+            <span class="bg-slate-950 text-white px-2 py-0.5 rounded text-[10px]">फिल्टर</span>
           </div>
-          <!-- Period Selector -->
           <div class="grid grid-cols-4 p-1 bg-slate-200 text-[10px] font-bold text-center">
-            <div class="py-1 text-slate-600">10 Days</div>
-            <div class="py-1 text-slate-600">20 Days</div>
-            <div class="py-1 bg-white text-sky-700 rounded shadow-sm">30 Days</div>
-            <div class="py-1 text-slate-600">All</div>
+            <div class="py-1 text-slate-600">10 दिन</div>
+            <div class="py-1 text-slate-600">20 दिन</div>
+            <div class="py-1 bg-white text-amber-800 rounded shadow-sm">30 दिन</div>
+            <div class="py-1 text-slate-600">सभी</div>
           </div>
-          <!-- Summary Banner -->
-          <div class="m-2 p-2 bg-sky-700 text-white rounded-lg flex justify-between text-center text-xs">
-            <div><span class="text-[10px] opacity-80">Billed</span><div class="font-bold">₹18,500</div></div>
-            <div class="w-px bg-sky-500"></div>
-            <div><span class="text-[10px] opacity-80">Paid</span><div class="font-bold">₹12,000</div></div>
-            <div class="w-px bg-sky-500"></div>
-            <div><span class="text-[10px] text-amber-200">Net Due</span><div class="font-bold text-amber-300">₹6,500</div></div>
+          <div class="m-2 p-2 bg-slate-900 text-white rounded-lg flex justify-between text-center text-xs">
+            <div><span class="text-[10px] text-slate-400">कुल बिल</span><div class="font-bold">₹18,500</div></div>
+            <div class="w-px bg-slate-700"></div>
+            <div><span class="text-[10px] text-slate-400">जमा</span><div class="font-bold">₹12,000</div></div>
+            <div class="w-px bg-slate-700"></div>
+            <div><span class="text-[10px] text-amber-300">बकाया</span><div class="font-bold text-amber-400">₹6,500</div></div>
           </div>
-          <!-- Customer Cards -->
           <div class="p-2 flex-1 space-y-2 text-xs">
-            <div class="p-2.5 bg-white border-2 border-sky-300 rounded-xl shadow-sm">
+            <div class="p-2.5 bg-white border-2 border-amber-400 rounded-xl shadow-sm">
               <div class="flex justify-between items-start">
                 <div>
-                  <span class="font-bold text-slate-900">Ramesh Kumar</span>
-                  <span class="ml-1 text-[9px] bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">📅 Date-wise ›</span>
+                  <span class="font-bold text-slate-900">रमेश कुमार</span>
+                  <span class="ml-1 text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">📅 तारीखवार ›</span>
                   <p class="text-[10px] text-slate-500">📞 98123 45678</p>
                 </div>
                 <div class="text-right">
-                  <div class="text-[10px] text-slate-400">Net Due</div>
+                  <div class="text-[10px] text-slate-400 font-semibold">कुल बकाया</div>
                   <div class="font-bold text-red-600 text-sm">₹880.00</div>
                 </div>
               </div>
               <div class="flex justify-between mt-2 pt-1 border-t border-slate-100 text-[10px] text-slate-600">
-                <span>Vol: 32.0 L</span>
-                <span>Billed: ₹1,760</span>
-                <span>Paid: ₹880</span>
+                <span>दूध: 32.0 L</span>
+                <span>बिल: ₹1,760</span>
+                <span>जमा: ₹880</span>
               </div>
             </div>
           </div>
@@ -380,149 +416,147 @@
       },
       {
         id: 5,
+        titleHi: "५. तारीखवार दूध रिपोर्ट व छूटे हुए दिन",
         titleEn: "5. Customer Date-Wise Delivery & Missing Audit",
-        titleHi: "५. तारीखवार रिपोर्ट व छूटा हुआ दूध चेक करना",
-        badge: "STEP 5 OF 7",
-        narrationEn: "Tap any customer card! A complete date-wise report opens showing every single day. Green indicates Delivered (वितरित), and orange highlights Missing / Skipped days with a 1-tap '+ Log Milk' button.",
-        narrationHi: "किसी भी ग्राहक के नाम पर क्लिक करें! तारीखवार विस्तृत रिपोर्ट खुलेगी। हरा टिक मतलब दूध वितरित, और संतरी रंग मतलब उस दिन दूध नहीं दिया या एंट्री छूटी हुई है।",
-        cursor: { top: "62%", left: "75%", label: "+ Log Missing Milk" },
+        badge: "चरण 5 / 7",
+        narrationHi: "किसी भी ग्राहक के कार्ड पर टच करें। तारीखवार पूरी रिपोर्ट खुलेगी। हरा टिक मतलब उस दिन दूध दिया गया है, और संतरी रंग मतलब उस दिन दूध नहीं दिया या एंट्री छूट गई है। 'लॉग मिल्क' दबाकर तुरंत जोड़ सकते हैं।",
+        narrationEn: "Tap any customer card! A complete date-wise report opens showing every single day. Green indicates Delivered, and orange highlights Missing days with a 1-tap '+ Log Milk' button.",
+        cursor: { top: "62%", left: "75%", label: "+ छूटा दूध जोड़ें" },
         renderPhone: () => `
           <div class="p-2.5 bg-slate-900 text-white text-xs font-bold flex justify-between items-center shadow">
-            <span>📅 Date-Wise Delivery Audit</span>
-            <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded">✕ Close</span>
+            <span>📅 तारीखवार डिलीवरी ऑडिट</span>
+            <span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded">✕ बंद करें</span>
           </div>
-          <div class="p-2 bg-sky-50 border-b border-sky-200 text-xs">
-            <div class="font-bold text-slate-800">Ramesh Kumar (2.0L Cow @ ₹55)</div>
+          <div class="p-2 bg-amber-50 border-b border-amber-200 text-xs">
+            <div class="font-bold text-slate-900">रमेश कुमार (2.0L गाय @ ₹55)</div>
             <div class="flex gap-2 text-[10px] mt-1">
-              <span class="text-emerald-700 font-bold">✓ 8 Delivered</span>
-              <span class="text-amber-600 font-bold">⚠️ 2 Missing Days</span>
-              <span class="text-red-600 font-bold ml-auto">Due: ₹880</span>
+              <span class="text-emerald-700 font-bold">✓ 8 दिन दिया</span>
+              <span class="text-amber-700 font-bold">⚠️ 2 दिन छूटा हुआ</span>
+              <span class="text-red-600 font-bold ml-auto">बकाया: ₹880</span>
             </div>
           </div>
-          <!-- Day by Day Items -->
           <div class="p-2 flex-1 space-y-1.5 overflow-hidden text-xs">
             <div class="p-1.5 bg-white border border-emerald-300 rounded-lg flex justify-between items-center">
               <div class="flex items-center gap-1.5">
                 <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-bold">✓</span>
                 <div>
-                  <div class="font-bold text-[11px] text-slate-800">07 Sep (Mon)</div>
-                  <div class="text-[9px] text-emerald-600">Morning: 2.0L Cow</div>
+                  <div class="font-bold text-[11px] text-slate-900">07 Sep (सोमवार)</div>
+                  <div class="text-[9px] text-emerald-700 font-semibold">सुबह: 2.0L गाय</div>
                 </div>
               </div>
-              <span class="font-bold text-slate-700 text-[11px]">₹110</span>
+              <span class="font-bold text-slate-800 text-[11px]">₹110</span>
             </div>
-            <!-- Missing Day Card -->
-            <div class="p-1.5 bg-amber-50/80 border border-amber-300 rounded-lg flex justify-between items-center">
+            <div class="p-1.5 bg-amber-100/60 border border-amber-400 rounded-lg flex justify-between items-center">
               <div class="flex items-center gap-1.5">
-                <span class="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-[10px] font-bold">⚠️</span>
+                <span class="w-5 h-5 rounded-full bg-amber-200 text-amber-800 flex items-center justify-center text-[10px] font-bold">⚠️</span>
                 <div>
-                  <div class="font-bold text-[11px] text-slate-800">06 Sep (Sun)</div>
-                  <div class="text-[9px] text-amber-600 font-semibold">MISSING / NO DELIVERY</div>
+                  <div class="font-bold text-[11px] text-slate-900">06 Sep (रविवार)</div>
+                  <div class="text-[9px] text-amber-700 font-bold">दूध नहीं दिया / छूटा हुआ</div>
                 </div>
               </div>
-              <button class="bg-amber-500 text-white font-bold text-[10px] px-2 py-1 rounded shadow">
-                + Log Milk
+              <button class="bg-amber-500 text-slate-950 font-extrabold text-[10px] px-2 py-1 rounded shadow">
+                + लॉग मिल्क
               </button>
             </div>
             <div class="p-1.5 bg-white border border-emerald-300 rounded-lg flex justify-between items-center">
               <div class="flex items-center gap-1.5">
                 <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-bold">✓</span>
                 <div>
-                  <div class="font-bold text-[11px] text-slate-800">05 Sep (Sat)</div>
-                  <div class="text-[9px] text-emerald-600">Morning: 2.0L Cow</div>
+                  <div class="font-bold text-[11px] text-slate-900">05 Sep (शनिवार)</div>
+                  <div class="text-[9px] text-emerald-700 font-semibold">सुबह: 2.0L गाय</div>
                 </div>
               </div>
-              <span class="font-bold text-slate-700 text-[11px]">₹110</span>
+              <span class="font-bold text-slate-800 text-[11px]">₹110</span>
             </div>
           </div>
         `
       },
       {
         id: 6,
+        titleHi: "६. व्हाट्सएप पर तारीखवार बिल व पेमेंट",
         titleEn: "6. WhatsApp Sharing & Recording Payments",
-        titleHi: "६. व्हाट्सएप पर तारीखवार बिल व पेमेंट एंट्री",
-        badge: "STEP 6 OF 7",
-        narrationEn: "Tap 'Share Date-wise Log on WhatsApp'. It formats an itemized bill showing every date, litres delivered, missing days, payments, and net due. You can also tap 'Record Payment' when receiving cash or UPI.",
-        narrationHi: "'Share on WhatsApp' दबाएं। यह प्रत्येक तारीख, दूध की मात्रा, छूटे हुए दिन और बकाया राशि का सुंदर बिल बनाकर ग्राहक के व्हाट्सएप पर भेज देता है।",
-        cursor: { top: "82%", left: "50%", label: "Send to WhatsApp" },
+        badge: "चरण 6 / 7",
+        narrationHi: "'व्हाट्सएप पर शेयर करें' दबाएं। यह प्रत्येक तारीख, दूध की मात्रा, छूटे हुए दिन, जमा रकम और कुल बकाया बैलेंस का सुंदर बिल बनाकर ग्राहक के व्हाट्सएप पर भेज देता है। जब पैसे मिलें तो 'रिकॉर्ड पेमेंट' से जमा कर लें।",
+        narrationEn: "Tap 'Share on WhatsApp'. It formats an itemized bill showing every date, litres delivered, missing days, payments, and net due. Tap 'Record Payment' when receiving money.",
+        cursor: { top: "82%", left: "50%", label: "व्हाट्सएप पर भेजें" },
         renderPhone: () => `
           <div class="p-2.5 bg-emerald-700 text-white text-xs font-bold flex justify-between items-center shadow">
-            <span>💬 WhatsApp Statement</span>
-            <span class="text-[10px] bg-emerald-800 px-2 py-0.5 rounded">Ramesh</span>
+            <span>💬 व्हाट्सएप बिल स्टेटमेंट</span>
+            <span class="text-[10px] bg-emerald-900 px-2 py-0.5 rounded">रमेश कुमार</span>
           </div>
-          <!-- WhatsApp Chat Preview -->
           <div class="p-2 flex-1 bg-amber-100/50 flex flex-col justify-end text-xs">
-            <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm space-y-1 text-[11px] text-slate-800">
-              <div class="font-bold text-emerald-800">🥛 Shree Krishna Dairy</div>
-              <div class="text-[10px] text-slate-500">👤 Customer: Ramesh Kumar</div>
-              <div class="text-[10px] text-slate-500">📅 Period: Last 10 Days</div>
-              <div class="p-1 bg-slate-50 rounded text-[10px] font-mono border border-slate-200 text-slate-700">
-                ✓ 07-Sep: 2.0L Cow = ₹110<br/>
-                ⚠️ 06-Sep: NO MILK (छूटा हुआ)<br/>
-                ✓ 05-Sep: 2.0L Cow = ₹110<br/>
-                ✓ 04-Sep: 2.0L Cow = ₹110
+            <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm space-y-1 text-[11px] text-slate-900">
+              <div class="font-bold text-emerald-800">🥛 श्री कृष्णा डेयरी फार्म</div>
+              <div class="text-[10px] text-slate-500">👤 ग्राहक: रमेश कुमार</div>
+              <div class="text-[10px] text-slate-500">📅 अवधि: पिछले 10 दिन</div>
+              <div class="p-1 bg-slate-50 rounded text-[10px] font-mono border border-slate-200 text-slate-800">
+                ✓ 07-Sep: 2.0L गाय = ₹110<br/>
+                ⚠️ 06-Sep: ❌ कोई दूध नहीं (छूटा)<br/>
+                ✓ 05-Sep: 2.0L गाय = ₹110<br/>
+                ✓ 04-Sep: 2.0L गाय = ₹110
               </div>
               <div class="border-t border-slate-200 pt-1 flex justify-between font-bold">
-                <span>Total Billed:</span><span>₹1,760</span>
+                <span>कुल दूध बिल:</span><span>₹1,760</span>
               </div>
               <div class="flex justify-between text-slate-600">
-                <span>Paid (जमा):</span><span>₹880</span>
+                <span>जमा भुगतान:</span><span>₹880</span>
               </div>
               <div class="flex justify-between font-bold text-red-600 text-xs pt-0.5">
-                <span>Net Due (बकाया):</span><span>₹880.00</span>
+                <span>कुल बकाया:</span><span>₹880.00</span>
               </div>
             </div>
             <button class="w-full bg-[#25D366] text-white font-bold py-2 rounded-lg shadow mt-2 flex items-center justify-center gap-1">
-              💬 Open in WhatsApp
+              💬 WhatsApp पर भेजें
             </button>
           </div>
         `
       },
       {
         id: 7,
+        titleHi: "७. बिना इंटरनेट ऑफलाइन काम व बैकअप",
         titleEn: "7. Offline Use, PWA Install & Safety",
-        titleHi: "७. बिना इंटरनेट ऑफलाइन काम व डेटा सुरक्षा",
-        badge: "STEP 7 OF 7",
+        badge: "चरण 7 / 7",
+        narrationHi: "यह ऐप 100% बिना इंटरनेट के भी काम करता है। आपका सारा डेटा फोन में सुरक्षित रहता है। सेटिंग्स में जाकर आप पूरा बैकअप भी ले सकते हैं और ऐप को फोन स्क्रीन पर इंस्टॉल कर सकते हैं।",
         narrationEn: "The app works 100% offline without internet. In Settings, inspect raw records, create JSON backups, and install it on your home screen for fast 1-tap access.",
-        narrationHi: "यह ऐप बिना इंटरनेट के 100% ऑफलाइन काम करता है। सेटिंग्स में जाकर आप डेटा बैकअप ले सकते हैं और ऐप को फोन की होम स्क्रीन पर इंस्टॉल कर सकते हैं।",
-        cursor: { top: "45%", left: "50%", label: "100% Offline Safe" },
+        cursor: { top: "45%", left: "50%", label: "100% ऑफलाइन सुरक्षित" },
         renderPhone: () => `
-          <div class="p-2.5 bg-slate-800 text-white text-xs font-bold flex justify-between items-center shadow">
-            <span>⚙️ Settings & Database</span>
-            <span class="text-[10px] bg-emerald-600 px-2 py-0.5 rounded">● Offline Safe</span>
+          <div class="p-2.5 bg-slate-900 text-white text-xs font-bold flex justify-between items-center shadow">
+            <span>⚙️ सेटिंग्स व डेटा सुरक्षा</span>
+            <span class="text-[10px] bg-emerald-600 px-2 py-0.5 rounded">● ऑफलाइन सुरक्षित</span>
           </div>
           <div class="p-3 flex-1 space-y-2.5 text-xs">
             <div class="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-center">
               <div class="text-2xl mb-1">🛡️</div>
-              <h4 class="font-bold text-emerald-900">100% Offline Storage</h4>
-              <p class="text-[10px] text-emerald-700 mt-0.5">
-                Your data is stored securely in phone memory. Works in village areas without internet.
+              <h4 class="font-bold text-emerald-950">100% ऑफलाइन डेटा सुरक्षा</h4>
+              <p class="text-[10px] text-emerald-800 mt-0.5">
+                इंटरनेट या नेटवर्क ना होने पर भी ऐप पूरा काम करेगा। कोई डेटा कभी डिलीट नहीं होगा।
               </p>
             </div>
             <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
-              <div class="font-bold text-slate-700">Database Records:</div>
+              <div class="font-bold text-slate-800">कुल सुरक्षित रिकॉर्ड:</div>
               <div class="grid grid-cols-3 gap-1 text-center mt-1 text-[10px]">
-                <div class="bg-white p-1 rounded border"><b>20</b> Cust.</div>
-                <div class="bg-white p-1 rounded border"><b>240</b> Entries</div>
-                <div class="bg-white p-1 rounded border"><b>18</b> Pays</div>
+                <div class="bg-white p-1 rounded border"><b>20</b> ग्राहक</div>
+                <div class="bg-white p-1 rounded border"><b>240</b> एंट्री</div>
+                <div class="bg-white p-1 rounded border"><b>18</b> पेमेंट</div>
               </div>
             </div>
-            <button class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg shadow text-xs flex items-center justify-center gap-1.5">
-              📤 Share Full JSON Backup
+            <button class="w-full bg-slate-900 text-white font-bold py-2 rounded-lg shadow text-xs flex items-center justify-center gap-1.5">
+              📤 पूरा बैकअप शेयर करें (.json)
             </button>
           </div>
         `
       }
     ];
 
-    // --- State & Controllers ---
+    // --- State & Variables ---
     let currentModuleIndex = 0;
-    let isPlaying = true;
-    let playbackSpeed = 1.5;
+    let isPlaying = false;
+    let playbackSpeed = 1.3;
     let timerSeconds = 0;
-    let isHindi = false;
+    let isHindi = true; // Default is pure Hindi!
     let voiceEnabled = true;
     let timerInterval = null;
+    let preferredHindiVoice = null;
 
     const phoneScreenEl = document.getElementById('phoneScreen');
     const cursorPointerEl = document.getElementById('cursorPointer');
@@ -542,44 +576,66 @@
     const voiceNarrationBtn = document.getElementById('voiceNarrationBtn');
     const voiceStatusEl = document.getElementById('voiceStatus');
     const voiceIconEl = document.getElementById('voiceIcon');
+    const startOverlay = document.getElementById('startOverlay');
+    const startHindiVideoBtn = document.getElementById('startHindiVideoBtn');
+    const downloadVideoBtn = document.getElementById('downloadVideoBtn');
+    const downloadVideoBtn2 = document.getElementById('downloadVideoBtn2');
+    const downloadBtnText = document.getElementById('downloadBtnText');
+    const recordingIndicator = document.getElementById('recordingIndicator');
+
+    // Find and cache Hindi voice from system
+    function loadVoices() {
+      if ('speechSynthesis' in window) {
+        const voices = window.speechSynthesis.getVoices();
+        preferredHindiVoice = voices.find(v => v.lang.includes('hi') || v.name.includes('Hindi') || v.name.includes('हिन्दी')) || null;
+      }
+    }
+    if ('speechSynthesis' in window) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
 
     // Build sidebar chapter buttons
     function buildChapterList() {
       chapterListEl.innerHTML = modules.map((m, idx) => `
         <button onclick="jumpToModule(${idx})" class="w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between text-xs ${
           idx === currentModuleIndex 
-            ? 'bg-sky-500/20 border-sky-400/50 text-white font-bold shadow' 
+            ? 'bg-amber-500/20 border-amber-400/60 text-white font-bold shadow' 
             : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
         }">
           <div class="flex items-center gap-2">
-            <span class="w-5 h-5 rounded-full ${idx === currentModuleIndex ? 'bg-sky-500 text-white' : 'bg-slate-800 text-slate-400'} flex items-center justify-center text-[10px] font-bold">
+            <span class="w-5 h-5 rounded-full ${idx === currentModuleIndex ? 'bg-amber-500 text-slate-950 font-extrabold' : 'bg-slate-800 text-slate-400'} flex items-center justify-center text-[10px]">
               ${idx + 1}
             </span>
             <span class="truncate max-w-[200px]">${isHindi ? m.titleHi : m.titleEn}</span>
           </div>
-          <span class="text-[10px] text-slate-500">${idx === currentModuleIndex ? '▶ Playing' : ''}</span>
+          <span class="text-[10px] text-amber-400 font-bold">${idx === currentModuleIndex ? '▶ चल रहा है' : ''}</span>
         </button>
       `).join('');
     }
 
-    // Speech Synthesis voiceover
+    // Speech Synthesis in Hindi
     function speakNarration(text, lang) {
       if (!voiceEnabled || !('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang;
+      if (preferredHindiVoice && lang.startsWith('hi')) {
+        utterance.voice = preferredHindiVoice;
+      }
       utterance.rate = playbackSpeed;
+      utterance.pitch = 1.0;
       window.speechSynthesis.speak(utterance);
     }
 
     function renderCurrentModule() {
       const current = modules[currentModuleIndex];
       phoneScreenEl.innerHTML = current.renderPhone();
-      chapterBadgeEl.textContent = `MODULE ${current.id} OF ${modules.length}`;
+      chapterBadgeEl.textContent = isHindi ? current.badge : `STEP ${current.id} OF 7`;
       
-      subtitleTitleEl.textContent = isHindi ? `ट्रेनिंग चरण ${current.id}` : `TRAINING MODULE ${current.id}`;
-      subtitleTextEl.textContent = current.narrationEn;
+      subtitleTitleEl.textContent = isHindi ? `हिंदी आवाज़ एवं व्याख्या (चरण ${current.id})` : `TRAINING MODULE ${current.id}`;
       subtitleHindiEl.textContent = current.narrationHi;
+      subtitleTextEl.textContent = current.narrationEn;
 
       // Position animated cursor
       cursorPointerEl.style.opacity = '1';
@@ -598,11 +654,13 @@
 
       buildChapterList();
 
-      // Trigger narration voice
-      if (isHindi) {
-        speakNarration(current.narrationHi, 'hi-IN');
-      } else {
-        speakNarration(current.narrationEn, 'en-IN');
+      // Trigger Hindi voiceover
+      if (isPlaying) {
+        if (isHindi) {
+          speakNarration(current.narrationHi, 'hi-IN');
+        } else {
+          speakNarration(current.narrationEn, 'en-IN');
+        }
       }
     }
 
@@ -611,9 +669,8 @@
         currentModuleIndex++;
         renderCurrentModule();
       } else {
-        // End reached: pause or loop
         isPlaying = false;
-        playPauseBtn.innerHTML = '▶ Replay';
+        playPauseBtn.innerHTML = '▶️ दोबारा चलाएं (Replay)';
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       }
     }
@@ -640,22 +697,35 @@
         const secs = String(timerSeconds % 60).padStart(2, '0');
         videoTimerEl.textContent = `${mins}:${secs} / 07:00`;
 
-        // Every 8 seconds (adjusted for playbackSpeed), advance module
-        if (timerSeconds > 0 && timerSeconds % Math.round(9 / playbackSpeed) === 0) {
+        // Advance to next module every 9 seconds
+        if (timerSeconds > 0 && timerSeconds % Math.round(9.5 / playbackSpeed) === 0) {
           nextModule();
         }
       }, 1000);
     }
 
+    // Big Start Hindi Video Button click
+    startHindiVideoBtn.addEventListener('click', () => {
+      startOverlay.style.display = 'none';
+      isPlaying = true;
+      playPauseBtn.innerHTML = '⏸ रोकें (Pause)';
+      renderCurrentModule();
+      startTimerLoop();
+    });
+
     // Play/Pause button
     playPauseBtn.addEventListener('click', () => {
+      if (startOverlay.style.display !== 'none') {
+        startOverlay.style.display = 'none';
+      }
       isPlaying = !isPlaying;
-      playPauseBtn.innerHTML = isPlaying ? '⏸ Pause' : '▶ Play';
+      playPauseBtn.innerHTML = isPlaying ? '⏸ रोकें (Pause)' : '▶️ चलाएं (Play)';
       if (!isPlaying && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       } else if (isPlaying) {
         const current = modules[currentModuleIndex];
         speakNarration(isHindi ? current.narrationHi : current.narrationEn, isHindi ? 'hi-IN' : 'en-IN');
+        startTimerLoop();
       }
     });
 
@@ -665,7 +735,7 @@
       currentModuleIndex = 0;
       timerSeconds = 0;
       isPlaying = true;
-      playPauseBtn.innerHTML = '⏸ Pause';
+      playPauseBtn.innerHTML = '⏸ रोकें (Pause)';
       renderCurrentModule();
     });
 
@@ -673,9 +743,9 @@
     document.querySelectorAll('.speed-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         document.querySelectorAll('.speed-btn').forEach(b => {
-          b.className = 'speed-btn px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-white';
+          b.className = 'speed-btn px-2.5 py-1 rounded bg-slate-800 text-slate-400 hover:text-white';
         });
-        e.target.className = 'speed-btn px-2 py-1 rounded bg-sky-600 text-white font-bold';
+        e.target.className = 'speed-btn px-2.5 py-1 rounded bg-amber-500 text-slate-950 font-bold';
         playbackSpeed = parseFloat(e.target.dataset.speed);
         startTimerLoop();
       });
@@ -685,29 +755,27 @@
     langToggleBtn.addEventListener('click', () => {
       isHindi = !isHindi;
       langToggleBtn.textContent = isHindi ? '🌐 Switch to English' : '🌐 Switch to हिंदी';
+      document.getElementById('curriculumHeading').textContent = isHindi ? 'प्रशिक्षण विषय सूची (Curriculum)' : 'Training Curriculum';
       document.getElementById('headerSubtitle').textContent = isHindi 
-        ? 'डेयरी ऐप संपूर्ण प्रशिक्षण वीडियो — Step-by-Step Training Guide'
-        : 'Complete Staff Training Video Simulation — Step-by-Step Training Guide';
+        ? 'दूध रजिस्टर, ग्राहक मैनेजमेंट, ड्यू रिपोर्ट व व्हाट्सएप बिलिंग की पूरी ट्रेनिंग'
+        : 'Step-by-Step Training Guide — Milk Register, Customers, Due Reports & WhatsApp';
       renderCurrentModule();
     });
 
     // Voice Narration Toggle
     voiceNarrationBtn.addEventListener('click', () => {
       voiceEnabled = !voiceEnabled;
-      voiceStatusEl.textContent = voiceEnabled ? 'ON' : 'OFF';
+      voiceStatusEl.textContent = voiceEnabled ? (isHindi ? 'चालू (ON)' : 'ON') : (isHindi ? 'बंद (OFF)' : 'OFF');
       voiceIconEl.textContent = voiceEnabled ? '🔊' : '🔇';
-      voiceNarrationBtn.className = voiceEnabled 
-        ? 'px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold text-emerald-400 flex items-center gap-1.5 transition'
-        : 'px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-semibold text-slate-400 flex items-center gap-1.5 transition';
       if (!voiceEnabled && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
-      } else if (voiceEnabled) {
+      } else if (voiceEnabled && isPlaying) {
         const current = modules[currentModuleIndex];
         speakNarration(isHindi ? current.narrationHi : current.narrationEn, isHindi ? 'hi-IN' : 'en-IN');
       }
     });
 
-    // Click anywhere on progress bar to scrub
+    // Scrub timeline
     document.getElementById('progressBarContainer').addEventListener('click', (e) => {
       const rect = e.currentTarget.getBoundingClientRect();
       const pos = (e.clientX - rect.left) / rect.width;
@@ -715,9 +783,177 @@
       jumpToModule(targetIndex);
     });
 
-    // Initial render
+    // --- HTML5 Canvas Video Recording & Download Engine ---
+    async function recordAndDownloadVideo() {
+      const canvas = document.getElementById('videoCanvas');
+      const ctx = canvas.getContext('2d');
+      if (!canvas || !ctx) {
+        alert('Canvas not supported in this browser.');
+        return;
+      }
+
+      downloadBtnText.textContent = 'वीडियो बन रही है... (0%)';
+      recordingIndicator.classList.remove('hidden');
+
+      // Create stream and MediaRecorder
+      const stream = canvas.captureStream(30);
+      let recorder;
+      try {
+        recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+      } catch {
+        try {
+          recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        } catch {
+          recorder = new MediaRecorder(stream);
+        }
+      }
+
+      const recordedChunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Dairy_App_Hindi_Training_Video.webm';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        downloadBtnText.textContent = '✓ वीडियो डाउनलोड हो गया!';
+        recordingIndicator.classList.add('hidden');
+        setTimeout(() => {
+          downloadBtnText.textContent = 'वीडियो डाउनलोड करें (.webm)';
+        }, 4000);
+      };
+
+      recorder.start();
+
+      // Render each module frame-by-frame on Canvas
+      for (let i = 0; i < modules.length; i++) {
+        const m = modules[i];
+        const progress = Math.round(((i + 1) / modules.length) * 100);
+        downloadBtnText.textContent = `रिकॉर्डिंग जारी है... (${progress}%)`;
+
+        // Render 70 frames (~2.3 seconds per step)
+        for (let f = 0; f < 70; f++) {
+          // 1. Background
+          ctx.fillStyle = '#090d16';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // 2. Header Banner
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(0, 0, canvas.width, 100);
+          ctx.fillStyle = '#090d16';
+          ctx.font = 'bold 36px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('🥛 डेयरी सेलर ऐप — स्टाफ ट्रेनिंग', canvas.width / 2, 65);
+
+          // 3. Phone Mockup Frame
+          ctx.fillStyle = '#1e293b';
+          ctx.roundRect ? ctx.roundRect(60, 140, 600, 880, 40) : ctx.fillRect(60, 140, 600, 880);
+          ctx.fill();
+          ctx.lineWidth = 6;
+          ctx.strokeStyle = '#334155';
+          ctx.stroke();
+
+          // 4. Phone Screen Area
+          ctx.fillStyle = '#f8fafc';
+          ctx.fillRect(80, 180, 560, 820);
+
+          // 5. Phone Screen Header
+          ctx.fillStyle = '#0284c7';
+          ctx.fillRect(80, 180, 560, 80);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 28px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('श्री कृष्णा डेयरी फार्म', 110, 230);
+
+          // 6. Step Content in Phone
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 32px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(m.titleHi, canvas.width / 2, 330);
+
+          // Draw Step illustration boxes
+          ctx.fillStyle = '#e0f2fe';
+          ctx.fillRect(120, 390, 480, 160);
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(120, 390, 480, 160);
+
+          ctx.fillStyle = '#0369a1';
+          ctx.font = 'bold 26px sans-serif';
+          ctx.fillText('✓ ' + m.cursor.label, canvas.width / 2, 480);
+
+          // Draw Simulated List items
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fillRect(120, 580, 480, 90);
+          ctx.fillStyle = '#1e293b';
+          ctx.font = '22px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText('1. रमेश कुमार • 2.0L गाय दूध', 140, 635);
+
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fillRect(120, 690, 480, 90);
+          ctx.fillStyle = '#1e293b';
+          ctx.fillText('2. सुरेश शर्मा • 1.5L भैंस दूध', 140, 745);
+
+          // Action Button in Phone
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(120, 840, 480, 80);
+          ctx.fillStyle = '#090d16';
+          ctx.font = 'bold 26px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('⚡ ' + m.cursor.label, canvas.width / 2, 890);
+
+          // Animated Finger Pointer
+          const bounceY = Math.sin(f * 0.2) * 10;
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(canvas.width / 2 + 120, 880 + bounceY, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 20px sans-serif';
+          ctx.fillText('👆', canvas.width / 2 + 120, 887 + bounceY);
+
+          // 7. Bottom Hindi Narration Subtitle Box
+          ctx.fillStyle = '#020617';
+          ctx.fillRect(40, 1050, 640, 190);
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(40, 1050, 640, 190);
+
+          ctx.fillStyle = '#fbbf24';
+          ctx.font = 'bold 26px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`📢 चरण ${m.id}: ${m.titleHi}`, canvas.width / 2, 1100);
+
+          ctx.fillStyle = '#f8fafc';
+          ctx.font = '22px sans-serif';
+          // Wrap Hindi text
+          const words = m.narrationHi.split(' ');
+          let line1 = words.slice(0, 8).join(' ');
+          let line2 = words.slice(8, 17).join(' ');
+          ctx.fillText(line1, canvas.width / 2, 1150);
+          if (line2) ctx.fillText(line2, canvas.width / 2, 1190);
+
+          await new Promise(r => setTimeout(r, 33)); // ~30fps
+        }
+      }
+
+      recorder.stop();
+    }
+
+    downloadVideoBtn.addEventListener('click', recordAndDownloadVideo);
+    downloadVideoBtn2.addEventListener('click', recordAndDownloadVideo);
+
+    // Initial load
     renderCurrentModule();
-    startTimerLoop();
   </script>
 </body>
 </html>
