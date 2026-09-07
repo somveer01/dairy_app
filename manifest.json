@@ -1,19 +1,23 @@
 {
-  "short_name": "Dairy App",
-  "name": "Dairy Milk Seller - Daily Register & Dues",
-  "description": "Smart Milk Register, Customer Master, Dues Calculator & WhatsApp Billing for Dairy Suppliers",
+  "short_name": "DairyApp",
+  "name": "Dairy Milk Supplier Register",
+  "description": "Daily milk register, billing, and customer management for milk suppliers",
   "icons": [
     {
-      "src": "/dairy_app/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon",
-      "purpose": "any maskable"
+      "src": "/dairy_app/assets/icon.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/dairy_app/assets/icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
     }
   ],
   "start_url": "/dairy_app/",
-  "scope": "/dairy_app/",
-  "background_color": "#f8fafc",
-  "theme_color": "#0284c7",
+  "background_color": "#16a34a",
+  "theme_color": "#16a34a",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "portrait",
+  "scope": "/dairy_app/"
 }
