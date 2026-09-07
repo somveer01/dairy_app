@@ -1,32 +1,64 @@
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
+
+export type DialogType = 'confirm' | 'alert';
+
+export interface DialogConfig {
+  type: DialogType;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  isDestructive?: boolean;
+  icon?: string;
+  onConfirm?: () => void | Promise<void>;
+  onCancel?: () => void;
+}
+
+let activeListener: ((config: DialogConfig | null) => void) | null = null;
+
+export const registerDialogListener = (listener: (config: DialogConfig | null) => void) => {
+  activeListener = listener;
+  return () => {
+    if (activeListener === listener) {
+      activeListener = null;
+    }
+  };
+};
 
 export const confirmAction = (
   title: string,
   message: string,
   onConfirm: () => void | Promise<void>,
-  confirmText = 'OK',
-  cancelText = 'Cancel'
+  confirmText = 'हटाएं (Delete)',
+  cancelText = 'रद्द करें (Cancel)',
+  isDestructive = true
 ) => {
-  if (Platform.OS === 'web') {
-    const fullMessage = title ? `${title}\n\n${message}` : message;
-    const confirmed = typeof window !== 'undefined' ? window.confirm(fullMessage) : true;
-    if (confirmed) {
-      void onConfirm();
-    }
+  if (activeListener) {
+    activeListener({
+      type: 'confirm',
+      title,
+      message,
+      confirmText,
+      cancelText,
+      isDestructive,
+      onConfirm
+    });
   } else {
     Alert.alert(title, message, [
       { text: cancelText, style: 'cancel' },
-      { text: confirmText, style: 'destructive', onPress: onConfirm }
+      { text: confirmText, style: isDestructive ? 'destructive' : 'default', onPress: onConfirm }
     ]);
   }
 };
 
 export const showAlert = (title: string, message?: string) => {
-  if (Platform.OS === 'web') {
-    const fullMessage = title && message ? `${title}\n\n${message}` : (title || message || '');
-    if (typeof window !== 'undefined') {
-      window.alert(fullMessage);
-    }
+  if (activeListener) {
+    activeListener({
+      type: 'alert',
+      title,
+      message: message || '',
+      confirmText: 'ठीक है (OK)'
+    });
   } else {
     Alert.alert(title, message);
   }

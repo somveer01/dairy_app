@@ -77,15 +77,19 @@ export const DailyRegisterScreen = () => {
   }, [customers, searchFilter]);
 
   const handleDeleteEntry = (entry: MilkEntry, customerName: string) => {
+    const milkLabel = entry.milkType === 'cow' ? '🐄 गाय (Cow Milk)' : '🐃 भैंस (Buffalo Milk)';
+    const sessionLabel = entry.session === 'Morning' ? '🌅 सुबह (Morning)' : entry.session === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
+
     confirmAction(
-      'Delete Milk Entry (दूध एंट्री हटाएं)',
-      `Delete ${customerName}'s ${entry.quantityLitres}L (${entry.milkType === 'cow' ? 'Cow' : 'Buffalo'}) entry for ${entry.session} on ${entry.date}?`,
+      'दूध एंट्री हटाएं (Delete Milk Entry)',
+      `क्या आप वाकई यह एंट्री हटाना चाहते हैं?\n• ग्राहक (Customer): ${customerName}\n• मात्रा (Quantity): ${entry.quantityLitres} L (${milkLabel})\n• शिफ्ट (Session): ${sessionLabel}\n• तारीख (Date): ${entry.date}\n• कुल रकम (Amount): ₹${entry.amount.toFixed(0)}`,
       async () => {
         await StorageService.deleteMilkEntry(entry.id);
         await refreshMilkEntries();
       },
-      'Delete (हटाएं)',
-      'Cancel'
+      '🗑️ हटाएं (Delete)',
+      'रद्द करें (Cancel)',
+      true
     );
   };
 
@@ -119,13 +123,15 @@ export const DailyRegisterScreen = () => {
     Keyboard.dismiss();
     const unrecordedCustomers = customers.filter(c => !sessionEntriesMap.has(c.id));
     if (unrecordedCustomers.length === 0) {
-      showAlert('All Recorded', `All ${customers.length} customers are already marked for ${activeSession}!`);
+      showAlert('सबका दूध दर्ज है (All Recorded)', `सभी ${customers.length} ग्राहकों का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`);
       return;
     }
 
+    const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
+
     confirmAction(
-      'Mark All Deliveries',
-      `Record default delivery for all ${unrecordedCustomers.length} remaining customers for ${activeSession} (${selectedDate})?`,
+      'सभी का दूध मार्क करें (Mark All Deliveries)',
+      `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${selectedDate}`,
       async () => {
         const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
           id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}`,
@@ -144,8 +150,9 @@ export const DailyRegisterScreen = () => {
         await StorageService.saveMilkEntriesBatch(newEntries);
         await refreshMilkEntries();
       },
-      `Mark All (${unrecordedCustomers.length})`,
-      'Cancel'
+      `✓ सभी दर्ज करें (${unrecordedCustomers.length})`,
+      'रद्द करें (Cancel)',
+      false
     );
   };
 

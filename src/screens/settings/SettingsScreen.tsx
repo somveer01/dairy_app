@@ -60,8 +60,8 @@ export const SettingsScreen = () => {
 
   const handleCloudDownload = async () => {
     confirmAction(
-      'Restore from Cloud',
-      'Download and restore your records from Firebase Cloud to this device?',
+      'क्लाउड से रिस्टोर करें (Restore from Cloud)',
+      'क्या आप Firebase Cloud से अपने सभी रिकॉर्ड डाउनलोड और रिस्टोर करना चाहते हैं?\n• सूचना: वर्तमान डेटा क्लाउड बैकअप से अपडेट हो जाएगा।',
       async () => {
         setIsSyncingCloud(true);
         const res = await FirebaseSyncService.downloadFromCloud(supplier?.id);
@@ -73,10 +73,11 @@ export const SettingsScreen = () => {
         await refreshMilkEntries();
         await refreshPayments();
         setIsSyncingCloud(false);
-        showAlert(res.success ? 'Restored' : 'Error', res.message);
+        showAlert(res.success ? 'रिस्टोर सफल (Restored)' : 'त्रुटि (Error)', res.message);
       },
-      'Restore',
-      'Cancel'
+      '⬇️ रिस्टोर करें (Restore)',
+      'रद्द करें (Cancel)',
+      false
     );
   };
 
@@ -96,31 +97,33 @@ export const SettingsScreen = () => {
 
   const handleClearCustomers = () => {
     confirmAction(
-      'Remove All Customers',
-      'Are you sure you want to remove all customer profiles? This will completely empty your customer list.',
+      'सभी ग्राहक हटाएं (Remove All Customers)',
+      `क्या आप वाकई सभी ग्राहकों को हटाना चाहते हैं?\n• कुल ग्राहक: ${customers.length} लोग\n• चेतावनी: यह पूरी ग्राहक सूची को खाली कर देगा।`,
       async () => {
         await StorageService.clearAllCustomers();
         await refreshCustomers();
-        showAlert('Customers Removed', 'All customer profiles have been removed.');
+        showAlert('ग्राहक हटा दिए गए (Customers Removed)', 'सभी ग्राहक प्रोफाइल हटा दी गई हैं।');
       },
-      'Remove All',
-      'Cancel'
+      '🗑️ सभी हटाएं (Remove All)',
+      'रद्द करें (Cancel)',
+      true
     );
   };
 
   const handleResetData = () => {
     confirmAction(
-      'Reset All Data',
-      'Clear all customers, deliveries, and payment records? This cannot be undone.',
+      'पूरा डेटा रीसेट करें (Reset All Data)',
+      'क्या आप सभी ग्राहक, दूध का रजिस्टर और पेमेंट रिकॉर्ड पूरी तरह मिटाना चाहते हैं?\n• चेतावनी: यह प्रक्रिया वापस नहीं की जा सकती। सारा डेटा मिट जाएगा।',
       async () => {
         await StorageService.clearAllData();
         await refreshCustomers();
         await refreshMilkEntries();
         await refreshPayments();
-        showAlert('Reset Complete', 'All data has been cleared.');
+        showAlert('डेटा रीसेट पूर्ण (Reset Complete)', 'सभी रिकॉर्ड मिटा दिए गए हैं।');
       },
-      'Reset All',
-      'Cancel'
+      '⚠️ पूरा डेटा मिटाएं (Reset All)',
+      'रद्द करें (Cancel)',
+      true
     );
   };
 
@@ -131,7 +134,7 @@ export const SettingsScreen = () => {
         prompt.prompt();
         prompt.userChoice.then((choiceResult: any) => {
           if (choiceResult.outcome === 'accepted') {
-            showAlert('Success', 'Dairy App has been added to your phone screen!');
+            showAlert('सफल (Success)', 'Dairy App आपकी मोबाइल स्क्रीन पर जोड़ दिया गया है!');
           }
           (window as any).pwaDeferredPrompt = null;
         });
@@ -139,19 +142,20 @@ export const SettingsScreen = () => {
         setInstallModalVisible(true);
       }
     } else {
-      showAlert('Installed', 'You are already using the installed Dairy App.');
+      showAlert('इंस्टॉल्ड (Installed)', 'आप पहले से इंस्टॉल्ड Dairy App का उपयोग कर रहे हैं।');
     }
   };
 
   const handleLogout = () => {
     confirmAction(
-      'Logout',
-      'Are you sure you want to log out?',
+      'लॉगआउट (Logout)',
+      'क्या आप वाकई डेयरी ऐप से लॉगआउट करना चाहते हैं?',
       () => {
         setSupplier(null);
       },
-      'Logout',
-      'Cancel'
+      'लॉगआउट (Logout)',
+      'रद्द करें (Cancel)',
+      false
     );
   };
 

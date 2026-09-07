@@ -113,14 +113,15 @@ export const CustomerListScreen = () => {
 
   const handleDelete = (id: string, custName: string) => {
     confirmAction(
-      'Delete Customer',
-      `Are you sure you want to delete ${custName}?`,
+      'ग्राहक हटाएं (Delete Customer)',
+      `क्या आप वाकई इस ग्राहक को अपनी लिस्ट से हटाना चाहते हैं?\n• ग्राहक का नाम (Customer): ${custName}\n• सूचना: हटाने पर इस ग्राहक का नाम लिस्ट से हट जाएगा।`,
       async () => {
         await StorageService.deleteCustomer(id);
         await refreshCustomers();
       },
-      'Delete',
-      'Cancel'
+      '🗑️ हटाएं (Delete)',
+      'रद्द करें (Cancel)',
+      true
     );
   };
 

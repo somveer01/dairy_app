@@ -337,14 +337,15 @@ export const DueReportsScreen = () => {
 
   const handleDeleteEntry = (entryId: string, dateStr: string) => {
     confirmAction(
-      'Delete Delivery',
-      `Are you sure you want to remove this delivery on ${dateStr}?`,
+      'डिलीवरी एंट्री हटाएं (Delete Delivery)',
+      `क्या आप यह डिलीवरी एंट्री हटाना चाहते हैं?\n• तारीख (Date): ${dateStr}\n• सूचना: यह एंट्री हिसाब और रिपोर्ट से हट जाएगी।`,
       async () => {
         await StorageService.deleteMilkEntry(entryId);
         await refreshMilkEntries();
       },
-      'Delete',
-      'Cancel'
+      '🗑️ हटाएं (Delete)',
+      'रद्द करें (Cancel)',
+      true
     );
   };
 

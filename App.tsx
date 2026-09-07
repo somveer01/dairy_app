@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as ScreenCapture from 'expo-screen-capture';
 import { AppProvider } from './src/context/AppContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { GlobalAlertModal } from './src/components/GlobalAlertModal';
 
 export default function App() {
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function App() {
       <AppProvider>
         <StatusBar style="auto" />
         <RootNavigator />
+        <GlobalAlertModal />
       </AppProvider>
     </SafeAreaProvider>
   );
