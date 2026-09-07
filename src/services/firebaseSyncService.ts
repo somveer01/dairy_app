@@ -1,10 +1,10 @@
-import { doc, setDoc, getDoc, collection, getDocs, writeBatch } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { ref, set, get, child } from 'firebase/database';
+import { rtdb } from '../config/firebase';
 import { Customer, MilkEntry, Payment, Supplier } from '../types';
 import { StorageService } from './storageService';
 
 // Helper to prevent infinite spinner with a timeout
-const withTimeout = <T>(promise: Promise<T>, timeoutMs = 12000, errorMsg = 'Firebase request timed out'): Promise<T> => {
+const withTimeout = <T>(promise: Promise<T>, timeoutMs = 15000, errorMsg = 'Firebase request timed out'): Promise<T> => {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorMsg)), timeoutMs))
@@ -13,35 +13,35 @@ const withTimeout = <T>(promise: Promise<T>, timeoutMs = 12000, errorMsg = 'Fire
 
 function formatFirebaseError(error: any): string {
   const msg = error?.message || String(error);
-  if (msg.includes('Cloud Firestore API has not been used') || msg.includes('disabled') || msg.includes('firestore.googleapis.com')) {
-    return 'Cloud Firestore is not activated in your Firebase project (diaryapp-28278).\n\nTo activate it:\n1. Open https://console.firebase.google.com\n2. Select your project "diaryapp-28278"\n3. Click "Firestore Database" in the left menu\n4. Click "Create database" (choose Test Mode)';
-  }
-  if (msg.includes('PERMISSION_DENIED') || msg.includes('permission-denied') || msg.includes('Missing or insufficient permissions')) {
-    return 'Firebase permission denied. In Firebase Console > Firestore Database > Rules, ensure read/write rules are set to: allow read, write: if true; (Test Mode)';
+  if (msg.includes('PERMISSION_DENIED') || msg.includes('permission_denied')) {
+    return 'Firebase permission denied. In Firebase Console > Realtime Database > Rules, set ".read": true, ".write": true for Test Mode.';
   }
   if (msg.includes('timed out') || msg.includes('TIMEOUT')) {
-    return 'Connection timed out (12s). Please check your internet connection or verify Firestore Database is created in Firebase Console.';
+    return 'Connection timed out (15s). Please check your internet connection.';
   }
-  if (msg.includes('unavailable') || msg.includes('network')) {
-    return 'Firebase Cloud service is currently unreachable. Check your internet connection.';
+  if (msg.includes('network') || msg.includes('NETWORK')) {
+    return 'Network connection issue. Please check your mobile data or Wi-Fi.';
   }
   return msg || 'An unknown error occurred during sync.';
 }
 
 export const FirebaseSyncService = {
-  // Test Firebase Firestore connection
+  // Test Firebase connection
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
-      const testDocRef = doc(db, 'system', 'ping');
+      const pingRef = ref(rtdb, 'system/ping');
       await withTimeout(
-        setDoc(testDocRef, {
+        set(pingRef, {
           lastPing: Date.now(),
           client: 'Dairy Mobile App'
-        }, { merge: true }),
-        8000,
-        'Firebase Ping timed out after 8 seconds.'
+        }),
+        10000,
+        'Firebase Ping timed out after 10 seconds.'
       );
-      return { success: true, message: 'Connected to Firebase Cloud Firestore successfully!' };
+      return {
+        success: true,
+        message: 'Connected to Firebase Cloud Database successfully!'
+      };
     } catch (error: any) {
       console.warn('Firebase connection test error:', error);
       return {
@@ -51,7 +51,7 @@ export const FirebaseSyncService = {
     }
   },
 
-  // Upload all local data to Firebase Cloud Firestore
+  // Upload all local data to Firebase Cloud Realtime Database
   async uploadAllToCloud(supplier: Supplier): Promise<{ success: boolean; message: string }> {
     try {
       if (!supplier || !supplier.id) {
@@ -60,60 +60,44 @@ export const FirebaseSyncService = {
 
       const supplierId = supplier.id;
 
-      // 1. Sync supplier profile with timeout
-      await withTimeout(
-        setDoc(doc(db, 'suppliers', supplierId), {
+      // 1. Fetch local storage data
+      const customers = await StorageService.getCustomers();
+      const milkEntries = await StorageService.getMilkEntries();
+      const payments = await StorageService.getPayments();
+
+      // Format records into indexed objects for Realtime Database
+      const customersMap: Record<string, Customer> = {};
+      customers.forEach(c => {
+        if (c && c.id) customersMap[c.id] = c;
+      });
+
+      const milkEntriesMap: Record<string, MilkEntry> = {};
+      milkEntries.forEach(e => {
+        if (e && e.id) milkEntriesMap[e.id] = e;
+      });
+
+      const paymentsMap: Record<string, Payment> = {};
+      payments.forEach(p => {
+        if (p && p.id) paymentsMap[p.id] = p;
+      });
+
+      // 2. Upload supplier root bundle to Firebase Realtime Database
+      const supplierData = {
+        profile: {
           ...supplier,
           lastSyncedAt: Date.now()
-        }, { merge: true }),
-        10000,
-        'Sync timed out connecting to Firebase Cloud.'
+        },
+        customers: customersMap,
+        milkEntries: milkEntriesMap,
+        payments: paymentsMap
+      };
+
+      const supplierRef = ref(rtdb, `suppliers/${supplierId}`);
+      await withTimeout(
+        set(supplierRef, supplierData),
+        15000,
+        'Upload timed out connecting to Firebase Cloud.'
       );
-
-      // 2. Sync customers in batch
-      const customers = await StorageService.getCustomers();
-      if (customers.length > 0) {
-        const batchSize = 400;
-        for (let i = 0; i < customers.length; i += batchSize) {
-          const chunk = customers.slice(i, i + batchSize);
-          const batch = writeBatch(db);
-          chunk.forEach(c => {
-            const ref = doc(db, 'suppliers', supplierId, 'customers', c.id);
-            batch.set(ref, c, { merge: true });
-          });
-          await withTimeout(batch.commit(), 10000, 'Batch commit timed out for customers.');
-        }
-      }
-
-      // 3. Sync milk entries in batch
-      const milkEntries = await StorageService.getMilkEntries();
-      if (milkEntries.length > 0) {
-        const batchSize = 400;
-        for (let i = 0; i < milkEntries.length; i += batchSize) {
-          const chunk = milkEntries.slice(i, i + batchSize);
-          const batch = writeBatch(db);
-          chunk.forEach(e => {
-            const ref = doc(db, 'suppliers', supplierId, 'milkEntries', e.id);
-            batch.set(ref, e, { merge: true });
-          });
-          await withTimeout(batch.commit(), 10000, 'Batch commit timed out for milk entries.');
-        }
-      }
-
-      // 4. Sync payments in batch
-      const payments = await StorageService.getPayments();
-      if (payments.length > 0) {
-        const batchSize = 400;
-        for (let i = 0; i < payments.length; i += batchSize) {
-          const chunk = payments.slice(i, i + batchSize);
-          const batch = writeBatch(db);
-          chunk.forEach(p => {
-            const ref = doc(db, 'suppliers', supplierId, 'payments', p.id);
-            batch.set(ref, p, { merge: true });
-          });
-          await withTimeout(batch.commit(), 10000, 'Batch commit timed out for payments.');
-        }
-      }
 
       return {
         success: true,
@@ -135,41 +119,35 @@ export const FirebaseSyncService = {
     counts?: { customers: number; entries: number; payments: number };
   }> {
     try {
-      // 1. Download customers
-      const custSnapshot = await withTimeout(
-        getDocs(collection(db, 'suppliers', supplierId, 'customers')),
-        10000,
-        'Timed out reading customers from cloud.'
+      const supplierRef = ref(rtdb, `suppliers/${supplierId}`);
+      const snapshot = await withTimeout(
+        get(supplierRef),
+        15000,
+        'Timed out downloading data from Firebase Cloud.'
       );
-      const cloudCustomers: Customer[] = [];
-      custSnapshot.forEach(d => cloudCustomers.push(d.data() as Customer));
+
+      if (!snapshot.exists()) {
+        return {
+          success: false,
+          message: 'No cloud backup found for this dairy profile.'
+        };
+      }
+
+      const cloudData = snapshot.val();
+      const cloudCustomersObj = cloudData.customers || {};
+      const cloudEntriesObj = cloudData.milkEntries || {};
+      const cloudPaymentsObj = cloudData.payments || {};
+
+      const cloudCustomers: Customer[] = Object.values(cloudCustomersObj);
+      const cloudEntries: MilkEntry[] = Object.values(cloudEntriesObj);
+      const cloudPayments: Payment[] = Object.values(cloudPaymentsObj);
 
       if (cloudCustomers.length > 0) {
         await StorageService.saveCustomersBatch(cloudCustomers);
       }
-
-      // 2. Download entries
-      const entriesSnapshot = await withTimeout(
-        getDocs(collection(db, 'suppliers', supplierId, 'milkEntries')),
-        10000,
-        'Timed out reading milk entries from cloud.'
-      );
-      const cloudEntries: MilkEntry[] = [];
-      entriesSnapshot.forEach(d => cloudEntries.push(d.data() as MilkEntry));
-
       if (cloudEntries.length > 0) {
         await StorageService.saveMilkEntriesBatch(cloudEntries);
       }
-
-      // 3. Download payments
-      const paymentsSnapshot = await withTimeout(
-        getDocs(collection(db, 'suppliers', supplierId, 'payments')),
-        10000,
-        'Timed out reading payments from cloud.'
-      );
-      const cloudPayments: Payment[] = [];
-      paymentsSnapshot.forEach(d => cloudPayments.push(d.data() as Payment));
-
       if (cloudPayments.length > 0) {
         await StorageService.savePaymentsBatch(cloudPayments);
       }
