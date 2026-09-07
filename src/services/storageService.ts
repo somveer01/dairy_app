@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Customer, MilkEntry, Payment, Supplier } from '../types';
-import { generate50Customers } from './mockDataGenerator';
 
 const STORAGE_KEYS = {
   SUPPLIER: '@dairy_supplier',
@@ -16,10 +15,10 @@ export const StorageService = {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.SUPPLIER);
     if (!data) {
       const defaultSupplier: Supplier = {
-        id: 'supp_default_1',
-        name: 'Om Dairy Supplier',
-        phone: '9876543210',
-        businessName: 'Om Fresh Dairy Farm',
+        id: 'supp_1',
+        name: 'My Dairy',
+        phone: '',
+        businessName: 'Fresh Milk Dairy',
         createdAt: Date.now()
       };
       await AsyncStorage.setItem(STORAGE_KEYS.SUPPLIER, JSON.stringify(defaultSupplier));
@@ -32,21 +31,10 @@ export const StorageService = {
     await AsyncStorage.setItem(STORAGE_KEYS.SUPPLIER, JSON.stringify(supplier));
   },
 
-  // Customers
+  // Customers - Clean real data only (no dummy customers)
   async getCustomers(): Promise<Customer[]> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-    if (!data) {
-      const initialCustomers = generate50Customers('supp_default_1');
-      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(initialCustomers));
-      return initialCustomers;
-    }
-    const parsed = JSON.parse(data);
-    if (parsed.length < 50) {
-      const full50 = generate50Customers('supp_default_1');
-      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(full50));
-      return full50;
-    }
-    return parsed;
+    return data ? JSON.parse(data) : [];
   },
 
   async saveCustomer(customer: Customer): Promise<void> {
@@ -75,45 +63,10 @@ export const StorageService = {
     await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(filtered));
   },
 
-  // Milk Entries
+  // Milk Entries - Clean real entries only (no dummy deliveries)
   async getMilkEntries(): Promise<MilkEntry[]> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.MILK_ENTRIES);
-    if (!data) {
-      const today = new Date().toISOString().split('T')[0];
-      const initialEntries: MilkEntry[] = [
-        {
-          id: 'entry_1',
-          supplierId: 'supp_default_1',
-          customerId: 'cust_1',
-          customerName: 'Ramesh Sharma',
-          date: today,
-          session: 'Morning',
-          milkType: 'cow',
-          quantityLitres: 2.0,
-          ratePerLitre: 55,
-          amount: 110,
-          isPaid: false,
-          createdAt: Date.now()
-        },
-        {
-          id: 'entry_2',
-          supplierId: 'supp_default_1',
-          customerId: 'cust_2',
-          customerName: 'Suresh Patel',
-          date: today,
-          session: 'Morning',
-          milkType: 'buffalo',
-          quantityLitres: 1.5,
-          ratePerLitre: 70,
-          amount: 105,
-          isPaid: false,
-          createdAt: Date.now()
-        }
-      ];
-      await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(initialEntries));
-      return initialEntries;
-    }
-    return JSON.parse(data);
+    return data ? JSON.parse(data) : [];
   },
 
   async saveMilkEntry(entry: MilkEntry): Promise<void> {

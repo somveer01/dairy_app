@@ -15,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { FirebaseSyncService } from '../../services/firebaseSyncService';
-import { generate50Customers } from '../../services/mockDataGenerator';
 
 export const SettingsScreen = () => {
   const {
@@ -89,25 +88,6 @@ export const SettingsScreen = () => {
     } catch (err: any) {
       Alert.alert('Share', `Could not open share dialog: ${err?.message || 'Unknown error'}`);
     }
-  };
-
-  const handleSeed50Customers = () => {
-    Alert.alert(
-      'Load 50 Customers',
-      'This will populate 50 realistic Indian dairy customers with mixed Cow & Buffalo milk subscriptions to test bulk register entries and dues.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Load 50 Customers',
-          onPress: async () => {
-            const mock50 = generate50Customers(supplier?.id || 'supp_default_1');
-            await StorageService.saveCustomersBatch(mock50);
-            await refreshCustomers();
-            Alert.alert('Loaded!', `Successfully loaded 50 customers. Check Customers or Daily Register!`);
-          }
-        }
-      ]
-    );
   };
 
   const handleResetData = () => {
@@ -288,22 +268,8 @@ export const SettingsScreen = () => {
           )}
         </View>
 
-        {/* Customer & Data Testing Tools */}
-        <Text style={styles.sectionHeader}>Customer Testing & Data Tools</Text>
-        
-        <TouchableOpacity
-          style={styles.menuItem}
-          onPress={handleSeed50Customers}
-          activeOpacity={0.7}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-        >
-          <Text style={styles.menuIcon}>👥</Text>
-          <View style={styles.menuContent}>
-            <Text style={styles.menuTitle}>Load 50 Test Customers</Text>
-            <Text style={styles.menuSubtitle}>Current customers: {customers.length}</Text>
-          </View>
-          <Text style={styles.badgeAction}>+ 50</Text>
-        </TouchableOpacity>
+        {/* Data Management */}
+        <Text style={styles.sectionHeader}>Data Management</Text>
 
         <TouchableOpacity
           style={styles.menuItem}
