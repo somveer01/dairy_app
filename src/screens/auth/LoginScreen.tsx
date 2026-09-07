@@ -9,10 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Keyboard
+  Keyboard,
+  Modal
 } from 'react-native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { Supplier } from '../../types';
 
 export const LoginScreen = ({ navigation }: any) => {
   const { t, setSupplier } = useApp();
@@ -28,6 +30,12 @@ export const LoginScreen = ({ navigation }: any) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // Dairy Name Setup Modal State
+  const [dairySetupVisible, setDairySetupVisible] = useState(false);
+  const [businessNameInput, setBusinessNameInput] = useState('');
+  const [ownerNameInput, setOwnerNameInput] = useState('');
+  const [verifiedPhoneOrEmail, setVerifiedPhoneOrEmail] = useState('');
+
   const handleSendOtp = () => {
     Keyboard.dismiss();
     if (!phone || phone.length < 10) {
@@ -38,39 +46,47 @@ export const LoginScreen = ({ navigation }: any) => {
     Alert.alert('OTP Sent', `Verification code sent to +91 ${phone}.\n(Use test OTP: 123456)`);
   };
 
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = () => {
     Keyboard.dismiss();
     if (otp === '123456' || otp.length === 6) {
-      const user = {
-        id: 'supp_' + phone,
-        name: 'Dairy Supplier (' + phone.slice(-4) + ')',
-        phone: phone,
-        businessName: 'Krishna Fresh Dairy',
-        createdAt: Date.now()
-      };
-      await StorageService.saveSupplier(user);
-      setSupplier(user);
+      setVerifiedPhoneOrEmail(phone);
+      setBusinessNameInput('');
+      setOwnerNameInput('');
+      setDairySetupVisible(true);
     } else {
       Alert.alert('Invalid OTP', 'Please enter a valid 6-digit OTP code.');
     }
   };
 
-  const handleEmailLogin = async () => {
+  const handleEmailLogin = () => {
     Keyboard.dismiss();
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password.');
       return;
     }
-    const user = {
-      id: 'supp_email_' + Date.now(),
-      name: email.split('@')[0],
-      phone: '9876543210',
-      email: email,
-      businessName: 'Shree Dairy Farm',
+    setVerifiedPhoneOrEmail(email);
+    setBusinessNameInput('');
+    setOwnerNameInput(email.split('@')[0]);
+    setDairySetupVisible(true);
+  };
+
+  const handleSaveDairyProfile = async () => {
+    Keyboard.dismiss();
+    const finalBusiness = businessNameInput.trim() || 'My Dairy Farm';
+    const finalOwner = ownerNameInput.trim() || (verifiedPhoneOrEmail.includes('@') ? verifiedPhoneOrEmail.split('@')[0] : `Dairy Supplier (${verifiedPhoneOrEmail.slice(-4)})`);
+
+    const user: Supplier = {
+      id: 'supp_' + (verifiedPhoneOrEmail.replace(/[^a-zA-Z0-9]/g, '') || Date.now()),
+      name: finalOwner,
+      phone: verifiedPhoneOrEmail.includes('@') ? '' : verifiedPhoneOrEmail,
+      email: verifiedPhoneOrEmail.includes('@') ? verifiedPhoneOrEmail : undefined,
+      businessName: finalBusiness,
       createdAt: Date.now()
     };
+
     await StorageService.saveSupplier(user);
     setSupplier(user);
+    setDairySetupVisible(false);
   };
 
   return (
@@ -216,6 +232,50 @@ export const LoginScreen = ({ navigation }: any) => {
           <Text style={styles.footerText}>Designed for independent milk sellers & dairies</Text>
         </View>
       </ScrollView>
+
+      {/* Dairy Profile Setup Popup Modal */}
+      <Modal visible={dairySetupVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalIcon}>🥛</Text>
+              <Text style={styles.modalTitle}>डेयरी प्रोफाइल सेटअप</Text>
+              <Text style={styles.modalSubtitle}>
+                Welcome! Enter your Dairy & Owner name to personalize bills and reports.
+              </Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>Dairy / Business Name (डेयरी का नाम) *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Radhe Dairy / राधे डेयरी फ़ार्म"
+                placeholderTextColor="#94a3b8"
+                value={businessNameInput}
+                onChangeText={setBusinessNameInput}
+                autoFocus
+              />
+
+              <Text style={styles.modalLabel}>Owner / Your Name (आपका नाम)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Ramesh Kumar / राम कुमार"
+                placeholderTextColor="#94a3b8"
+                value={ownerNameInput}
+                onChangeText={setOwnerNameInput}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalPrimaryBtn}
+              onPress={handleSaveDairyProfile}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalPrimaryBtnText}>🚀 Save & Start (सहेजें और शुरू करें)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 };
@@ -232,30 +292,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     borderRadius: 12,
     padding: 4,
-    marginBottom: 16
+    marginBottom: 20
   },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 8
-  },
-  tabButtonActive: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2
-  },
-  tabText: { fontSize: 14, color: '#64748b', fontWeight: '500' },
+  tabButton: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
+  tabButtonActive: { backgroundColor: '#ffffff', elevation: 2 },
+  tabText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
   tabTextActive: { color: '#0284c7', fontWeight: 'bold' },
   formCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 18,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 3
   },
   label: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 10 },
@@ -280,5 +331,45 @@ const styles = StyleSheet.create({
   linkButton: { alignItems: 'center', marginTop: 14, paddingVertical: 6 },
   linkText: { color: '#0284c7', fontSize: 13, fontWeight: '500' },
   footerNote: { alignItems: 'center', marginTop: 24 },
-  footerText: { fontSize: 12, color: '#94a3b8' }
+  footerText: { fontSize: 12, color: '#94a3b8' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    padding: 20
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10
+  },
+  modalHeader: { alignItems: 'center', marginBottom: 16 },
+  modalIcon: { fontSize: 44, marginBottom: 8 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0f172a' },
+  modalSubtitle: { fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4, paddingHorizontal: 10 },
+  modalBody: { marginVertical: 10 },
+  modalLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 8 },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    backgroundColor: '#f8fafc',
+    color: '#0f172a',
+    marginBottom: 8
+  },
+  modalPrimaryBtn: {
+    backgroundColor: '#16a34a',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 14
+  },
+  modalPrimaryBtnText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' }
 });

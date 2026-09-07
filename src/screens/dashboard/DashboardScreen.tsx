@@ -1,16 +1,20 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  Keyboard
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
+import { StorageService } from '../../services/storageService';
 
 export const DashboardScreen = ({ navigation }: any) => {
-  const { t, supplier, customers, milkEntries, payments } = useApp();
+  const { t, supplier, setSupplier, customers, milkEntries, payments } = useApp();
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -44,6 +48,44 @@ export const DashboardScreen = ({ navigation }: any) => {
     return Math.max(0, totalDeliveriesAmount - totalPaymentsReceived);
   }, [milkEntries, payments]);
 
+  // Dairy Name Setup / Edit Modal State
+  const [editDairyModalVisible, setEditDairyModalVisible] = useState(false);
+  const [dairyNameInput, setDairyNameInput] = useState('');
+  const [ownerNameInput, setOwnerNameInput] = useState('');
+
+  // Automatically prompt if supplier profile has placeholder/default name
+  useEffect(() => {
+    if (
+      supplier &&
+      (supplier.businessName === 'Om Fresh Dairy Farm' ||
+        supplier.name === 'Om Dairy Supplier' ||
+        supplier.businessName === 'Fresh Milk Dairy' ||
+        supplier.businessName === 'Krishna Fresh Dairy' ||
+        !supplier.businessName)
+    ) {
+      setDairyNameInput(supplier.businessName === 'Om Fresh Dairy Farm' ? '' : supplier.businessName);
+      setOwnerNameInput(supplier.name === 'Om Dairy Supplier' ? '' : supplier.name);
+      setEditDairyModalVisible(true);
+    }
+  }, [supplier]);
+
+  const handleSaveDairyProfile = async () => {
+    Keyboard.dismiss();
+    const finalBusiness = dairyNameInput.trim() || 'My Dairy Farm';
+    const finalOwner = ownerNameInput.trim() || supplier?.name || 'Dairy Supplier';
+
+    const updated = {
+      ...(supplier || { id: 'supp_1', createdAt: Date.now() }),
+      phone: supplier?.phone || '',
+      businessName: finalBusiness,
+      name: finalOwner
+    };
+
+    await StorageService.saveSupplier(updated);
+    setSupplier(updated);
+    setEditDairyModalVisible(false);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <ScrollView
@@ -54,10 +96,23 @@ export const DashboardScreen = ({ navigation }: any) => {
       >
         {/* Header greeting */}
         <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greeting} numberOfLines={1}>नमस्ते, {supplier?.name || 'दूध विक्रेता'}</Text>
-            <Text style={styles.businessName} numberOfLines={1}>{supplier?.businessName || 'Dairy Farm'}</Text>
-          </View>
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => {
+              setDairyNameInput(supplier?.businessName === 'Om Fresh Dairy Farm' ? '' : (supplier?.businessName || ''));
+              setOwnerNameInput(supplier?.name === 'Om Dairy Supplier' ? '' : (supplier?.name || ''));
+              setEditDairyModalVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.greeting} numberOfLines={1}>नमस्ते, {supplier?.name || 'दूध विक्रेता'}</Text>
+              <Text style={{ fontSize: 13 }}>✏️</Text>
+            </View>
+            <Text style={styles.businessName} numberOfLines={1}>
+              {supplier?.businessName || 'डेयरी का नाम सेट करें (Tap to set)'}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.profileBadge}
             onPress={() => navigation.navigate('SettingsTab')}
@@ -164,6 +219,60 @@ export const DashboardScreen = ({ navigation }: any) => {
           </View>
         ))}
       </ScrollView>
+
+      {/* Dairy Profile Edit / Setup Popup Modal */}
+      <Modal visible={editDairyModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalIcon}>🥛</Text>
+              <Text style={styles.modalTitle}>डेयरी प्रोफाइल सेट करें</Text>
+              <Text style={styles.modalSubtitle}>
+                Set your dairy farm name and owner name for receipts & daily registers.
+              </Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>Dairy / Business Name (डेयरी का नाम) *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Radhe Dairy / राधे डेयरी फ़ार्म"
+                placeholderTextColor="#94a3b8"
+                value={dairyNameInput}
+                onChangeText={setDairyNameInput}
+                autoFocus
+              />
+
+              <Text style={styles.modalLabel}>Owner / Supplier Name (आपका नाम)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Ramesh Kumar / आपका नाम"
+                placeholderTextColor="#94a3b8"
+                value={ownerNameInput}
+                onChangeText={setOwnerNameInput}
+              />
+            </View>
+
+            <View style={styles.modalBtnRow}>
+              {supplier?.businessName && supplier.businessName !== 'Om Fresh Dairy Farm' && supplier.businessName !== 'Fresh Milk Dairy' ? (
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setEditDairyModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { flex: 1 }]}
+                onPress={handleSaveDairyProfile}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalSaveBtnText}>✓ Save Dairy Profile (सहेजें)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -285,5 +394,47 @@ const styles = StyleSheet.create({
   customerInfo: { flex: 1 },
   customerName: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
   customerSub: { fontSize: 11, color: '#64748b', marginTop: 2 },
-  customerPhone: { fontSize: 12, color: '#0284c7', fontWeight: '500' }
+  customerPhone: { fontSize: 12, color: '#0284c7', fontWeight: '500' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    padding: 20
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10
+  },
+  modalHeader: { alignItems: 'center', marginBottom: 16 },
+  modalIcon: { fontSize: 44, marginBottom: 8 },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0f172a' },
+  modalSubtitle: { fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4, paddingHorizontal: 10 },
+  modalBody: { marginVertical: 10 },
+  modalLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 8 },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    backgroundColor: '#f8fafc',
+    color: '#0f172a',
+    marginBottom: 8
+  },
+  modalBtnRow: { flexDirection: 'row', gap: 10, marginTop: 14, alignItems: 'center' },
+  modalCancelBtn: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#f1f5f9' },
+  modalCancelBtnText: { color: '#64748b', fontWeight: '600' },
+  modalSaveBtn: {
+    backgroundColor: '#16a34a',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center'
+  },
+  modalSaveBtnText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' }
 });
