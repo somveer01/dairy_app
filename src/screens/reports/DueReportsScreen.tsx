@@ -166,7 +166,7 @@ export const DueReportsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
         {/* Period Selector Tabs */}
         <View style={styles.periodTabs}>

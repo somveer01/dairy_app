@@ -45,7 +45,7 @@ export const DashboardScreen = ({ navigation }: any) => {
   }, [milkEntries, payments]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}

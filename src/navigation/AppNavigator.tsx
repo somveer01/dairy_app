@@ -1,6 +1,7 @@
-﻿import React from 'react';
+import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Text, View, StyleSheet, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { DailyRegisterScreen } from '../screens/register/DailyRegisterScreen';
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
@@ -12,14 +13,68 @@ const Tab = createBottomTabNavigator();
 
 export const AppNavigator = () => {
   const { t } = useApp();
+  const insets = useSafeAreaInsets();
+
+  // Calculate responsive bottom padding across all device types and browsers
+  const safeBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'web' ? 10 : 8);
+  const barHeight = Platform.OS === 'ios'
+    ? 58 + insets.bottom
+    : 62 + (insets.bottom > 0 ? insets.bottom : 8);
+
+  const renderTabIcon = (emoji: string, focused: boolean) => (
+    <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
+      <Text style={styles.tabIconEmoji}>{emoji}</Text>
+    </View>
+  );
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: true,
+        headerStyle: {
+          backgroundColor: '#ffffff',
+          elevation: 2,
+          shadowColor: '#000',
+          shadowOpacity: 0.05,
+          shadowRadius: 3,
+          shadowOffset: { width: 0, height: 1 }
+        },
+        headerTitleStyle: {
+          fontWeight: '700',
+          fontSize: 17,
+          color: '#0f172a'
+        },
+        headerTitleAlign: 'center',
         tabBarActiveTintColor: '#0284c7',
-        tabBarInactiveTintColor: '#94a3b8',
-        tabBarStyle: { height: 60, paddingBottom: 8, paddingTop: 6 }
+        tabBarInactiveTintColor: '#64748b',
+        tabBarHideOnKeyboard: true,
+        tabBarAllowFontScaling: false,
+        tabBarStyle: {
+          height: barHeight,
+          paddingTop: 6,
+          paddingBottom: safeBottom,
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#e2e8f0',
+          elevation: 10,
+          shadowColor: '#000',
+          shadowOpacity: 0.08,
+          shadowRadius: 6,
+          shadowOffset: { width: 0, height: -3 }
+        },
+        tabBarItemStyle: {
+          paddingVertical: 2,
+          paddingHorizontal: 0,
+          justifyContent: 'center',
+          alignItems: 'center'
+        },
+        tabBarLabelStyle: {
+          fontSize: 10.5,
+          fontWeight: '600',
+          letterSpacing: -0.2,
+          marginTop: 1,
+          marginBottom: Platform.OS === 'ios' ? 0 : 2
+        }
       }}
     >
       <Tab.Screen
@@ -27,8 +82,8 @@ export const AppNavigator = () => {
         component={DashboardScreen}
         options={{
           title: t.dashboard,
-          tabBarLabel: t.dashboard,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>
+          tabBarLabel: t.tabDashboard,
+          tabBarIcon: ({ focused }) => renderTabIcon('🏠', focused)
         }}
       />
       <Tab.Screen
@@ -36,8 +91,8 @@ export const AppNavigator = () => {
         component={DailyRegisterScreen}
         options={{
           title: t.register,
-          tabBarLabel: t.register,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📋</Text>
+          tabBarLabel: t.tabRegister,
+          tabBarIcon: ({ focused }) => renderTabIcon('📋', focused)
         }}
       />
       <Tab.Screen
@@ -45,8 +100,8 @@ export const AppNavigator = () => {
         component={CustomerListScreen}
         options={{
           title: t.customers,
-          tabBarLabel: t.customers,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👥</Text>
+          tabBarLabel: t.tabCustomers,
+          tabBarIcon: ({ focused }) => renderTabIcon('👥', focused)
         }}
       />
       <Tab.Screen
@@ -54,8 +109,8 @@ export const AppNavigator = () => {
         component={DueReportsScreen}
         options={{
           title: t.reports,
-          tabBarLabel: t.reports,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📊</Text>
+          tabBarLabel: t.tabReports,
+          tabBarIcon: ({ focused }) => renderTabIcon('📊', focused)
         }}
       />
       <Tab.Screen
@@ -63,10 +118,26 @@ export const AppNavigator = () => {
         component={SettingsScreen}
         options={{
           title: t.settings,
-          tabBarLabel: t.settings,
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>⚙️</Text>
+          tabBarLabel: t.tabSettings,
+          tabBarIcon: ({ focused }) => renderTabIcon('⚙️', focused)
         }}
       />
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  tabIconWrap: {
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  tabIconWrapActive: {
+    backgroundColor: '#e0f2fe'
+  },
+  tabIconEmoji: {
+    fontSize: 18
+  }
+});

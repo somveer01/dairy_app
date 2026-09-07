@@ -369,7 +369,7 @@ export const CustomerListScreen = () => {
   const selectedCount = deviceContacts.filter(c => c.isSelected).length;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
         {/* Search Bar & Add / Import Buttons */}
         <View style={styles.topBar}>

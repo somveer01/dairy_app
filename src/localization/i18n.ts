@@ -1,4 +1,4 @@
-﻿export type Language = 'en' | 'hi';
+export type Language = 'en' | 'hi';
 
 export const translations = {
   en: {
@@ -8,6 +8,11 @@ export const translations = {
     customers: 'Customers',
     reports: 'Due Reports',
     settings: 'Settings',
+    tabDashboard: 'Home',
+    tabRegister: 'Register',
+    tabCustomers: 'Customers',
+    tabReports: 'Reports',
+    tabSettings: 'Settings',
     todayDeliveries: "Today's Deliveries",
     todayBilled: "Today's Billed",
     totalOutstanding: 'Total Due (All Customers)',
@@ -56,6 +61,11 @@ export const translations = {
     customers: 'ग्राहक',
     reports: 'बकाया रिपोर्ट',
     settings: 'सेटिंग्स',
+    tabDashboard: 'होम',
+    tabRegister: 'रजिस्टर',
+    tabCustomers: 'ग्राहक',
+    tabReports: 'रिपोर्ट',
+    tabSettings: 'सेटिंग्स',
     todayDeliveries: 'आज का कुल दूध',
     todayBilled: 'आज का कुल बिल',
     totalOutstanding: 'कुल बकाया राशि',

@@ -200,7 +200,7 @@ export const DailyRegisterScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
         {/* Date Selector Header */}
         <View style={styles.dateHeader}>
