@@ -17,6 +17,7 @@ import { Contact } from 'expo-contacts';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { Customer, MilkType } from '../../types';
+import { confirmAction, showAlert } from '../../utils/alertUtils';
 
 interface PhoneContactItem {
   id: string;
@@ -110,20 +111,15 @@ export const CustomerListScreen = () => {
   };
 
   const handleDelete = (id: string, custName: string) => {
-    Alert.alert(
+    confirmAction(
       'Delete Customer',
       `Are you sure you want to delete ${custName}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await StorageService.deleteCustomer(id);
-            await refreshCustomers();
-          }
-        }
-      ]
+      async () => {
+        await StorageService.deleteCustomer(id);
+        await refreshCustomers();
+      },
+      'Delete',
+      'Cancel'
     );
   };
 

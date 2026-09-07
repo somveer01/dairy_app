@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { MilkEntry, MilkType, SessionType, Customer } from '../../types';
+import { confirmAction, showAlert } from '../../utils/alertUtils';
 
 export const DailyRegisterScreen = () => {
   const { t, customers, milkEntries, refreshMilkEntries, supplier } = useApp();
@@ -78,20 +79,15 @@ export const DailyRegisterScreen = () => {
   const handleQuickAddDefault = async (customer: Customer) => {
     const existing = sessionEntriesMap.get(customer.id);
     if (existing) {
-      Alert.alert(
+      confirmAction(
         'Delivery Recorded',
         `${customer.name} already has ${existing.quantityLitres}L marked. Remove it?`,
-        [
-          { text: 'Keep', style: 'cancel' },
-          {
-            text: 'Remove',
-            style: 'destructive',
-            onPress: async () => {
-              await StorageService.deleteMilkEntry(existing.id);
-              await refreshMilkEntries();
-            }
-          }
-        ]
+        async () => {
+          await StorageService.deleteMilkEntry(existing.id);
+          await refreshMilkEntries();
+        },
+        'Remove',
+        'Keep'
       );
       return;
     }
@@ -119,37 +115,33 @@ export const DailyRegisterScreen = () => {
     Keyboard.dismiss();
     const unrecordedCustomers = customers.filter(c => !sessionEntriesMap.has(c.id));
     if (unrecordedCustomers.length === 0) {
-      Alert.alert('All Recorded', `All ${customers.length} customers are already marked for ${activeSession}!`);
+      showAlert('All Recorded', `All ${customers.length} customers are already marked for ${activeSession}!`);
       return;
     }
 
-    Alert.alert(
+    confirmAction(
       'Mark All Deliveries',
       `Record default delivery for all ${unrecordedCustomers.length} remaining customers for ${activeSession} (${selectedDate})?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: `Mark All (${unrecordedCustomers.length})`,
-          onPress: async () => {
-            const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
-              id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}`,
-              supplierId: supplier?.id || 'supp_default',
-              customerId: c.id,
-              customerName: c.name,
-              date: selectedDate,
-              session: activeSession,
-              milkType: c.milkType,
-              quantityLitres: c.defaultLitres,
-              ratePerLitre: c.ratePerLitre,
-              amount: c.defaultLitres * c.ratePerLitre,
-              isPaid: false,
-              createdAt: Date.now()
-            }));
-            await StorageService.saveMilkEntriesBatch(newEntries);
-            await refreshMilkEntries();
-          }
-        }
-      ]
+      async () => {
+        const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
+          id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}`,
+          supplierId: supplier?.id || 'supp_default',
+          customerId: c.id,
+          customerName: c.name,
+          date: selectedDate,
+          session: activeSession,
+          milkType: c.milkType,
+          quantityLitres: c.defaultLitres,
+          ratePerLitre: c.ratePerLitre,
+          amount: c.defaultLitres * c.ratePerLitre,
+          isPaid: false,
+          createdAt: Date.now()
+        }));
+        await StorageService.saveMilkEntriesBatch(newEntries);
+        await refreshMilkEntries();
+      },
+      `Mark All (${unrecordedCustomers.length})`,
+      'Cancel'
     );
   };
 

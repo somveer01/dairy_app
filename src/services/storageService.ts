@@ -34,7 +34,24 @@ export const StorageService = {
   // Customers - Clean real data only (no dummy customers)
   async getCustomers(): Promise<Customer[]> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    try {
+      const parsed: Customer[] = JSON.parse(data);
+      // Auto-purge any residual default or mock customers
+      const clean = parsed.filter(c =>
+        c.id !== 'cust_1' &&
+        c.id !== 'cust_2' &&
+        !c.id.startsWith('mock_cust_') &&
+        c.name !== 'Ramesh Sharma' &&
+        c.name !== 'Suresh Patel'
+      );
+      if (clean.length !== parsed.length) {
+        await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(clean));
+      }
+      return clean;
+    } catch {
+      return [];
+    }
   },
 
   async saveCustomer(customer: Customer): Promise<void> {
@@ -66,7 +83,25 @@ export const StorageService = {
   // Milk Entries - Clean real entries only (no dummy deliveries)
   async getMilkEntries(): Promise<MilkEntry[]> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.MILK_ENTRIES);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    try {
+      const parsed: MilkEntry[] = JSON.parse(data);
+      const clean = parsed.filter(e =>
+        e.id !== 'entry_1' &&
+        e.id !== 'entry_2' &&
+        !e.id.startsWith('mock_entry_') &&
+        e.customerId !== 'cust_1' &&
+        e.customerId !== 'cust_2' &&
+        e.customerName !== 'Ramesh Sharma' &&
+        e.customerName !== 'Suresh Patel'
+      );
+      if (clean.length !== parsed.length) {
+        await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(clean));
+      }
+      return clean;
+    } catch {
+      return [];
+    }
   },
 
   async saveMilkEntry(entry: MilkEntry): Promise<void> {
@@ -123,11 +158,35 @@ export const StorageService = {
     await AsyncStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
   },
 
-  // Reset or seed fresh data for testing
+  // Reset or seed fresh data
   async clearAllData(): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify([]));
+    await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify([]));
+    await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify([]));
     await AsyncStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
     await AsyncStorage.removeItem(STORAGE_KEYS.MILK_ENTRIES);
     await AsyncStorage.removeItem(STORAGE_KEYS.PAYMENTS);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
+        window.localStorage.removeItem(STORAGE_KEYS.MILK_ENTRIES);
+        window.localStorage.removeItem(STORAGE_KEYS.PAYMENTS);
+      } catch {
+        // ignore
+      }
+    }
+  },
+
+  async clearAllCustomers(): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify([]));
+    await AsyncStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
+      } catch {
+        // ignore
+      }
+    }
   },
 
   // Storage inspection & backup export

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { FirebaseSyncService } from '../../services/firebaseSyncService';
+import { confirmAction, showAlert } from '../../utils/alertUtils';
 
 export const SettingsScreen = () => {
   const {
@@ -55,24 +56,20 @@ export const SettingsScreen = () => {
 
   const handleCloudDownload = async () => {
     if (!supplier) return;
-    Alert.alert(
+    confirmAction(
       'Restore from Cloud',
       'Download your latest records from Firebase Cloud Firestore to this device?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          onPress: async () => {
-            setIsSyncingCloud(true);
-            const res = await FirebaseSyncService.downloadFromCloud(supplier.id);
-            await refreshCustomers();
-            await refreshMilkEntries();
-            await refreshPayments();
-            setIsSyncingCloud(false);
-            Alert.alert(res.success ? 'Restored' : 'Error', res.message);
-          }
-        }
-      ]
+      async () => {
+        setIsSyncingCloud(true);
+        const res = await FirebaseSyncService.downloadFromCloud(supplier.id);
+        await refreshCustomers();
+        await refreshMilkEntries();
+        await refreshPayments();
+        setIsSyncingCloud(false);
+        showAlert(res.success ? 'Restored' : 'Error', res.message);
+      },
+      'Restore',
+      'Cancel'
     );
   };
 
@@ -86,42 +83,50 @@ export const SettingsScreen = () => {
         message: jsonString
       });
     } catch (err: any) {
-      Alert.alert('Share', `Could not open share dialog: ${err?.message || 'Unknown error'}`);
+      showAlert('Share', `Could not open share dialog: ${err?.message || 'Unknown error'}`);
     }
   };
 
+  const handleClearCustomers = () => {
+    confirmAction(
+      'Remove All Customers',
+      'Are you sure you want to remove all customer profiles? This will completely empty your customer list.',
+      async () => {
+        await StorageService.clearAllCustomers();
+        await refreshCustomers();
+        showAlert('Customers Removed', 'All customer profiles have been removed.');
+      },
+      'Remove All',
+      'Cancel'
+    );
+  };
+
   const handleResetData = () => {
-    Alert.alert(
+    confirmAction(
       'Reset All Data',
-      'Clear all customers, deliveries, and payment records?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            await StorageService.clearAllData();
-            await refreshCustomers();
-            await refreshMilkEntries();
-            await refreshPayments();
-            Alert.alert('Reset Complete', 'All data has been cleared.');
-          }
-        }
-      ]
+      'Clear all customers, deliveries, and payment records? This cannot be undone.',
+      async () => {
+        await StorageService.clearAllData();
+        await refreshCustomers();
+        await refreshMilkEntries();
+        await refreshPayments();
+        showAlert('Reset Complete', 'All data has been cleared.');
+      },
+      'Reset All',
+      'Cancel'
     );
   };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: () => {
-          setSupplier(null);
-        }
-      }
-    ]);
+    confirmAction(
+      'Logout',
+      'Are you sure you want to log out?',
+      () => {
+        setSupplier(null);
+      },
+      'Logout',
+      'Cancel'
+    );
   };
 
 
@@ -273,6 +278,20 @@ export const SettingsScreen = () => {
 
         <TouchableOpacity
           style={styles.menuItem}
+          onPress={handleClearCustomers}
+          activeOpacity={0.7}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Text style={styles.menuIcon}>👥</Text>
+          <View style={styles.menuContent}>
+            <Text style={[styles.menuTitle, { color: '#f59e0b' }]}>Remove All Customers</Text>
+            <Text style={styles.menuSubtitle}>Wipe customer list clean ({customers.length} currently)</Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItem}
           onPress={handleResetData}
           activeOpacity={0.7}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -280,7 +299,7 @@ export const SettingsScreen = () => {
           <Text style={styles.menuIcon}>🔄</Text>
           <View style={styles.menuContent}>
             <Text style={[styles.menuTitle, { color: '#ef4444' }]}>Reset All Records</Text>
-            <Text style={styles.menuSubtitle}>Clear and start fresh</Text>
+            <Text style={styles.menuSubtitle}>Clear all customers, milk register & payments</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
