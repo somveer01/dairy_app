@@ -1,24 +1,29 @@
 const fs = require('fs');
+const path = require('path');
 
+// 1. Web App Manifest
 const manifest = {
   short_name: 'DairyApp',
   name: 'Dairy Milk Supplier Register',
   description: 'Daily milk register, billing, and customer management for milk suppliers',
+  id: '/dairy_app/',
   icons: [
     {
       src: '/dairy_app/assets/icon.png',
       type: 'image/png',
-      sizes: '192x192'
+      sizes: '192x192',
+      purpose: 'any maskable'
     },
     {
       src: '/dairy_app/assets/icon.png',
       type: 'image/png',
-      sizes: '512x512'
+      sizes: '512x512',
+      purpose: 'any maskable'
     }
   ],
   start_url: '/dairy_app/',
-  background_color: '#16a34a',
-  theme_color: '#16a34a',
+  background_color: '#ffffff',
+  theme_color: '#0284c7',
   display: 'standalone',
   orientation: 'portrait',
   scope: '/dairy_app/'
@@ -26,34 +31,176 @@ const manifest = {
 
 fs.writeFileSync('dist/manifest.json', JSON.stringify(manifest, null, 2));
 
+// 2. Copy App Icon & .nojekyll
 if (fs.existsSync('assets/icon.png')) {
+  if (!fs.existsSync('dist/assets')) fs.mkdirSync('dist/assets', { recursive: true });
   fs.copyFileSync('assets/icon.png', 'dist/assets/icon.png');
 }
-
 fs.writeFileSync('dist/.nojekyll', '');
 
+// 3. PWA Service Worker (dist/sw.js)
+const swContent = `
+const CACHE_NAME = 'dairy-pwa-v3';
+const CORE_ASSETS = [
+  '/dairy_app/',
+  '/dairy_app/index.html',
+  '/dairy_app/manifest.json',
+  '/dairy_app/favicon.ico',
+  '/dairy_app/assets/icon.png'
+];
+
+self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(CORE_ASSETS).catch(() => {});
+    })
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      );
+    })
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
+  e.respondWith(
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.status === 200) {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        }
+        return res;
+      })
+      .catch(() => {
+        return caches.match(e.request).then(m => {
+          if (m) return m;
+          if (e.request.headers.get('accept')?.includes('text/html')) {
+            return caches.match('/dairy_app/index.html');
+          }
+        });
+      })
+  );
+});
+`;
+fs.writeFileSync('dist/sw.js', swContent.trim());
+
+// 4. Update index.html
 let html = fs.readFileSync('dist/index.html', 'utf8');
 
-// Ensure viewport-fit=cover
-if (!html.includes('viewport-fit=cover')) {
-  html = html.replace('shrink-to-fit=no', 'shrink-to-fit=no, viewport-fit=cover');
-}
+// Use standard viewport so UI does NOT get hidden under Android 3-button navigation bar (Back/Home/Recents)
+html = html.replace(/<meta name="viewport"[^>]*>/i, '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />');
 
-// Clean meta tags
+// Clean existing PWA head tags
+html = html.replace(/<link rel="manifest"[^>]*>/g, '');
 html = html.replace(/<link rel= manifest[^>]*>/g, '');
+html = html.replace(/<meta name="theme-color"[^>]*>/g, '');
 html = html.replace(/<meta name=theme-color[^>]*>/g, '');
+html = html.replace(/<meta name="apple-mobile-web-app-capable"[^>]*>/g, '');
 html = html.replace(/<meta name=apple-mobile-web-app-capable[^>]*>/g, '');
+html = html.replace(/<meta name="apple-mobile-web-app-status-bar-style"[^>]*>/g, '');
 html = html.replace(/<meta name=apple-mobile-web-app-status-bar-style[^>]*>/g, '');
 
-const pwaTags = [
-  '  <link rel= manifest href=/dairy_app/manifest.json/>',
-  '  <meta name=theme-color content=#16a34a/>',
-  '  <meta name=apple-mobile-web-app-capable content=yes/>',
-  '  <meta name=apple-mobile-web-app-status-bar-style content=black-translucent/>',
-  '</head>'
-].join('\n');
+const pwaHead = `  <link rel="manifest" href="/dairy_app/manifest.json"/>
+  <meta name="theme-color" content="#0284c7"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+</head>`;
 
-html = html.replace('</head>', pwaTags);
+html = html.replace('</head>', pwaHead);
+
+// Remove old banner or install script if previously inserted
+html = html.replace(/<!-- PWA Install Banner -->[\s\S]*?<\/script>\s*<\/body>/, '</body>');
+
+// Install Banner and ServiceWorker script
+const pwaBody = `
+  <!-- PWA Install Banner -->
+  <div id="pwa-install-banner" style="display:none; position:fixed; top:12px; left:12px; right:12px; z-index:999999; background:linear-gradient(135deg, #0284c7, #0369a1); color:#ffffff; padding:10px 14px; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.25); font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; align-items:center; justify-content:space-between;">
+    <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+      <img src="/dairy_app/assets/icon.png" style="width:38px; height:38px; border-radius:9px; background:#fff; flex-shrink:0;" alt="Icon"/>
+      <div style="min-width:0;">
+        <div style="font-weight:bold; font-size:13px; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Dairy Milk App</div>
+        <div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Tap to install on Phone Home Screen</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+      <button id="pwa-install-btn" style="background:#ffffff; color:#0284c7; border:none; padding:7px 14px; border-radius:8px; font-weight:bold; font-size:12px; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.15);">
+        📲 Install
+      </button>
+      <button id="pwa-dismiss-btn" style="background:transparent; border:none; color:#ffffff; font-size:16px; cursor:pointer; padding:4px 6px;">✕</button>
+    </div>
+  </div>
+
+  <script>
+    // PWA Install Prompt Handler
+    window.pwaDeferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window.pwaDeferredPrompt = e;
+      var banner = document.getElementById('pwa-install-banner');
+      if (banner) {
+        banner.style.display = 'flex';
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var installBtn = document.getElementById('pwa-install-btn');
+      var dismissBtn = document.getElementById('pwa-dismiss-btn');
+      var banner = document.getElementById('pwa-install-banner');
+
+      if (installBtn) {
+        installBtn.addEventListener('click', function() {
+          if (window.pwaDeferredPrompt) {
+            window.pwaDeferredPrompt.prompt();
+            window.pwaDeferredPrompt.userChoice.then(function(choice) {
+              if (choice.outcome === 'accepted') {
+                if (banner) banner.style.display = 'none';
+              }
+              window.pwaDeferredPrompt = null;
+            });
+          } else {
+            alert('To install on your phone:\\n\\n1. Tap the 3 dots (⋮) in Chrome (or Share ⎋ in Safari)\\n2. Tap "Install app" or "Add to Home screen"\\n3. The Dairy App icon will appear on your phone home screen!');
+          }
+        });
+      }
+
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', function() {
+          if (banner) banner.style.display = 'none';
+        });
+      }
+
+      window.addEventListener('appinstalled', function() {
+        if (banner) banner.style.display = 'none';
+        window.pwaDeferredPrompt = null;
+      });
+    });
+
+    // Register Service Worker for PWA installability
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/dairy_app/sw.js', { scope: '/dairy_app/' })
+          .then(function(reg) {
+            console.log('Dairy PWA ServiceWorker active with scope:', reg.scope);
+          })
+          .catch(function(err) {
+            console.log('ServiceWorker registration error:', err);
+          });
+      });
+    }
+  </script>
+</body>`;
+
+html = html.replace('</body>', pwaBody);
 
 fs.writeFileSync('dist/index.html', html);
-console.log('Post build cleaned and verified.');
+console.log('PWA build post-processing complete!');

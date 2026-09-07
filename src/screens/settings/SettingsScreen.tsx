@@ -9,7 +9,8 @@ import {
   Share,
   Modal,
   TextInput,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
@@ -115,6 +116,27 @@ export const SettingsScreen = () => {
       'Reset All',
       'Cancel'
     );
+  };
+
+  const handleInstallPWA = () => {
+    if (Platform.OS === 'web') {
+      const prompt = (window as any).pwaDeferredPrompt;
+      if (prompt) {
+        prompt.prompt();
+        prompt.userChoice.then((choiceResult: any) => {
+          if (choiceResult.outcome === 'accepted') {
+            showAlert('Success', 'Dairy App has been added to your phone screen!');
+          }
+        });
+      } else {
+        showAlert(
+          'Install on Phone',
+          'To install Dairy App on your phone:\n\n1. Tap the 3 dots (⋮) in your Chrome browser (or Share icon ⎋ in Safari)\n2. Select "Install app" or "Add to Home screen"\n3. The Dairy App icon will appear on your phone screen!'
+        );
+      }
+    } else {
+      showAlert('Installed', 'You are already using the installed Dairy App.');
+    }
   };
 
   const handleLogout = () => {
@@ -302,6 +324,21 @@ export const SettingsScreen = () => {
             <Text style={styles.menuSubtitle}>Clear all customers, milk register & payments</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+
+        {/* Install App on Device */}
+        <TouchableOpacity
+          style={[styles.menuItem, { backgroundColor: '#f0fdf4', borderColor: '#86efac', borderWidth: 1 }]}
+          onPress={handleInstallPWA}
+          activeOpacity={0.7}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Text style={styles.menuIcon}>📲</Text>
+          <View style={styles.menuContent}>
+            <Text style={[styles.menuTitle, { color: '#16a34a', fontWeight: 'bold' }]}>Install App on Phone</Text>
+            <Text style={styles.menuSubtitle}>Add to Home Screen for 1-tap offline use</Text>
+          </View>
+          <Text style={[styles.chevron, { color: '#16a34a', fontWeight: 'bold' }]}>Install</Text>
         </TouchableOpacity>
 
         {/* App Version Info */}

@@ -15,11 +15,18 @@ export const AppNavigator = () => {
   const { t } = useApp();
   const insets = useSafeAreaInsets();
 
-  // Calculate responsive bottom padding across all device types and browsers
-  const safeBottom = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'web' ? 10 : 8);
-  const barHeight = Platform.OS === 'ios'
-    ? 58 + insets.bottom
-    : 62 + (insets.bottom > 0 ? insets.bottom : 8);
+  const isWeb = Platform.OS === 'web';
+  const isMobileScreen = isWeb
+    ? (typeof window !== 'undefined' && (window.innerWidth <= 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')))
+    : true;
+
+  // Allocate 26px bottom clearance on phones so icons and labels float above Android Back and Home buttons
+  const phoneBottomPadding = 26;
+  const safeBottom = insets.bottom > 0
+    ? Math.max(insets.bottom, isMobileScreen ? phoneBottomPadding : 8)
+    : (isMobileScreen ? phoneBottomPadding : 8);
+
+  const barHeight = 56 + safeBottom;
 
   const renderTabIcon = (emoji: string, focused: boolean) => (
     <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
