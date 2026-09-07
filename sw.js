@@ -2,6 +2,7 @@ const CACHE_NAME = 'dairy-pwa-v3';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
+  '/dairy_app/training.html',
   '/dairy_app/manifest.json',
   '/dairy_app/favicon.ico',
   '/dairy_app/assets/icon.png'
