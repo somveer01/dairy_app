@@ -9,7 +9,8 @@ import {
   Modal,
   Alert,
   Keyboard,
-  ActivityIndicator
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
@@ -126,16 +127,23 @@ export const CustomerListScreen = () => {
   // --- CONTACTS IMPORT FLOW ---
   const openContactsImportModal = async () => {
     Keyboard.dismiss();
-    setIsLoadingContacts(true);
     setContactModalVisible(true);
     setContactSearch('');
 
+    if (Platform.OS === 'web') {
+      // On Web/PWA, browser security does not allow silent background contact reading.
+      // Instead, we let the user trigger the Android/browser contact picker or upload a VCF file.
+      setIsLoadingContacts(false);
+      return;
+    }
+
+    setIsLoadingContacts(true);
     try {
-      // 1. Request permission safely
+      // 1. Request permission safely on native Android/iOS
       const permissionRes = await Contacts.requestPermissionsAsync();
       if (permissionRes.status !== 'granted') {
         setIsLoadingContacts(false);
-        Alert.alert(
+        showAlert(
           'Permission Denied',
           'Please allow contact permissions in your phone settings to import contacts directly.'
         );
@@ -147,7 +155,6 @@ export const CustomerListScreen = () => {
       const validList: PhoneContactItem[] = [];
 
       // 2. Fetch contacts across all accounts (Device, SIM, Google, Outlook)
-      // We set high limits (2000) so Google/cloud-synced contacts aren't cut off
       let contactRecords: any[] = [];
       try {
         if (typeof Contact?.getAllDetails === 'function') {
@@ -185,7 +192,6 @@ export const CustomerListScreen = () => {
       // 3. Process retrieved contacts across all accounts
       if (contactRecords && contactRecords.length > 0) {
         contactRecords.forEach((c: any, index: number) => {
-          // A. Extract Contact Display Name
           let displayName = '';
           if (c.name && typeof c.name === 'string' && c.name.trim()) {
             displayName = c.name.trim();
@@ -197,7 +203,6 @@ export const CustomerListScreen = () => {
             displayName = `${c.firstName || ''} ${c.lastName || ''}`.trim();
           }
 
-          // B. Extract Phone number from all phone entries
           const phones = c.phones || c.phoneNumbers || [];
           let extractedPhone = '';
           if (Array.isArray(phones)) {
@@ -213,14 +218,12 @@ export const CustomerListScreen = () => {
             }
           }
 
-          // C. Extract Email address (for Google/email contacts)
           const emails = c.emails || [];
           let extractedEmail = '';
           if (Array.isArray(emails) && emails.length > 0) {
             extractedEmail = emails[0]?.email || emails[0]?.address || (typeof emails[0] === 'string' ? emails[0] : '');
           }
 
-          // Fallback name if neither first nor last name given
           if (!displayName) {
             if (extractedEmail) {
               displayName = extractedEmail.split('@')[0];
@@ -231,7 +234,6 @@ export const CustomerListScreen = () => {
             }
           }
 
-          // Must have at least a phone number or an email
           if (extractedPhone || extractedEmail) {
             const isAlreadyCustomer = extractedPhone && existingPhones.has(extractedPhone);
             if (!isAlreadyCustomer) {
@@ -247,7 +249,6 @@ export const CustomerListScreen = () => {
           }
         });
 
-        // Sort alphabetically by name
         validList.sort((a, b) => a.name.localeCompare(b.name));
         setDeviceContacts(validList);
       } else {
@@ -255,7 +256,7 @@ export const CustomerListScreen = () => {
       }
     } catch (error: any) {
       console.warn('Contact read error:', error);
-      Alert.alert(
+      showAlert(
         'Contacts Notice',
         `Unable to read contacts directly: ${error?.message || 'Permission or device restriction'}.\n\nTip: You can use the "+ Add" button to quickly add customers.`
       );
@@ -264,8 +265,43 @@ export const CustomerListScreen = () => {
     }
   };
 
-  // Launch Android native contact picker for 1-tap selection across any Google account
+  // Launch Android native contact picker or Web W3C Contact Picker for 1-tap single contact
   const handlePickFromNativeContacts = async () => {
+    if (Platform.OS === 'web') {
+      if (typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window) {
+        try {
+          const selected = await (navigator as any).contacts.select(['name', 'tel'], { multiple: false });
+          if (selected && selected.length > 0) {
+            const c = selected[0];
+            const pName = (c.name && c.name[0]) || 'New Customer';
+            let pPhone = '';
+            if (c.tel && c.tel.length > 0) {
+              pPhone = c.tel[0].replace(/[^0-9]/g, '').slice(-10);
+            }
+            setContactModalVisible(false);
+            setEditingCustomer(null);
+            setName(pName);
+            setPhone(pPhone);
+            setAddress('');
+            setMilkType('cow');
+            setDefaultLitres('2.0');
+            setRatePerLitre('55');
+            setNotes('Picked from phone contacts');
+            setModalVisible(true);
+            return;
+          }
+        } catch (pickerErr) {
+          console.warn('Web single contact picker cancelled or failed:', pickerErr);
+        }
+      } else {
+        showAlert(
+          'Notice',
+          'Direct contact picking requires Android Chrome. You can also upload a .VCF file from Google Contacts or enter customer details.'
+        );
+      }
+      return;
+    }
+
     try {
       let picked: any = null;
       if (typeof Contact?.presentPicker === 'function') {
@@ -291,7 +327,6 @@ export const CustomerListScreen = () => {
           }
         }
 
-        // Close contact modal and open Add modal prefilled
         setContactModalVisible(false);
         setEditingCustomer(null);
         setName(pName);
@@ -305,7 +340,138 @@ export const CustomerListScreen = () => {
       }
     } catch (pickerErr: any) {
       console.warn('Native picker error:', pickerErr);
-      Alert.alert('Notice', 'Could not open native contact picker.');
+      showAlert('Notice', 'Could not open native contact picker.');
+    }
+  };
+
+  // Launch W3C Web Contact Picker on Android Chrome for multiple contacts selection
+  const handlePickMultipleWebContacts = async () => {
+    if (typeof navigator !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window) {
+      try {
+        setIsLoadingContacts(true);
+        const selected = await (navigator as any).contacts.select(['name', 'tel', 'email'], { multiple: true });
+        if (selected && selected.length > 0) {
+          const existingPhones = new Set(customers.map(c => c.phone.replace(/[^0-9]/g, '')));
+          const newItems: PhoneContactItem[] = [];
+
+          selected.forEach((c: any, index: number) => {
+            const pName = (c.name && c.name[0]) || `Contact ${index + 1}`;
+            let pPhone = '';
+            if (c.tel && c.tel.length > 0) {
+              pPhone = c.tel[0].replace(/[^0-9]/g, '').slice(-10);
+            }
+            const pEmail = (c.email && c.email[0]) || '';
+
+            if (pPhone || pEmail) {
+              const isAlready = pPhone && existingPhones.has(pPhone);
+              if (!isAlready) {
+                newItems.push({
+                  id: `web_contact_${Date.now()}_${index}`,
+                  name: pName,
+                  phone: pPhone,
+                  email: pEmail,
+                  hasPhone: pPhone.length >= 10,
+                  isSelected: true
+                });
+              }
+            }
+          });
+
+          if (newItems.length > 0) {
+            setDeviceContacts(prev => [...newItems, ...prev]);
+            showAlert('Contacts Loaded', `Loaded ${newItems.length} contact(s) from phone! Review below and tap 'Import'.`);
+          } else {
+            showAlert('Notice', 'All selected contacts are already present in your customer list.');
+          }
+        }
+      } catch (err) {
+        console.warn('Web multiple contacts select cancelled/failed:', err);
+      } finally {
+        setIsLoadingContacts(false);
+      }
+    } else {
+      showAlert(
+        'Browser Contact Picker',
+        'Direct phone contact selection in browser is supported on Android Chrome. You can also use the "Upload .VCF File" button to import all contacts.'
+      );
+    }
+  };
+
+  // Import contacts from a .VCF file (Google Contacts / Phone Contacts export)
+  const handleImportVcfFile = () => {
+    if (typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.vcf,.csv,text/vcard';
+      input.onchange = async (event: any) => {
+        const file = event.target?.files?.[0];
+        if (!file) return;
+
+        try {
+          setIsLoadingContacts(true);
+          const text = await file.text();
+          const parsedContacts: PhoneContactItem[] = [];
+          const existingPhones = new Set(customers.map(c => c.phone.replace(/[^0-9]/g, '')));
+          const cards = text.split(/BEGIN:VCARD/i);
+
+          cards.forEach((card: string, idx: number) => {
+            if (!card.trim()) return;
+            let cName = '';
+            let cPhone = '';
+            let cEmail = '';
+
+            const fnMatch = card.match(/FN[;:]([^\r\n]+)/i);
+            if (fnMatch) cName = fnMatch[1].trim();
+
+            if (!cName) {
+              const nMatch = card.match(/N[;:]([^\r\n]+)/i);
+              if (nMatch) {
+                const parts = nMatch[1].split(';');
+                cName = `${parts[1] || ''} ${parts[0] || ''}`.trim();
+              }
+            }
+
+            const telMatches = card.matchAll(/TEL[^:]*:([^\r\n]+)/gi);
+            for (const tm of telMatches) {
+              const clean = tm[1].replace(/[^0-9]/g, '');
+              if (clean.length >= 10) {
+                cPhone = clean.slice(-10);
+                break;
+              }
+            }
+
+            const emailMatch = card.match(/EMAIL[^:]*:([^\r\n]+)/i);
+            if (emailMatch) cEmail = emailMatch[1].trim();
+
+            if (cName || cPhone) {
+              const isAlready = cPhone && existingPhones.has(cPhone);
+              if (!isAlready) {
+                parsedContacts.push({
+                  id: `vcf_${Date.now()}_${idx}`,
+                  name: cName || `Contact ${cPhone}`,
+                  phone: cPhone,
+                  email: cEmail,
+                  hasPhone: cPhone.length >= 10,
+                  isSelected: true
+                });
+              }
+            }
+          });
+
+          if (parsedContacts.length > 0) {
+            parsedContacts.sort((a, b) => a.name.localeCompare(b.name));
+            setDeviceContacts(parsedContacts);
+            showAlert('Contacts Loaded', `Loaded ${parsedContacts.length} contacts from file! Review and tap 'Import' below.`);
+          } else {
+            showAlert('No Contacts Found', 'Could not find valid contacts in the selected file.');
+          }
+        } catch {
+          showAlert('Error', 'Failed to read contacts file.');
+        } finally {
+          setIsLoadingContacts(false);
+        }
+      };
+      input.click();
     }
   };
 
@@ -498,19 +664,51 @@ export const CustomerListScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              {/* Native Android Contact App Picker Button */}
-              <TouchableOpacity
-                style={styles.nativePickerBtn}
-                onPress={handlePickFromNativeContacts}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.nativePickerBtnText}>📱 Open Phone Contacts App (Pick Single Contact)</Text>
-              </TouchableOpacity>
+              {/* Actions for Web/Chrome or Native */}
+              <View style={{ gap: 8, marginBottom: 10 }}>
+                {Platform.OS === 'web' && (
+                  <TouchableOpacity
+                    style={styles.webBatchPickerBtn}
+                    onPress={handlePickMultipleWebContacts}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.webBatchPickerBtnText}>
+                      📱 Select from Phone Contacts (Pick Multiple)
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
-              {/* Account Sync Tip Banner */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={[styles.nativePickerBtn, { flex: 1, marginBottom: 0 }]}
+                    onPress={handlePickFromNativeContacts}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.nativePickerBtnText}>
+                      👤 Pick Single Contact
+                    </Text>
+                  </TouchableOpacity>
+
+                  {Platform.OS === 'web' && (
+                    <TouchableOpacity
+                      style={[styles.vcfPickerBtn, { flex: 1 }]}
+                      onPress={handleImportVcfFile}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.vcfPickerBtnText}>
+                        📁 Upload .VCF File
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Permission & Sync Explanation Tip */}
               <View style={styles.tipBanner}>
                 <Text style={styles.tipText}>
-                  💡 Tip: To show Google/Gmail contacts, ensure "Contacts Sync" is toggled ON in Android Settings → Accounts → Google.
+                  {Platform.OS === 'web'
+                    ? '💡 Android Permission Note: Browser/PWA apps ask for contact permission when you tap "Select from Phone Contacts" above. Tap the button to select contacts from your phone!'
+                    : '💡 Tip: To show Google/Gmail contacts, ensure "Contacts Sync" is toggled ON in Android Settings → Accounts → Google.'}
                 </Text>
               </View>
 
@@ -1043,5 +1241,21 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: 4
   },
-  emailBadgeText: { fontSize: 9.5, color: '#0369a1', fontWeight: '700' }
+  emailBadgeText: { fontSize: 9.5, color: '#0369a1', fontWeight: '700' },
+  webBatchPickerBtn: {
+    backgroundColor: '#0284c7',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center'
+  },
+  webBatchPickerBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+  vcfPickerBtn: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center'
+  },
+  vcfPickerBtnText: { color: '#334155', fontWeight: '700', fontSize: 12 }
 });

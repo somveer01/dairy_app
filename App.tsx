@@ -11,6 +11,10 @@ export default function App() {
     // Explicitly unblock screenshot taking across Android and iOS devices
     if (Platform.OS !== 'web') {
       ScreenCapture.allowScreenCaptureAsync().catch(() => {});
+      // Proactively request contacts permission on native startup so user sees permission dialog immediately
+      import('expo-contacts').then(Contacts => {
+        Contacts.requestPermissionsAsync().catch(() => {});
+      }).catch(() => {});
     }
   }, []);
 
