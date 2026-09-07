@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ export const LoginScreen = ({ navigation }: any) => {
   // Email state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSendOtp = () => {
     Keyboard.dismiss();
@@ -181,14 +182,23 @@ export const LoginScreen = ({ navigation }: any) => {
               />
 
               <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor="#94a3b8"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
+              <View style={{ position: 'relative', justifyContent: 'center' }}>
+                <TextInput
+                  style={[styles.input, { paddingRight: 45 }]}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: 12, padding: 4 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={{ fontSize: 16 }}>{showPassword ? '👁️' : '🔒'}</Text>
+                </TouchableOpacity>
+              </View>
 
               <TouchableOpacity
                 style={styles.primaryButton}

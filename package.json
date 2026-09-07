@@ -13,6 +13,7 @@
     "expo-contacts": "~57.0.4",
     "expo-linking": "~57.0.9",
     "expo-print": "~57.0.1",
+    "expo-screen-capture": "~57.0.2",
     "expo-sharing": "~57.0.18",
     "expo-status-bar": "~57.0.1",
     "firebase": "^12.18.0",
