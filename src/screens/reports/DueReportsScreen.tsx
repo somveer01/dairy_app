@@ -83,6 +83,10 @@ export const DueReportsScreen = () => {
   const [payAmount, setPayAmount] = useState('');
   const [payNotes, setPayNotes] = useState('');
 
+  // Payment History Modal State
+  const [payHistoryVisible, setPayHistoryVisible] = useState(false);
+  const [payHistoryCustomer, setPayHistoryCustomer] = useState<Customer | null>(null); // null = all customers
+
   // Date-wise Customer Detail Modal State
   const [selectedDetailCustomerId, setSelectedDetailCustomerId] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<AuditFilterType>('all');
@@ -240,7 +244,10 @@ export const DueReportsScreen = () => {
       const custEntries = milkEntries.filter(
         e => e.customerId === cust.id && e.date >= startDate && e.date <= endDate
       );
-      const custPayments = payments.filter(
+      // All-time payments (not date-filtered) so netDue reflects actual outstanding
+      const custPaymentsAllTime = payments.filter(p => p.customerId === cust.id);
+      // Period-filtered payments for display only
+      const custPaymentsInPeriod = payments.filter(
         p => p.customerId === cust.id && p.date >= startDate && p.date <= endDate
       );
 
@@ -254,8 +261,9 @@ export const DueReportsScreen = () => {
         totalBilled += entry.amount;
       });
 
-      const totalPaid = custPayments.reduce((sum, p) => sum + p.amountPaid, 0);
-      const netDue = Math.max(0, totalBilled - totalPaid);
+      const totalPaid = custPaymentsInPeriod.reduce((sum, p) => sum + p.amountPaid, 0);
+      const totalPaidAllTime = custPaymentsAllTime.reduce((sum, p) => sum + p.amountPaid, 0);
+      const netDue = Math.max(0, totalBilled - totalPaidAllTime);
       const unpaidCount = custEntries.filter(e => !e.isPaid).length;
       const deliveredDaysCount = new Set(custEntries.map(e => e.date)).size;
 
@@ -406,16 +414,20 @@ export const DueReportsScreen = () => {
     if (!paymentCustomer) return;
     const amountVal = parseFloat(payAmount);
     if (isNaN(amountVal) || amountVal <= 0) {
-      showAlert('Invalid Amount', 'Please enter a valid payment amount.');
+      showAlert(
+        lang === 'hi' ? 'अमान्य राशि' : 'Invalid Amount',
+        lang === 'hi' ? 'कृपया एक मान्य राशि दर्ज करें।' : 'Please enter a valid payment amount.'
+      );
       return;
     }
 
+    // Use local date (not UTC) for payment date
     const newPayment: Payment = {
       id: 'pay_' + Date.now(),
       supplierId: supplier?.id || 'supp_default',
       customerId: paymentCustomer.id,
       customerName: paymentCustomer.name,
-      date: new Date().toISOString().split('T')[0],
+      date: toLocalIso(new Date()),
       amountPaid: amountVal,
       notes: payNotes.trim(),
       createdAt: Date.now()
@@ -424,7 +436,26 @@ export const DueReportsScreen = () => {
     await StorageService.savePayment(newPayment);
     await refreshPayments();
     setPaymentModalVisible(false);
-    showAlert('Payment Saved', `Payment of ₹${amountVal} recorded for ${paymentCustomer.name}.`);
+    showAlert(
+      lang === 'hi' ? '✓ भुगतान सहेजा गया' : '✓ Payment Saved',
+      lang === 'hi'
+        ? `₹${amountVal} का भुगतान ${paymentCustomer.name} के लिए दर्ज किया गया।`
+        : `Payment of ₹${amountVal} recorded for ${paymentCustomer.name}.`
+    );
+  };
+
+  const handleDeletePayment = (payId: string) => {
+    confirmAction(
+      lang === 'hi' ? 'भुगतान हटाएं?' : 'Delete Payment?',
+      lang === 'hi' ? 'क्या आप इस भुगतान को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं होगी।' : 'Are you sure you want to delete this payment? This cannot be undone.',
+      async () => {
+        await StorageService.deletePayment(payId);
+        await refreshPayments();
+      },
+      lang === 'hi' ? 'हटाएं' : 'Delete',
+      lang === 'hi' ? 'रद्द करें' : 'Cancel',
+      true
+    );
   };
 
   const handleShareWhatsAppSummary = async (summary: CustomerDueSummary) => {
@@ -692,6 +723,17 @@ export const DueReportsScreen = () => {
             </View>
           </View>
         </View>
+
+        {/* All Payments History Button */}
+        <TouchableOpacity
+          style={styles.allPaymentsBtn}
+          onPress={() => { setPayHistoryCustomer(null); setPayHistoryVisible(true); }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.allPaymentsBtnText}>
+            💰 {t.allPayments} ({payments.length})
+          </Text>
+        </TouchableOpacity>
 
         {/* Search Bar with Clear Button to find any customer easily */}
         <View style={styles.searchRow}>
@@ -1237,31 +1279,74 @@ export const DueReportsScreen = () => {
         {/* ------------------------------------------------------------- */}
         {/* RECORD PAYMENT MODAL */}
         {/* ------------------------------------------------------------- */}
-        <Modal visible={paymentModalVisible} animationType="slide" transparent>
+        <Modal visible={paymentModalVisible} animationType="slide" transparent onRequestClose={() => setPaymentModalVisible(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                Record Payment — {paymentCustomer?.name}
+                💵 {lang === 'hi' ? 'भुगतान जमा करें' : 'Record Payment'}
+              </Text>
+              <Text style={styles.payModalCustomerName}>
+                {paymentCustomer?.name}
               </Text>
 
-              <Text style={styles.label}>Amount Paid (₹) *</Text>
+              {/* Customer total due summary */}
+              {paymentCustomer && (() => {
+                const custPaymentsAll = payments.filter(p => p.customerId === paymentCustomer.id);
+                const custLifetimePaid = custPaymentsAll.reduce((s, p) => s + p.amountPaid, 0);
+                const summary = allDueSummaries.find(s => s.customer.id === paymentCustomer.id);
+                return (
+                  <View style={styles.payModalInfoRow}>
+                    <View style={styles.payModalInfoBox}>
+                      <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'कुल बिल' : 'Billed'}</Text>
+                      <Text style={styles.payModalInfoValue}>₹{(summary?.totalAmountBilled || 0).toFixed(0)}</Text>
+                    </View>
+                    <View style={styles.payModalInfoBox}>
+                      <Text style={styles.payModalInfoLabel}>{t.lifetimePaid}</Text>
+                      <Text style={[styles.payModalInfoValue, { color: '#16a34a' }]}>₹{custLifetimePaid.toFixed(0)}</Text>
+                    </View>
+                    <View style={styles.payModalInfoBox}>
+                      <Text style={styles.payModalInfoLabel}>{t.outstandingDue}</Text>
+                      <Text style={[styles.payModalInfoValue, { color: '#dc2626' }]}>₹{(summary?.netDue || 0).toFixed(0)}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              <Text style={styles.label}>{lang === 'hi' ? 'जमा राशि (₹) *' : 'Amount Paid (₹) *'}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. 500"
+                placeholder={lang === 'hi' ? 'उदा. 500' : 'e.g. 500'}
                 placeholderTextColor="#94a3b8"
                 keyboardType="numeric"
                 value={payAmount}
                 onChangeText={setPayAmount}
               />
 
-              <Text style={styles.label}>Notes</Text>
+              <Text style={styles.label}>{lang === 'hi' ? 'नोट्स' : 'Notes'}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Google Pay / Cash"
+                placeholder={lang === 'hi' ? 'उदा. गूगल पे / नकद' : 'e.g. Google Pay / Cash'}
                 placeholderTextColor="#94a3b8"
                 value={payNotes}
                 onChangeText={setPayNotes}
               />
+
+              {/* View History button */}
+              {paymentCustomer && (
+                <TouchableOpacity
+                  style={styles.payHistoryLinkBtn}
+                  onPress={() => {
+                    setPaymentModalVisible(false);
+                    setPayHistoryCustomer(paymentCustomer);
+                    setPayHistoryVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.payHistoryLinkText}>
+                    📋 {t.paymentHistory} ({payments.filter(p => p.customerId === paymentCustomer.id).length})
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               <View style={styles.modalButtonRow}>
                 <TouchableOpacity
@@ -1278,11 +1363,131 @@ export const DueReportsScreen = () => {
                   activeOpacity={0.8}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={styles.modalSaveBtnText}>Save Payment</Text>
+                  <Text style={styles.modalSaveBtnText}>
+                    {lang === 'hi' ? 'सहेजें' : 'Save Payment'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
+        </Modal>
+
+        {/* ------------------------------------------------------------- */}
+        {/* PAYMENT HISTORY MODAL */}
+        {/* ------------------------------------------------------------- */}
+        <Modal
+          visible={payHistoryVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setPayHistoryVisible(false)}
+        >
+          <SafeAreaView style={styles.detailModalSafeArea}>
+            {/* Header */}
+            <View style={styles.modalHeaderBar}>
+              <TouchableOpacity
+                style={styles.modalBackBtn}
+                onPress={() => setPayHistoryVisible(false)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.modalBackBtnText}>✕ {t.cancel}</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+                💰 {payHistoryCustomer ? `${payHistoryCustomer.name} — ${t.paymentHistory}` : t.allPayments}
+              </Text>
+              <View style={{ width: 70 }} />
+            </View>
+
+            {/* Payment List */}
+            <ScrollView style={styles.detailScrollContent} contentContainerStyle={{ paddingBottom: 40 }}>
+              {(() => {
+                const filteredPays = payHistoryCustomer
+                  ? payments.filter(p => p.customerId === payHistoryCustomer.id)
+                  : [...payments];
+                const sortedPays = filteredPays.sort((a, b) => b.createdAt - a.createdAt);
+
+                if (sortedPays.length === 0) {
+                  return (
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyEmoji}>💰</Text>
+                      <Text style={styles.emptyText}>{t.noPaymentsFound}</Text>
+                    </View>
+                  );
+                }
+
+                // Group by date
+                const grouped: Record<string, Payment[]> = {};
+                sortedPays.forEach(p => {
+                  if (!grouped[p.date]) grouped[p.date] = [];
+                  grouped[p.date].push(p);
+                });
+
+                return Object.entries(grouped).map(([date, dayPayments]) => {
+                  const displayDate = formatToDisplayDate(date);
+                  const dayTotal = dayPayments.reduce((s, p) => s + p.amountPaid, 0);
+                  return (
+                    <View key={date}>
+                      {/* Date Header */}
+                      <View style={styles.payHistoryDateHeader}>
+                        <Text style={styles.payHistoryDateText}>{displayDate}</Text>
+                        <Text style={styles.payHistoryDayTotal}>₹{dayTotal.toFixed(0)}</Text>
+                      </View>
+                      {/* Payments for this date */}
+                      {dayPayments.map(pay => (
+                        <View key={pay.id} style={styles.payHistoryRow}>
+                          <View style={{ flex: 1 }}>
+                            {!payHistoryCustomer && (
+                              <Text style={styles.payHistoryCustomerLabel}>{pay.customerName}</Text>
+                            )}
+                            <Text style={styles.payHistoryNotes} numberOfLines={1}>
+                              {pay.notes || (lang === 'hi' ? 'कोई नोट नहीं' : 'No notes')}
+                            </Text>
+                          </View>
+                          <Text style={styles.payHistoryAmount}>₹{pay.amountPaid.toFixed(0)}</Text>
+                          <TouchableOpacity
+                            style={styles.payHistoryDeleteBtn}
+                            onPress={() => handleDeletePayment(pay.id)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Text style={styles.payHistoryDeleteText}>🗑️</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                });
+              })()}
+
+              {/* Total Summary */}
+              {payHistoryCustomer && (() => {
+                const custPays = payments.filter(p => p.customerId === payHistoryCustomer.id);
+                const total = custPays.reduce((s, p) => s + p.amountPaid, 0);
+                const summary = allDueSummaries.find(s => s.customer.id === payHistoryCustomer.id);
+                return (
+                  <View style={styles.payHistorySummaryBox}>
+                    <Text style={styles.payHistorySummaryTitle}>
+                      {lang === 'hi' ? '📊 खाता सारांश' : '📊 Account Summary'}
+                    </Text>
+                    <View style={styles.payModalInfoRow}>
+                      <View style={styles.payModalInfoBox}>
+                        <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'कुल भुगतान' : 'Total Payments'}</Text>
+                        <Text style={styles.payModalInfoValue}>{custPays.length}</Text>
+                      </View>
+                      <View style={styles.payModalInfoBox}>
+                        <Text style={styles.payModalInfoLabel}>{t.lifetimePaid}</Text>
+                        <Text style={[styles.payModalInfoValue, { color: '#16a34a' }]}>₹{total.toFixed(0)}</Text>
+                      </View>
+                      <View style={styles.payModalInfoBox}>
+                        <Text style={styles.payModalInfoLabel}>{t.outstandingDue}</Text>
+                        <Text style={[styles.payModalInfoValue, { color: '#dc2626' }]}>₹{(summary?.netDue || 0).toFixed(0)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()}
+            </ScrollView>
+          </SafeAreaView>
         </Modal>
 
         {/* ------------------------------------------------------------- */}
@@ -2183,6 +2388,139 @@ const styles = StyleSheet.create({
   calendarDayTextToday: {
     color: '#0284c7',
     fontWeight: 'bold'
+  },
+  // ─── All Payments Button ───────────────────────────────────────────────
+  allPaymentsBtn: {
+    marginHorizontal: 14,
+    marginBottom: 8,
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    alignItems: 'center'
+  },
+  allPaymentsBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1d4ed8'
+  },
+  // ─── Payment Modal Info Row ─────────────────────────────────────────────
+  payModalCustomerName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b',
+    textAlign: 'center',
+    marginBottom: 10
+  },
+  payModalInfoRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  payModalInfoBox: {
+    flex: 1,
+    alignItems: 'center'
+  },
+  payModalInfoLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 2
+  },
+  payModalInfoValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1e293b',
+    textAlign: 'center'
+  },
+  // ─── Payment History Link Button (inside payment modal) ─────────────────
+  payHistoryLinkBtn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginBottom: 8
+  },
+  payHistoryLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0284c7',
+    textDecorationLine: 'underline'
+  },
+  // ─── Payment History Modal Rows ──────────────────────────────────────────
+  payHistoryDateHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    marginTop: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#0284c7'
+  },
+  payHistoryDateText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  payHistoryDayTotal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0284c7'
+  },
+  payHistoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 8
+  },
+  payHistoryCustomerLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1e293b'
+  },
+  payHistoryNotes: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 1
+  },
+  payHistoryAmount: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#16a34a',
+    minWidth: 60,
+    textAlign: 'right'
+  },
+  payHistoryDeleteBtn: {
+    padding: 6
+  },
+  payHistoryDeleteText: {
+    fontSize: 18
+  },
+  payHistorySummaryBox: {
+    margin: 14,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14
+  },
+  payHistorySummaryTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 10,
+    textAlign: 'center'
   }
 });
-

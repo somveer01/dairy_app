@@ -148,6 +148,12 @@ export const StorageService = {
     await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(merged));
   },
 
+  async deletePayment(id: string): Promise<void> {
+    const payments = await this.getPayments();
+    const filtered = payments.filter(p => p.id !== id);
+    await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(filtered));
+  },
+
   // Language
   async getLanguage(): Promise<'en' | 'hi'> {
     try {

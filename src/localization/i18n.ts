@@ -110,7 +110,13 @@ export const translations = {
     searchDuesBtn: 'Search Dues',
     selectFromCalendar: 'Calendar',
     pickDateTitle: 'Select Date',
-    confirmDate: 'Confirm Date'
+    confirmDate: 'Confirm Date',
+    paymentHistory: 'Payment History',
+    allPayments: 'All Payments',
+    noPaymentsFound: 'No payments recorded yet.',
+    deletePayment: 'Delete',
+    lifetimePaid: 'Total Paid (All Time)',
+    outstandingDue: 'Outstanding Due'
   },
 
   hi: {
@@ -222,7 +228,13 @@ export const translations = {
     searchDuesBtn: 'बकाया खोजें',
     selectFromCalendar: 'कैलेंडर',
     pickDateTitle: 'तारीख चुनें',
-    confirmDate: 'तारीख तय करें'
+    confirmDate: 'तारीख तय करें',
+    paymentHistory: 'भुगतान इतिहास',
+    allPayments: 'सभी भुगतान',
+    noPaymentsFound: 'कोई भुगतान दर्ज नहीं है।',
+    deletePayment: 'हटाएं',
+    lifetimePaid: 'कुल जमा (अब तक)',
+    outstandingDue: 'बकाया राशि'
   }
 };
 
