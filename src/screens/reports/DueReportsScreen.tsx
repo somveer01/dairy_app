@@ -41,7 +41,7 @@ export const MONTH_NAMES = [
 ];
 
 export const DueReportsScreen = () => {
-  const { t, customers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier } = useApp();
+  const { t, lang, customers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier } = useApp();
   
   const now = new Date();
   const [reportMode, setReportMode] = useState<ReportMode>('month');
@@ -54,9 +54,17 @@ export const DueReportsScreen = () => {
   const todayDisplayStr = getTodayDisplayDate();
   const [customStartDate, setCustomStartDate] = useState<string>(firstOfCurrentMonth);
   const [customEndDate, setCustomEndDate] = useState<string>(todayDisplayStr);
+  const [appliedStartDate, setAppliedStartDate] = useState<string>(firstOfCurrentMonth);
+  const [appliedEndDate, setAppliedEndDate] = useState<string>(todayDisplayStr);
 
   // Month Picker Modal State
   const [monthPickerVisible, setMonthPickerVisible] = useState<boolean>(false);
+
+  // Calendar Picker Modal State for Custom Date Range
+  const [calendarPickerVisible, setCalendarPickerVisible] = useState<boolean>(false);
+  const [calendarTarget, setCalendarTarget] = useState<'start' | 'end'>('start');
+  const [calendarYear, setCalendarYear] = useState<number>(now.getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(now.getMonth());
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -93,8 +101,8 @@ export const DueReportsScreen = () => {
     }
 
     if (reportMode === 'custom') {
-      const startIso = parseToIsoDate(customStartDate) || '2000-01-01';
-      const endIso = parseToIsoDate(customEndDate) || '2099-12-31';
+      const startIso = parseToIsoDate(appliedStartDate) || '2000-01-01';
+      const endIso = parseToIsoDate(appliedEndDate) || '2099-12-31';
       const label = `${formatToDisplayDate(startIso)} to ${formatToDisplayDate(endIso)}`;
       return { startDate: startIso, endDate: endIso, label };
     }
@@ -104,7 +112,7 @@ export const DueReportsScreen = () => {
       endDate: '2099-12-31',
       label: 'All Time (कुल बकाया)'
     };
-  }, [reportMode, selectedYear, selectedMonth, customStartDate, customEndDate]);
+  }, [reportMode, selectedYear, selectedMonth, appliedStartDate, appliedEndDate]);
 
   const handlePrevMonth = () => {
     if (selectedMonth === 0) {
@@ -134,16 +142,78 @@ export const DueReportsScreen = () => {
     const y = now.getFullYear();
     const mStr = String(now.getMonth() + 1).padStart(2, '0');
     const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    let newStart = '';
+    let newEnd = '';
     if (preset === 'firstHalf') {
-      setCustomStartDate(formatToDisplayDate(`${y}-${mStr}-01`));
-      setCustomEndDate(formatToDisplayDate(`${y}-${mStr}-15`));
+      newStart = formatToDisplayDate(`${y}-${mStr}-01`);
+      newEnd = formatToDisplayDate(`${y}-${mStr}-15`);
     } else if (preset === 'secondHalf') {
-      setCustomStartDate(formatToDisplayDate(`${y}-${mStr}-16`));
-      setCustomEndDate(formatToDisplayDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`));
+      newStart = formatToDisplayDate(`${y}-${mStr}-16`);
+      newEnd = formatToDisplayDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`);
     } else if (preset === 'fullMonth') {
-      setCustomStartDate(formatToDisplayDate(`${y}-${mStr}-01`));
-      setCustomEndDate(formatToDisplayDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`));
+      newStart = formatToDisplayDate(`${y}-${mStr}-01`);
+      newEnd = formatToDisplayDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`);
     }
+    setCustomStartDate(newStart);
+    setCustomEndDate(newEnd);
+    setAppliedStartDate(newStart);
+    setAppliedEndDate(newEnd);
+  };
+
+  const handleApplyCustomSearch = () => {
+    Keyboard.dismiss();
+    const startIso = parseToIsoDate(customStartDate);
+    const endIso = parseToIsoDate(customEndDate);
+    if (!startIso || !endIso) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य तारीख' : 'Invalid Date',
+        lang === 'hi' ? 'कृपया मान्य तारीख प्रारूप (DD-MMM-YYYY) दर्ज करें।' : 'Please enter a valid date in DD-MMM-YYYY format.'
+      );
+      return;
+    }
+    if (startIso > endIso) {
+      showAlert(
+        lang === 'hi' ? 'तारीख क्रम जांचें' : 'Check Date Range',
+        lang === 'hi' ? '"से तारीख" "तक तारीख" से पहले होनी चाहिए।' : 'Start date must be before or equal to End date.'
+      );
+      return;
+    }
+    setAppliedStartDate(formatToDisplayDate(startIso));
+    setAppliedEndDate(formatToDisplayDate(endIso));
+  };
+
+  const openCalendarPicker = (target: 'start' | 'end') => {
+    const currentDateStr = target === 'start' ? customStartDate : customEndDate;
+    const iso = parseToIsoDate(currentDateStr);
+    let y = now.getFullYear();
+    let m = now.getMonth();
+    if (iso) {
+      const parts = iso.split('-');
+      if (parts.length === 3) {
+        y = parseInt(parts[0], 10) || now.getFullYear();
+        m = (parseInt(parts[1], 10) - 1) || now.getMonth();
+      }
+    }
+    setCalendarYear(y);
+    setCalendarMonth(m);
+    setCalendarTarget(target);
+    setCalendarPickerVisible(true);
+  };
+
+  const handleSelectCalendarDay = (day: number) => {
+    const mStr = String(calendarMonth + 1).padStart(2, '0');
+    const dStr = String(day).padStart(2, '0');
+    const selectedIso = `${calendarYear}-${mStr}-${dStr}`;
+    const displayFormatted = formatToDisplayDate(selectedIso);
+
+    if (calendarTarget === 'start') {
+      setCustomStartDate(displayFormatted);
+      setAppliedStartDate(displayFormatted);
+    } else {
+      setCustomEndDate(displayFormatted);
+      setAppliedEndDate(displayFormatted);
+    }
+    setCalendarPickerVisible(false);
   };
 
 
@@ -478,7 +548,9 @@ export const DueReportsScreen = () => {
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={styles.monthNavBtnText}>◀ पिछला</Text>
+              <Text style={styles.monthNavBtnText}>
+                {lang === 'hi' ? '◀ पिछला' : `◀ ${t.prev || 'Prev'}`}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -500,31 +572,53 @@ export const DueReportsScreen = () => {
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={styles.monthNavBtnText}>अगला ▶</Text>
+              <Text style={styles.monthNavBtnText}>
+                {lang === 'hi' ? 'अगला ▶' : `${t.next || 'Next'} ▶`}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* When in Custom Mode: Date Inputs & Quick Presets */}
+        {/* When in Custom Mode: Date Inputs, Calendar Buttons, Presets & Search Button */}
         {reportMode === 'custom' && (
           <View style={styles.customDateBox}>
             <View style={styles.customDateInputRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customDateLabel}>{t.fromDate || 'से तारीख'} (DD-MMM-YYYY)</Text>
+                <View style={styles.dateLabelRow}>
+                  <Text style={styles.customDateLabel}>{t.fromDate || 'से तारीख'} (DD-MMM-YYYY)</Text>
+                  <TouchableOpacity
+                    style={styles.calPickerTriggerBtn}
+                    onPress={() => openCalendarPicker('start')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.calPickerTriggerText}>📅 {t.selectFromCalendar || 'कैलेंडर'}</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={styles.customDateInput}
-                  placeholder="DD-MMM-YYYY (e.g. 01-SEP-2026)"
+                  placeholder="01-SEP-2026"
                   placeholderTextColor="#94a3b8"
                   value={customStartDate}
                   onChangeText={setCustomStartDate}
                 />
               </View>
+
               <Text style={styles.customDateArrow}>→</Text>
+
               <View style={{ flex: 1 }}>
-                <Text style={styles.customDateLabel}>{t.toDate || 'तक तारीख'} (DD-MMM-YYYY)</Text>
+                <View style={styles.dateLabelRow}>
+                  <Text style={styles.customDateLabel}>{t.toDate || 'तक तारीख'} (DD-MMM-YYYY)</Text>
+                  <TouchableOpacity
+                    style={styles.calPickerTriggerBtn}
+                    onPress={() => openCalendarPicker('end')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.calPickerTriggerText}>📅 {t.selectFromCalendar || 'कैलेंडर'}</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={styles.customDateInput}
-                  placeholder="DD-MMM-YYYY (e.g. 08-SEP-2026)"
+                  placeholder="08-SEP-2026"
                   placeholderTextColor="#94a3b8"
                   value={customEndDate}
                   onChangeText={setCustomEndDate}
@@ -532,17 +626,29 @@ export const DueReportsScreen = () => {
               </View>
             </View>
 
-            {/* Quick Presets */}
-            <View style={styles.presetRow}>
-              <Text style={styles.presetLabel}>{t.quickPresets || 'त्वरित चुनें'}:</Text>
-              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('firstHalf')}>
-                <Text style={styles.presetBtnText}>{t.preset1_15 || '1-15 तारीख'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('secondHalf')}>
-                <Text style={styles.presetBtnText}>{t.preset16_End || '16-अंतिम'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('fullMonth')}>
-                <Text style={styles.presetBtnText}>{t.presetFullMonth || 'पूरा महीना'}</Text>
+            {/* Quick Presets and Dedicated Search / Filter Button */}
+            <View style={styles.customActionRow}>
+              <View style={styles.presetRow}>
+                <Text style={styles.presetLabel}>{t.quickPresets || 'त्वरित'}:</Text>
+                <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('firstHalf')}>
+                  <Text style={styles.presetBtnText}>{t.preset1_15 || '1-15'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('secondHalf')}>
+                  <Text style={styles.presetBtnText}>{t.preset16_End || '16-अंतिम'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('fullMonth')}>
+                  <Text style={styles.presetBtnText}>{t.presetFullMonth || 'महीना'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.searchDuesBtn}
+                onPress={handleApplyCustomSearch}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.searchDuesBtnText}>
+                  🔍 {t.searchDuesBtn || (lang === 'hi' ? 'बकाया खोजें' : 'Search Dues')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -809,7 +915,9 @@ export const DueReportsScreen = () => {
                           activeOpacity={0.7}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                         >
-                          <Text style={styles.modalMonthNavBtnText}>◀ पिछला</Text>
+                          <Text style={styles.modalMonthNavBtnText}>
+                            {lang === 'hi' ? '◀ पिछला' : `◀ ${t.prev || 'Prev'}`}
+                          </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.modalMonthNavBtn}
@@ -817,7 +925,9 @@ export const DueReportsScreen = () => {
                           activeOpacity={0.7}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                         >
-                          <Text style={styles.modalMonthNavBtnText}>अगला ▶</Text>
+                          <Text style={styles.modalMonthNavBtnText}>
+                            {lang === 'hi' ? 'अगला ▶' : `${t.next || 'Next'} ▶`}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -1215,6 +1325,150 @@ export const DueReportsScreen = () => {
             </View>
           </View>
         </Modal>
+
+        {/* ------------------------------------------------------------- */}
+        {/* CUSTOM DATE RANGE CALENDAR PICKER MODAL */}
+        {/* ------------------------------------------------------------- */}
+        <Modal
+          visible={calendarPickerVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setCalendarPickerVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.calendarPickerCard}>
+              <View style={styles.calendarPickerHeader}>
+                <Text style={styles.calendarTargetBadge}>
+                  {calendarTarget === 'start'
+                    ? `📅 ${t.fromDate || 'से तारीख'}`
+                    : `📅 ${t.toDate || 'तक तारीख'}`}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setCalendarPickerVisible(false)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Month / Year Navigator for Calendar */}
+              <View style={styles.calendarNavRow}>
+                <TouchableOpacity
+                  style={styles.calNavArrowBtn}
+                  onPress={() => {
+                    if (calendarMonth === 0) {
+                      setCalendarMonth(11);
+                      setCalendarYear(y => y - 1);
+                    } else {
+                      setCalendarMonth(m => m - 1);
+                    }
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.calNavArrowText}>◀</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.calendarNavTitle}>
+                  {MONTH_NAMES[calendarMonth]?.en} {calendarYear}{' '}
+                  <Text style={{ fontSize: 13, color: '#64748b' }}>
+                    ({MONTH_NAMES[calendarMonth]?.hi})
+                  </Text>
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.calNavArrowBtn}
+                  onPress={() => {
+                    if (calendarMonth === 11) {
+                      setCalendarMonth(0);
+                      setCalendarYear(y => y + 1);
+                    } else {
+                      setCalendarMonth(m => m + 1);
+                    }
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.calNavArrowText}>▶</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Day of week header (Sun - Sat) */}
+              <View style={styles.calendarWeekRow}>
+                {DAYS_SHORT.map((dayName, idx) => (
+                  <Text
+                    key={dayName}
+                    style={[
+                      styles.calendarWeekText,
+                      idx === 0 && { color: '#ef4444' } // Red for Sunday
+                    ]}
+                  >
+                    {dayName}
+                  </Text>
+                ))}
+              </View>
+
+              {/* Days Grid */}
+              <View style={styles.calendarDaysGrid}>
+                {(() => {
+                  const firstDayIndex = new Date(calendarYear, calendarMonth, 1).getDay();
+                  const totalDaysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+                  const currentSelectedDisplay = calendarTarget === 'start' ? customStartDate : customEndDate;
+                  const currentSelectedIso = parseToIsoDate(currentSelectedDisplay);
+
+                  const cells = [];
+                  // Empty offset cells for start day of week
+                  for (let i = 0; i < firstDayIndex; i++) {
+                    cells.push(<View key={`empty-${i}`} style={styles.calendarDayCell} />);
+                  }
+
+                  // Day cells
+                  for (let day = 1; day <= totalDaysInMonth; day++) {
+                    const mStr = String(calendarMonth + 1).padStart(2, '0');
+                    const dStr = String(day).padStart(2, '0');
+                    const cellIso = `${calendarYear}-${mStr}-${dStr}`;
+                    const isSelected = currentSelectedIso === cellIso;
+                    const isToday =
+                      now.getFullYear() === calendarYear &&
+                      now.getMonth() === calendarMonth &&
+                      now.getDate() === day;
+
+                    cells.push(
+                      <TouchableOpacity
+                        key={`day-${day}`}
+                        style={[
+                          styles.calendarDayCell,
+                          isSelected && styles.calendarDayCellSelected,
+                          isToday && !isSelected && styles.calendarDayCellToday
+                        ]}
+                        onPress={() => handleSelectCalendarDay(day)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.calendarDayText,
+                            isSelected && styles.calendarDayTextSelected,
+                            isToday && !isSelected && styles.calendarDayTextToday
+                          ]}
+                        >
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }
+
+                  return cells;
+                })()}
+              </View>
+
+              <TouchableOpacity
+                style={styles.monthPickerCloseBtn}
+                onPress={() => setCalendarPickerVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.monthPickerCloseText}>{t.cancel || 'रद्द करें'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -1273,7 +1527,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8
   },
-  customDateLabel: { fontSize: 11, color: '#475569', fontWeight: '600', marginBottom: 4 },
+  dateLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4
+  },
+  customDateLabel: { fontSize: 11, color: '#475569', fontWeight: '600' },
+  calPickerTriggerBtn: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#bfdbfe'
+  },
+  calPickerTriggerText: { fontSize: 10, color: '#0284c7', fontWeight: '600' },
   customDateInput: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -1284,12 +1553,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     color: '#0f172a'
   },
-  customDateArrow: { fontSize: 16, color: '#94a3b8', fontWeight: 'bold', marginTop: 16 },
+  customDateArrow: { fontSize: 16, color: '#94a3b8', fontWeight: 'bold', marginTop: 14 },
+  customActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+    flexWrap: 'wrap'
+  },
   presetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
+    gap: 5,
     flexWrap: 'wrap'
   },
   presetLabel: { fontSize: 11, color: '#64748b', fontWeight: '500' },
@@ -1302,6 +1578,23 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   presetBtnText: { fontSize: 11, color: '#0284c7', fontWeight: '600' },
+  searchDuesBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0284c7',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  searchDuesBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold'
+  },
   summaryBanner: {
     backgroundColor: '#0284c7',
     borderRadius: 14,
@@ -1734,6 +2027,107 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     alignItems: 'center'
   },
-  monthPickerCloseText: { color: '#475569', fontWeight: 'bold', fontSize: 13 }
+  monthPickerCloseText: { color: '#475569', fontWeight: 'bold', fontSize: 13 },
+
+  // Calendar Picker Modal Styles
+  calendarPickerCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 16,
+    width: '94%',
+    maxWidth: 360,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10
+  },
+  calendarPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  modalCloseText: {
+    fontSize: 16,
+    color: '#64748b',
+    fontWeight: 'bold',
+    padding: 4
+  },
+  calendarTargetBadge: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#0284c7',
+    backgroundColor: '#e0f2fe',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8
+  },
+  calendarNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    backgroundColor: '#f8fafc',
+    padding: 6,
+    borderRadius: 10
+  },
+  calNavArrowBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  calNavArrowText: { fontSize: 13, fontWeight: 'bold', color: '#0284c7' },
+  calendarNavTitle: { fontSize: 14, fontWeight: 'bold', color: '#0f172a' },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    marginBottom: 6
+  },
+  calendarWeekText: {
+    width: 38,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#64748b'
+  },
+  calendarDaysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start'
+  },
+  calendarDayCell: {
+    width: `${100 / 7}%`,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 2,
+    borderRadius: 8
+  },
+  calendarDayCellSelected: {
+    backgroundColor: '#0284c7'
+  },
+  calendarDayCellToday: {
+    borderWidth: 1.5,
+    borderColor: '#0284c7'
+  },
+  calendarDayText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1e293b'
+  },
+  calendarDayTextSelected: {
+    color: '#ffffff',
+    fontWeight: 'bold'
+  },
+  calendarDayTextToday: {
+    color: '#0284c7',
+    fontWeight: 'bold'
+  }
 });
 

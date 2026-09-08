@@ -246,7 +246,7 @@ export const DashboardScreen = ({ navigation }: any) => {
         </View>
 
         {/* Quick Actions */}
-        <Text style={styles.sectionHeading}>Quick Actions</Text>
+        <Text style={styles.sectionHeading}>{t.quickActions || 'Quick Actions'}</Text>
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.primaryActionButton}
@@ -263,7 +263,7 @@ export const DashboardScreen = ({ navigation }: any) => {
             activeOpacity={0.7}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Text style={styles.secondaryActionText}>👥 + Add Customer</Text>
+            <Text style={styles.secondaryActionText}>👥 + {t.addNewCustomer || 'Add Customer'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -298,14 +298,14 @@ export const DashboardScreen = ({ navigation }: any) => {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalIcon}>🥛</Text>
-              <Text style={styles.modalTitle}>डेयरी प्रोफाइल सेट करें</Text>
+              <Text style={styles.modalTitle}>{t.dairyProfileSetupTitle || 'डेयरी प्रोफाइल सेट करें'}</Text>
               <Text style={styles.modalSubtitle}>
-                Set your dairy farm name and owner name for receipts & daily registers.
+                {t.dairyProfileSetupSub || 'Set your dairy farm name and owner name for receipts & daily registers.'}
               </Text>
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.modalLabel}>Dairy / Business Name (डेयरी का नाम) *</Text>
+              <Text style={styles.modalLabel}>{t.dairyNameInputLabel || 'Dairy / Business Name (डेयरी का नाम) *'}</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="e.g. Radhe Dairy / राधे डेयरी फ़ार्म"
@@ -315,7 +315,7 @@ export const DashboardScreen = ({ navigation }: any) => {
                 autoFocus
               />
 
-              <Text style={styles.modalLabel}>Owner / Supplier Name (आपका नाम)</Text>
+              <Text style={styles.modalLabel}>{t.dairyOwnerInputLabel || 'Owner / Supplier Name (आपका नाम)'}</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="e.g. Ramesh Kumar / आपका नाम"
@@ -331,7 +331,7 @@ export const DashboardScreen = ({ navigation }: any) => {
                   style={styles.modalCancelBtn}
                   onPress={() => setEditDairyModalVisible(false)}
                 >
-                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                  <Text style={styles.modalCancelBtnText}>{t.cancel || 'Cancel'}</Text>
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity
@@ -339,12 +339,13 @@ export const DashboardScreen = ({ navigation }: any) => {
                 onPress={handleSaveDairyProfile}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalSaveBtnText}>✓ Save Dairy Profile (सहेजें)</Text>
+                <Text style={styles.modalSaveBtnText}>{t.saveDairyProfileBtn || '✓ Save Dairy Profile (सहेजें)'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
+
 
       {/* App Installation Process Guide Modal */}
       <InstallAppModal

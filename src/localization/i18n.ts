@@ -89,8 +89,30 @@ export const translations = {
     inspectStoredData: 'Inspect Stored Data',
     shareBackup: 'Share Backup',
     trainingVideo: 'Staff Training Video',
-    firebaseCloud: 'Firebase Cloud Database'
+    firebaseCloud: 'Firebase Cloud Database',
+
+    // New keys for complete bilingual support
+    quickActions: 'Quick Actions',
+    editCustomer: 'Edit Customer',
+    addNewCustomer: 'Add New Customer',
+    customerNameReq: 'Customer Name *',
+    phoneNumberReq: 'Phone Number (+91) *',
+    addressLabel: 'Address',
+    defaultLitresDay: 'Default Litres / Day',
+    ratePerLitreLabel: 'Rate per Litre (₹)',
+    editPrompt: 'Edit',
+    deletePrompt: 'Delete',
+    dairyProfileSetupTitle: 'Set Dairy Profile',
+    dairyProfileSetupSub: 'Set your dairy farm name and owner name for receipts & daily registers.',
+    dairyNameInputLabel: 'Dairy / Business Name *',
+    dairyOwnerInputLabel: 'Owner / Supplier Name',
+    saveDairyProfileBtn: 'Save Dairy Profile',
+    searchDuesBtn: 'Search Dues',
+    selectFromCalendar: 'Calendar',
+    pickDateTitle: 'Select Date',
+    confirmDate: 'Confirm Date'
   },
+
   hi: {
     appTitle: 'डेयरी दूध विक्रेता',
     dashboard: 'डैशबोर्ड',
@@ -179,7 +201,29 @@ export const translations = {
     inspectStoredData: 'संग्रहीत डेटा जांचें',
     shareBackup: 'बैकअप शेयर करें',
     trainingVideo: 'स्टाफ ट्रेनिंग वीडियो',
-    firebaseCloud: 'फायरबेस क्लाउड डेटाबेस'
+    firebaseCloud: 'फायरबेस क्लाउड डेटाबेस',
+
+    // New keys for complete bilingual support
+    quickActions: 'त्वरित कार्य (Quick Actions)',
+    editCustomer: 'ग्राहक विवरण बदलें (Edit Customer)',
+    addNewCustomer: 'नया ग्राहक जोड़ें (Add Customer)',
+    customerNameReq: 'ग्राहक का नाम *',
+    phoneNumberReq: 'मोबाइल नंबर (+91) *',
+    addressLabel: 'पता',
+    defaultLitresDay: 'दैनिक दूध (लीटर/दिन)',
+    ratePerLitreLabel: 'दर प्रति लीटर (₹)',
+    editPrompt: 'बदलें',
+    deletePrompt: 'हटाएं',
+    dairyProfileSetupTitle: 'डेयरी प्रोफाइल सेट करें',
+    dairyProfileSetupSub: 'रसीदों और दैनिक रजिस्टर के लिए अपनी डेयरी और मालिक का नाम सेट करें।',
+    dairyNameInputLabel: 'डेयरी का नाम *',
+    dairyOwnerInputLabel: 'मालिक / सप्लायर का नाम',
+    saveDairyProfileBtn: '✓ डेयरी प्रोफाइल सहेजें',
+    searchDuesBtn: 'बकाया खोजें',
+    selectFromCalendar: 'कैलेंडर',
+    pickDateTitle: 'तारीख चुनें',
+    confirmDate: 'तारीख तय करें'
   }
 };
+
 

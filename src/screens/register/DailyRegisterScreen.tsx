@@ -435,7 +435,7 @@ export const DailyRegisterScreen = () => {
               </Text>
 
               {/* Milk Type */}
-              <Text style={styles.label}>Milk Type</Text>
+              <Text style={styles.label}>{t.selectMilkType} *</Text>
               <View style={styles.typeSelectorRow}>
                 <TouchableOpacity
                   style={[styles.typeOption, milkType === 'cow' && styles.typeOptionSelectedCow]}
@@ -443,7 +443,7 @@ export const DailyRegisterScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
-                  <Text style={styles.typeOptionText}>🐄 Cow Milk</Text>
+                  <Text style={styles.typeOptionText}>🐄 {t.cowMilk}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.typeOption, milkType === 'buffalo' && styles.typeOptionSelectedBuffalo]}
@@ -451,16 +451,16 @@ export const DailyRegisterScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
-                  <Text style={styles.typeOptionText}>🐃 Buffalo Milk</Text>
+                  <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk}</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.rowTwoInputs}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.label}>Quantity (Litres)</Text>
+                  <Text style={styles.label}>{t.litres}</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="Litres"
+                    placeholder="e.g. 2.0"
                     placeholderTextColor="#94a3b8"
                     keyboardType="decimal-pad"
                     value={litres}
@@ -468,10 +468,10 @@ export const DailyRegisterScreen = () => {
                   />
                 </View>
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.label}>Rate / Litre (₹)</Text>
+                  <Text style={styles.label}>{t.ratePerLitre}</Text>
                   <TextInput
                     style={styles.modalInput}
-                    placeholder="Rate"
+                    placeholder="e.g. 55"
                     placeholderTextColor="#94a3b8"
                     keyboardType="numeric"
                     value={rate}
@@ -480,7 +480,7 @@ export const DailyRegisterScreen = () => {
                 </View>
               </View>
 
-              <Text style={styles.label}>Notes / Remarks</Text>
+              <Text style={styles.label}>Notes / Remarks (विवरण)</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="Optional remark"
@@ -503,7 +503,7 @@ export const DailyRegisterScreen = () => {
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
-                    <Text style={styles.modalDeleteBtnText}>🗑️ Delete</Text>
+                    <Text style={styles.modalDeleteBtnText}>🗑️ {t.deletePrompt || 'Delete'}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -520,9 +520,10 @@ export const DailyRegisterScreen = () => {
                   activeOpacity={0.8}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={styles.modalSaveBtnText}>Save Entry</Text>
+                  <Text style={styles.modalSaveBtnText}>{t.save}</Text>
                 </TouchableOpacity>
               </View>
+
             </View>
           </View>
         </Modal>

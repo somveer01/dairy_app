@@ -620,7 +620,7 @@ export const CustomerListScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={styles.editBtnText}>✏️ Edit</Text>
+                  <Text style={styles.editBtnText}>✏️ {t.editPrompt || 'Edit'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.deleteBtn}
@@ -628,9 +628,10 @@ export const CustomerListScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={styles.deleteBtnText}>🗑️ Delete</Text>
+                  <Text style={styles.deleteBtnText}>🗑️ {t.deletePrompt || 'Delete'}</Text>
                 </TouchableOpacity>
               </View>
+
             </View>
           )}
           ListEmptyComponent={
@@ -834,19 +835,19 @@ export const CustomerListScreen = () => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                {editingCustomer ? 'Edit Customer' : 'Add New Customer'}
+                {editingCustomer ? (t.editCustomer || 'Edit Customer') : (t.addNewCustomer || 'Add New Customer')}
               </Text>
 
-              <Text style={styles.label}>Customer Name *</Text>
+              <Text style={styles.label}>{t.customerNameReq || 'Customer Name *'}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Ramesh Kumar"
+                placeholder="e.g. Ramesh Kumar / रमेश कुमार"
                 placeholderTextColor="#94a3b8"
                 value={name}
                 onChangeText={setName}
               />
 
-              <Text style={styles.label}>Phone Number (+91) *</Text>
+              <Text style={styles.label}>{t.phoneNumberReq || 'Phone Number (+91) *'}</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="10-digit mobile"
@@ -857,10 +858,10 @@ export const CustomerListScreen = () => {
                 onChangeText={setPhone}
               />
 
-              <Text style={styles.label}>Address</Text>
+              <Text style={styles.label}>{t.addressLabel || 'Address'}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="House / Flat / Area"
+                placeholder="House / Flat / Area / पता"
                 placeholderTextColor="#94a3b8"
                 value={address}
                 onChangeText={setAddress}
@@ -881,7 +882,7 @@ export const CustomerListScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
-                  <Text style={styles.typeOptionText}>🐄 Cow Milk</Text>
+                  <Text style={styles.typeOptionText}>🐄 {t.cowMilk}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -895,13 +896,13 @@ export const CustomerListScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
-                  <Text style={styles.typeOptionText}>🐃 Buffalo Milk</Text>
+                  <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk}</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.rowTwoInputs}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.label}>Default Litres / Day</Text>
+                  <Text style={styles.label}>{t.defaultLitresDay || 'Default Litres / Day'}</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g. 2.0"
@@ -912,7 +913,7 @@ export const CustomerListScreen = () => {
                   />
                 </View>
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.label}>Rate per Litre (₹)</Text>
+                  <Text style={styles.label}>{t.ratePerLitreLabel || 'Rate per Litre (₹)'}</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="e.g. 55"
@@ -945,6 +946,7 @@ export const CustomerListScreen = () => {
             </View>
           </View>
         </Modal>
+
       </View>
     </SafeAreaView>
   );
