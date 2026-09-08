@@ -22,6 +22,12 @@ export const WhatsAppService = {
     const { customer, totalLitresCow, totalLitresBuffalo, totalAmountBilled, totalPaid, netDue } = summary;
 
     let itemsText = '';
+    if (summary.deliveredDaysCount !== undefined && summary.totalRangeDays !== undefined && summary.totalRangeDays > 0) {
+      itemsText += `\n📅 Milk Delivered: ${summary.deliveredDaysCount} / ${summary.totalRangeDays} Days`;
+    } else if (summary.deliveredDaysCount !== undefined && summary.deliveredDaysCount > 0) {
+      itemsText += `\n📅 Milk Delivered: ${summary.deliveredDaysCount} Days`;
+    }
+
     if (totalLitresCow > 0) {
       itemsText += `\n🐄 Cow Milk: ${totalLitresCow.toFixed(1)} L`;
     }
@@ -32,8 +38,7 @@ export const WhatsAppService = {
     const message = `🥛 *${supplierBusinessName}*
 -----------------------------
 👤 Customer: *${customer.name}*
-📅 Period: ${periodLabel}
-${itemsText}
+📅 Period: ${periodLabel}${itemsText}
 💰 Total Milk Billed: ₹${totalAmountBilled.toFixed(2)}
 💵 Payment Received: ₹${totalPaid.toFixed(2)}
 -----------------------------
@@ -90,7 +95,7 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
 -----------------------------
 👤 Customer: *${customer.name}*
 📅 Period: ${periodLabel}
-📊 Status: ${deliveredDays} Days Delivered | ${missingDays} Days Missing
+📊 Status: ${deliveredDays} Days Delivered | ${missingDays} Days Missing (${auditItems.length} Days)
 -----------------------------
 📅 *DATE-WISE DELIVERY LOG:*${breakdownText}
 -----------------------------

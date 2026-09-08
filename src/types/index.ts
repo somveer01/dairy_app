@@ -1,4 +1,4 @@
-﻿export type MilkType = 'cow' | 'buffalo';
+export type MilkType = 'cow' | 'buffalo';
 
 export type SessionType = 'Morning' | 'Evening' | 'Custom';
 
@@ -60,4 +60,6 @@ export interface CustomerDueSummary {
   totalPaid: number;
   netDue: number;
   unpaidEntriesCount: number;
+  deliveredDaysCount?: number;
+  totalRangeDays?: number;
 }

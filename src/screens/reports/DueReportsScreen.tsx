@@ -40,6 +40,13 @@ export const MONTH_NAMES = [
   { en: 'December', hi: 'दिसम्बर', short: 'Dec' },
 ];
 
+const toLocalIso = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export const DueReportsScreen = () => {
   const { t, lang, customers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier } = useApp();
   
@@ -97,20 +104,29 @@ export const DueReportsScreen = () => {
       const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
       const mObj = MONTH_NAMES[selectedMonth] || { en: '', hi: '' };
       const label = `${mObj.en} ${year} (${mObj.hi})`;
-      return { startDate, endDate, label };
+      return { startDate, endDate, label, totalDays: lastDay };
     }
 
     if (reportMode === 'custom') {
       const startIso = parseToIsoDate(appliedStartDate) || '2000-01-01';
       const endIso = parseToIsoDate(appliedEndDate) || '2099-12-31';
       const label = `${formatToDisplayDate(startIso)} to ${formatToDisplayDate(endIso)}`;
-      return { startDate: startIso, endDate: endIso, label };
+
+      const sParts = startIso.split('-').map(Number);
+      const eParts = endIso.split('-').map(Number);
+      const sObj = new Date(sParts[0], sParts[1] - 1, sParts[2], 12, 0, 0);
+      const eObj = new Date(eParts[0], eParts[1] - 1, eParts[2], 12, 0, 0);
+      const diffMs = eObj.getTime() - sObj.getTime();
+      const totalDays = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+
+      return { startDate: startIso, endDate: endIso, label, totalDays };
     }
 
     return {
       startDate: '2000-01-01',
       endDate: '2099-12-31',
-      label: 'All Time (कुल बकाया)'
+      label: 'All Time (कुल बकाया)',
+      totalDays: 0
     };
   }, [reportMode, selectedYear, selectedMonth, appliedStartDate, appliedEndDate]);
 
@@ -219,7 +235,7 @@ export const DueReportsScreen = () => {
 
   // All calculated due summaries for the selected period
   const allDueSummaries: CustomerDueSummary[] = useMemo(() => {
-    const { startDate, endDate } = dateRange;
+    const { startDate, endDate, totalDays } = dateRange;
     return customers.map(cust => {
       const custEntries = milkEntries.filter(
         e => e.customerId === cust.id && e.date >= startDate && e.date <= endDate
@@ -241,6 +257,7 @@ export const DueReportsScreen = () => {
       const totalPaid = custPayments.reduce((sum, p) => sum + p.amountPaid, 0);
       const netDue = Math.max(0, totalBilled - totalPaid);
       const unpaidCount = custEntries.filter(e => !e.isPaid).length;
+      const deliveredDaysCount = new Set(custEntries.map(e => e.date)).size;
 
       return {
         customer: cust,
@@ -250,7 +267,9 @@ export const DueReportsScreen = () => {
         totalAmountBilled: totalBilled,
         totalPaid,
         netDue,
-        unpaidEntriesCount: unpaidCount
+        unpaidEntriesCount: unpaidCount,
+        deliveredDaysCount,
+        totalRangeDays: totalDays
       };
     });
   }, [customers, milkEntries, payments, dateRange]);
@@ -301,32 +320,34 @@ export const DueReportsScreen = () => {
     if (reportMode === 'all') {
       const custEntries = milkEntries.filter(e => e.customerId === activeDetailSummary.customer.id);
       const today = new Date();
+      const todayNoon = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
       if (custEntries.length > 0) {
         const sorted = custEntries.map(e => e.date).sort();
-        const earliest = new Date(sorted[0]);
-        const diffTime = Math.abs(today.getTime() - earliest.getTime());
+        const earliestParts = sorted[0].split('-').map(Number);
+        const earliest = new Date(earliestParts[0], earliestParts[1] - 1, earliestParts[2], 12, 0, 0);
+        const diffTime = Math.abs(todayNoon.getTime() - earliest.getTime());
         const diffDays = Math.min(Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1, 90);
+        const cur = new Date(todayNoon);
         for (let i = 0; i < diffDays; i++) {
-          const d = new Date();
-          d.setDate(today.getDate() - i);
-          dates.push(d.toISOString().split('T')[0]);
+          dates.push(toLocalIso(cur));
+          cur.setDate(cur.getDate() - 1);
         }
       } else {
+        const cur = new Date(todayNoon);
         for (let i = 0; i < 30; i++) {
-          const d = new Date();
-          d.setDate(today.getDate() - i);
-          dates.push(d.toISOString().split('T')[0]);
+          dates.push(toLocalIso(cur));
+          cur.setDate(cur.getDate() - 1);
         }
       }
     } else {
       const startParts = startDate.split('-').map(Number);
       const endParts = endDate.split('-').map(Number);
-      const startObj = new Date(startParts[0], startParts[1] - 1, startParts[2]);
-      const endObj = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+      const startObj = new Date(startParts[0], startParts[1] - 1, startParts[2], 12, 0, 0);
+      const endObj = new Date(endParts[0], endParts[1] - 1, endParts[2], 12, 0, 0);
 
       const cur = new Date(endObj);
       while (cur >= startObj) {
-        dates.push(cur.toISOString().split('T')[0]);
+        dates.push(toLocalIso(cur));
         cur.setDate(cur.getDate() - 1);
       }
     }
@@ -343,7 +364,7 @@ export const DueReportsScreen = () => {
       const y = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10);
       const d = parseInt(parts[2], 10);
-      const dateObj = new Date(y, m - 1, d);
+      const dateObj = new Date(y, m - 1, d, 12, 0, 0);
       const dayName = DAYS_SHORT[dateObj.getDay()] || '';
       const formattedDate = `${formatToDisplayDate(dateStr)} (${dayName})`;
 
@@ -648,6 +669,12 @@ export const DueReportsScreen = () => {
 
         {/* Total Summary Banner with Billed, Received and Net Due */}
         <View style={styles.summaryBanner}>
+          <View style={styles.bannerPeriodInfoRow}>
+            <Text style={styles.bannerPeriodInfoText}>
+              📅 {dateRange.label}
+              {dateRange.totalDays > 0 ? ` • ${dateRange.totalDays} ${lang === 'hi' ? 'दिन का रिपोर्ट' : 'Days Report'}` : ''}
+            </Text>
+          </View>
           <View style={styles.bannerRow}>
             <View style={styles.bannerItem}>
               <Text style={styles.bannerSubLabel}>{t.totalBilled}</Text>
@@ -751,7 +778,9 @@ export const DueReportsScreen = () => {
                     <Text style={styles.custIndex}>{index + 1}.</Text>
                     <Text style={styles.custName} numberOfLines={1}>{item.customer.name}</Text>
                     <View style={styles.viewReportBadge}>
-                      <Text style={styles.viewReportBadgeText}>📅 Date-wise ›</Text>
+                      <Text style={styles.viewReportBadgeText}>
+                        📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'} ›
+                      </Text>
                     </View>
                   </View>
                   <Text style={styles.custPhone}>📞 {item.customer.phone}</Text>
@@ -768,7 +797,7 @@ export const DueReportsScreen = () => {
                 </View>
               </View>
 
-              {/* Quantities delivered */}
+              {/* Quantities delivered & Days count */}
               <View style={styles.qtyRow}>
                 {item.totalLitresCow > 0 && (
                   <Text style={styles.qtyTag}>🐄 Cow: {item.totalLitresCow.toFixed(1)} L</Text>
@@ -777,6 +806,9 @@ export const DueReportsScreen = () => {
                   <Text style={styles.qtyTag}>🐃 Buffalo: {item.totalLitresBuffalo.toFixed(1)} L</Text>
                 )}
                 <Text style={styles.qtyTagTotal}>Total: {item.totalLitres.toFixed(1)} L</Text>
+                <Text style={styles.qtyTagDays}>
+                  📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'}
+                </Text>
               </View>
 
               {/* Billed vs Paid */}
@@ -852,7 +884,7 @@ export const DueReportsScreen = () => {
                   <Text style={styles.modalBackBtnText}>✕ Close</Text>
                 </TouchableOpacity>
                 <Text style={styles.modalHeaderTitle} numberOfLines={1}>
-                  Date-Wise Delivery Report
+                  {lang === 'hi' ? 'तारीख-वार दूध रिपोर्ट' : 'Date-Wise Delivery Report'} ({auditDateList.length} {lang === 'hi' ? 'दिन' : 'Days'})
                 </Text>
                 <TouchableOpacity
                   style={styles.modalHeaderPayBtn}
@@ -895,7 +927,7 @@ export const DueReportsScreen = () => {
                         {reportMode === 'month' ? '📅' : reportMode === 'custom' ? '🗓️' : '♾️'}
                       </Text>
                       <Text style={styles.modalPeriodBadgeText} numberOfLines={1}>
-                        {dateRange.label}
+                        {dateRange.label} • {auditDateList.length} {lang === 'hi' ? 'दिन' : 'Days'}
                       </Text>
                     </View>
                     {reportMode === 'month' && (
@@ -929,26 +961,26 @@ export const DueReportsScreen = () => {
                 <View style={styles.kpiContainer}>
                   <View style={[styles.kpiBox, { backgroundColor: '#f0fdf4', borderColor: '#86efac' }]}>
                     <Text style={[styles.kpiValue, { color: '#16a34a' }]}>{deliveredDaysCount}</Text>
-                    <Text style={styles.kpiLabel}>✓ Delivered</Text>
+                    <Text style={styles.kpiLabel}>✓ {lang === 'hi' ? 'सप्लाय दिन' : 'Delivered'}</Text>
                   </View>
 
                   <View style={[styles.kpiBox, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
                     <Text style={[styles.kpiValue, { color: '#d97706' }]}>{missingDaysCount}</Text>
-                    <Text style={styles.kpiLabel}>⚠️ Missing</Text>
+                    <Text style={styles.kpiLabel}>⚠️ {lang === 'hi' ? 'नागा दिन' : 'Missing'}</Text>
                   </View>
 
                   <View style={[styles.kpiBox, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
                     <Text style={[styles.kpiValue, { color: '#0284c7' }]}>
                       {activeDetailSummary.totalLitres.toFixed(1)}L
                     </Text>
-                    <Text style={styles.kpiLabel}>Total Vol</Text>
+                    <Text style={styles.kpiLabel}>{lang === 'hi' ? 'कुल दूध' : 'Total Vol'}</Text>
                   </View>
 
                   <View style={[styles.kpiBox, { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' }]}>
                     <Text style={[styles.kpiValue, { color: '#7e22ce' }]}>
                       ₹{activeDetailSummary.totalAmountBilled.toFixed(0)}
                     </Text>
-                    <Text style={styles.kpiLabel}>Billed</Text>
+                    <Text style={styles.kpiLabel}>{lang === 'hi' ? 'कुल बिल' : 'Billed'}</Text>
                   </View>
                 </View>
 
@@ -959,7 +991,7 @@ export const DueReportsScreen = () => {
                     onPress={() => setAuditFilter('all')}
                   >
                     <Text style={[styles.auditFilterChipText, auditFilter === 'all' && styles.auditFilterChipTextActive]}>
-                      All Dates ({auditDateList.length})
+                      {lang === 'hi' ? `सभी ${auditDateList.length} दिन` : `All ${auditDateList.length} Days`}
                     </Text>
                   </TouchableOpacity>
 
@@ -968,7 +1000,7 @@ export const DueReportsScreen = () => {
                     onPress={() => setAuditFilter('missing')}
                   >
                     <Text style={[styles.auditFilterChipText, auditFilter === 'missing' && styles.auditFilterChipTextActiveMissing]}>
-                      ⚠️ Missing Only ({missingDaysCount})
+                      ⚠️ {lang === 'hi' ? `नागा (${missingDaysCount})` : `Missing (${missingDaysCount})`}
                     </Text>
                   </TouchableOpacity>
 
@@ -977,7 +1009,7 @@ export const DueReportsScreen = () => {
                     onPress={() => setAuditFilter('delivered')}
                   >
                     <Text style={[styles.auditFilterChipText, auditFilter === 'delivered' && styles.auditFilterChipTextActiveDelivered]}>
-                      ✓ Delivered ({deliveredDaysCount})
+                      ✓ {lang === 'hi' ? `सप्लाय (${deliveredDaysCount})` : `Delivered (${deliveredDaysCount})`}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1599,6 +1631,20 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10
   },
+  bannerPeriodInfoRow: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  bannerPeriodInfoText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700'
+  },
   bannerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   bannerItem: { flex: 1, alignItems: 'center' },
   bannerItemDivider: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.25)' },
@@ -1692,6 +1738,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     fontSize: 11,
     color: '#0284c7',
+    fontWeight: 'bold'
+  },
+  qtyTagDays: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    fontSize: 11,
+    color: '#15803d',
     fontWeight: 'bold'
   },
   finRow: {
