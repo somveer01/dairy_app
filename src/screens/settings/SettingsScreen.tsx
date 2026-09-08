@@ -146,6 +146,42 @@ export const SettingsScreen = () => {
     }
   };
 
+  const handleCheckForUpdates = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      confirmAction(
+        lang === 'hi' ? 'अपडेट जांचें (Check Updates)' : 'Check for Updates',
+        lang === 'hi'
+          ? 'क्या आप नया अपडेट डाउनलोड करना चाहते हैं? ऐप ताजा डेटा और नए फीचर्स के साथ रिफ्रेश हो जाएगा।'
+          : 'Do you want to check and download the latest updates? The app will refresh with the newest features.',
+        async () => {
+          try {
+            if ('serviceWorker' in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              for (const reg of registrations) {
+                await reg.update();
+              }
+            }
+            if ('caches' in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.map(k => caches.delete(k)));
+            }
+          } catch {
+            // Proceed to reload
+          }
+          window.location.reload();
+        },
+        lang === 'hi' ? 'अपडेट करें (Update)' : 'Update Now',
+        lang === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel',
+        false
+      );
+    } else {
+      showAlert(
+        lang === 'hi' ? 'ऐप अपडेट' : 'App Update',
+        lang === 'hi' ? 'आप पहले से नवीनतम संस्करण चला रहे हैं।' : 'You are running the latest version.'
+      );
+    }
+  };
+
   const handleLogout = () => {
     confirmAction(
       'लॉगआउट (Logout)',
@@ -355,6 +391,27 @@ export const SettingsScreen = () => {
             <Text style={styles.menuSubtitle}>Add to Home Screen for 1-tap offline use</Text>
           </View>
           <Text style={[styles.chevron, { color: '#16a34a', fontWeight: 'bold' }]}>Install</Text>
+        </TouchableOpacity>
+
+        {/* Check for App Updates */}
+        <TouchableOpacity
+          style={[styles.menuItem, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd', borderWidth: 1 }]}
+          onPress={handleCheckForUpdates}
+          activeOpacity={0.7}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Text style={styles.menuIcon}>🔄</Text>
+          <View style={styles.menuContent}>
+            <Text style={[styles.menuTitle, { color: '#0284c7', fontWeight: 'bold' }]}>
+              {lang === 'hi' ? 'नया अपडेट लोड करें (Check Updates)' : 'Check for Updates'}
+            </Text>
+            <Text style={styles.menuSubtitle}>
+              {lang === 'hi' ? 'ताजा बदलाव और नए फीचर्स तुरंत लोड करें' : 'Get latest features, fixes & screen layouts'}
+            </Text>
+          </View>
+          <Text style={[styles.chevron, { color: '#0284c7', fontWeight: 'bold' }]}>
+            {lang === 'hi' ? 'अपडेट' : 'Update'}
+          </Text>
         </TouchableOpacity>
 
         {/* App Version Info */}

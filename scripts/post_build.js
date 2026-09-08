@@ -42,12 +42,14 @@ if (fs.existsSync('assets/training.html')) {
 fs.writeFileSync('dist/.nojekyll', '');
 
 // 3. PWA Service Worker (dist/sw.js)
+const BUILD_TIME = Date.now();
+const CACHE_NAME = `dairy-pwa-${BUILD_TIME}`;
+
 const swContent = `
-const CACHE_NAME = 'dairy-pwa-v3';
+const CACHE_NAME = '${CACHE_NAME}';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
-  '/dairy_app/training.html',
   '/dairy_app/manifest.json',
   '/dairy_app/favicon.ico',
   '/dairy_app/assets/icon.png'
@@ -73,25 +75,55 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+
+  // For HTML navigation requests: NETWORK FIRST, fallback to cache when offline
+  if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => {
+          return caches.match('/dairy_app/index.html').then(m => m || caches.match('/dairy_app/'));
+        })
+    );
+    return;
+  }
+
+  // For static assets (JS bundles, images, fonts): Cache-first with network fallback and background refresh
   e.respondWith(
-    fetch(e.request)
-      .then((res) => {
+    caches.match(e.request).then((cached) => {
+      if (cached) {
+        // Stale-while-revalidate in background
+        fetch(e.request)
+          .then((res) => {
+            if (res && res.status === 200) {
+              caches.open(CACHE_NAME).then(c => c.put(e.request, res));
+            }
+          })
+          .catch(() => {});
+        return cached;
+      }
+      return fetch(e.request).then((res) => {
         if (res && res.status === 200) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
         }
         return res;
-      })
-      .catch(() => {
-        return caches.match(e.request).then(m => {
-          if (m) return m;
-          if (e.request.headers.get('accept')?.includes('text/html')) {
-            return caches.match('/dairy_app/index.html');
-          }
-        });
-      })
+      });
+    })
   );
 });
 `;
@@ -204,16 +236,47 @@ const pwaBody = `
       initPwaBanner();
     }
 
-    // Register Service Worker for PWA installability
+    // Register Service Worker for PWA installability with immediate update detection
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/dairy_app/sw.js', { scope: '/dairy_app/' })
+        navigator.serviceWorker.register('/dairy_app/sw.js', { scope: '/dairy_app/', updateViaCache: 'none' })
           .then(function(reg) {
             console.log('Dairy PWA ServiceWorker active with scope:', reg.scope);
+
+            // Proactively check for updates immediately on launch
+            reg.update();
+
+            // Re-check for updates whenever user switches back to the app
+            document.addEventListener('visibilitychange', function() {
+              if (document.visibilityState === 'visible') {
+                reg.update();
+              }
+            });
+
+            // If a new update is found, activate it right away
+            reg.addEventListener('updatefound', function() {
+              var newWorker = reg.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    newWorker.postMessage({ action: 'skipWaiting' });
+                  }
+                });
+              }
+            });
           })
           .catch(function(err) {
             console.log('ServiceWorker registration error:', err);
           });
+
+        // Automatically reload once when the new version takes control
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
       });
     }
   </script>
