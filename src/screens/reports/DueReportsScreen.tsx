@@ -17,16 +17,46 @@ import { WhatsAppService, CustomerDateAuditItem } from '../../services/whatsappS
 import { Customer, CustomerDueSummary, Payment, MilkEntry, MilkType, SessionType } from '../../types';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
 
-type PeriodType = '10' | '20' | '30' | 'all';
+export type ReportMode = 'month' | 'custom' | 'all';
 type DueFilterType = 'all' | 'dueOnly' | 'paidOnly';
 type AuditFilterType = 'all' | 'missing' | 'delivered';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+export const MONTH_NAMES = [
+  { en: 'January', hi: 'जनवरी', short: 'Jan' },
+  { en: 'February', hi: 'फ़रवरी', short: 'Feb' },
+  { en: 'March', hi: 'मार्च', short: 'Mar' },
+  { en: 'April', hi: 'अप्रैल', short: 'Apr' },
+  { en: 'May', hi: 'मई', short: 'May' },
+  { en: 'June', hi: 'जून', short: 'Jun' },
+  { en: 'July', hi: 'जुलाई', short: 'Jul' },
+  { en: 'August', hi: 'अगस्त', short: 'Aug' },
+  { en: 'September', hi: 'सितम्बर', short: 'Sep' },
+  { en: 'October', hi: 'अक्टूबर', short: 'Oct' },
+  { en: 'November', hi: 'नवम्बर', short: 'Nov' },
+  { en: 'December', hi: 'दिसम्बर', short: 'Dec' },
+];
+
 export const DueReportsScreen = () => {
   const { t, customers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier } = useApp();
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('30');
+  
+  const now = new Date();
+  const [reportMode, setReportMode] = useState<ReportMode>('month');
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth()); // 0-11
+  const [pickerYear, setPickerYear] = useState<number>(now.getFullYear());
+
+  // Custom Date Range State
+  const firstOfCurrentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const todayStr = now.toISOString().split('T')[0];
+  const [customStartDate, setCustomStartDate] = useState<string>(firstOfCurrentMonth);
+  const [customEndDate, setCustomEndDate] = useState<string>(todayStr);
+
+  // Month Picker Modal State
+  const [monthPickerVisible, setMonthPickerVisible] = useState<boolean>(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [dueFilter, setDueFilter] = useState<DueFilterType>('all');
   
@@ -48,22 +78,81 @@ export const DueReportsScreen = () => {
   const [quickEntryLitres, setQuickEntryLitres] = useState('');
   const [quickEntryRate, setQuickEntryRate] = useState('');
 
-  const cutoffDate = useMemo(() => {
-    if (selectedPeriod === 'all') return '2000-01-01';
-    const days = parseInt(selectedPeriod, 10);
-    const d = new Date();
-    d.setDate(d.getDate() - days);
-    return d.toISOString().split('T')[0];
-  }, [selectedPeriod]);
+  const dateRange = useMemo(() => {
+    if (reportMode === 'month') {
+      const year = selectedYear;
+      const monthStr = String(selectedMonth + 1).padStart(2, '0');
+      const startDate = `${year}-${monthStr}-01`;
+      const lastDay = new Date(year, selectedMonth + 1, 0).getDate();
+      const endDate = `${year}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+      const mObj = MONTH_NAMES[selectedMonth] || { en: '', hi: '' };
+      const label = `${mObj.en} ${year} (${mObj.hi})`;
+      return { startDate, endDate, label };
+    }
+
+    if (reportMode === 'custom') {
+      const start = customStartDate.trim() || '2000-01-01';
+      const end = customEndDate.trim() || '2099-12-31';
+      const label = `${start} to ${end}`;
+      return { startDate: start, endDate: end, label };
+    }
+
+    return {
+      startDate: '2000-01-01',
+      endDate: '2099-12-31',
+      label: 'All Time (कुल बकाया)'
+    };
+  }, [reportMode, selectedYear, selectedMonth, customStartDate, customEndDate]);
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(y => y - 1);
+    } else {
+      setSelectedMonth(m => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(y => y + 1);
+    } else {
+      setSelectedMonth(m => m + 1);
+    }
+  };
+
+  const handleSelectMonthYear = (monthIdx: number, year: number) => {
+    setSelectedMonth(monthIdx);
+    setSelectedYear(year);
+    setMonthPickerVisible(false);
+  };
+
+  const handleApplyPreset = (preset: 'firstHalf' | 'secondHalf' | 'fullMonth') => {
+    const y = now.getFullYear();
+    const mStr = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    if (preset === 'firstHalf') {
+      setCustomStartDate(`${y}-${mStr}-01`);
+      setCustomEndDate(`${y}-${mStr}-15`);
+    } else if (preset === 'secondHalf') {
+      setCustomStartDate(`${y}-${mStr}-16`);
+      setCustomEndDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`);
+    } else if (preset === 'fullMonth') {
+      setCustomStartDate(`${y}-${mStr}-01`);
+      setCustomEndDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`);
+    }
+  };
 
   // All calculated due summaries for the selected period
   const allDueSummaries: CustomerDueSummary[] = useMemo(() => {
+    const { startDate, endDate } = dateRange;
     return customers.map(cust => {
       const custEntries = milkEntries.filter(
-        e => e.customerId === cust.id && e.date >= cutoffDate
+        e => e.customerId === cust.id && e.date >= startDate && e.date <= endDate
       );
       const custPayments = payments.filter(
-        p => p.customerId === cust.id && p.date >= cutoffDate
+        p => p.customerId === cust.id && p.date >= startDate && p.date <= endDate
       );
 
       let totalLitresCow = 0;
@@ -91,7 +180,7 @@ export const DueReportsScreen = () => {
         unpaidEntriesCount: unpaidCount
       };
     });
-  }, [customers, milkEntries, payments, cutoffDate]);
+  }, [customers, milkEntries, payments, dateRange]);
 
   // Filtered by Search Query (Name/Phone/Address) and Due Status
   const filteredSummaries = useMemo(() => {
@@ -133,31 +222,40 @@ export const DueReportsScreen = () => {
   const auditDateList = useMemo(() => {
     if (!activeDetailSummary) return [];
 
-    const today = new Date();
+    const { startDate, endDate } = dateRange;
     const dates: string[] = [];
-    
-    let numDays = 30;
-    if (selectedPeriod === '10') numDays = 10;
-    else if (selectedPeriod === '20') numDays = 20;
-    else if (selectedPeriod === '30') numDays = 30;
-    else {
-      // All time: calculate span from earliest entry or default to 30
-      const custEntries = milkEntries.filter(e => e.customerId === activeDetailSummary.customer.id);
-      if (custEntries.length > 0) {
-        const datesSorted = custEntries.map(e => e.date).sort();
-        const earliest = new Date(datesSorted[0]);
-        const diffTime = Math.abs(today.getTime() - earliest.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        numDays = Math.min(Math.max(diffDays, 10), 60);
-      } else {
-        numDays = 30;
-      }
-    }
 
-    for (let i = 0; i < numDays; i++) {
-      const d = new Date();
-      d.setDate(today.getDate() - i);
-      dates.push(d.toISOString().split('T')[0]);
+    if (reportMode === 'all') {
+      const custEntries = milkEntries.filter(e => e.customerId === activeDetailSummary.customer.id);
+      const today = new Date();
+      if (custEntries.length > 0) {
+        const sorted = custEntries.map(e => e.date).sort();
+        const earliest = new Date(sorted[0]);
+        const diffTime = Math.abs(today.getTime() - earliest.getTime());
+        const diffDays = Math.min(Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1, 90);
+        for (let i = 0; i < diffDays; i++) {
+          const d = new Date();
+          d.setDate(today.getDate() - i);
+          dates.push(d.toISOString().split('T')[0]);
+        }
+      } else {
+        for (let i = 0; i < 30; i++) {
+          const d = new Date();
+          d.setDate(today.getDate() - i);
+          dates.push(d.toISOString().split('T')[0]);
+        }
+      }
+    } else {
+      const startParts = startDate.split('-').map(Number);
+      const endParts = endDate.split('-').map(Number);
+      const startObj = new Date(startParts[0], startParts[1] - 1, startParts[2]);
+      const endObj = new Date(endParts[0], endParts[1] - 1, endParts[2]);
+
+      const cur = new Date(endObj);
+      while (cur >= startObj) {
+        dates.push(cur.toISOString().split('T')[0]);
+        cur.setDate(cur.getDate() - 1);
+      }
     }
 
     return dates.map(dateStr => {
@@ -185,7 +283,7 @@ export const DueReportsScreen = () => {
         totalAmount
       };
     });
-  }, [activeDetailSummary, selectedPeriod, milkEntries]);
+  }, [activeDetailSummary, dateRange, reportMode, milkEntries]);
 
   const deliveredDaysCount = useMemo(() => {
     return auditDateList.filter(d => d.isDelivered).length;
@@ -237,14 +335,7 @@ export const DueReportsScreen = () => {
 
   const handleShareWhatsAppSummary = async (summary: CustomerDueSummary) => {
     Keyboard.dismiss();
-    const periodName =
-      selectedPeriod === '10'
-        ? 'Last 10 Days'
-        : selectedPeriod === '20'
-        ? 'Last 20 Days'
-        : selectedPeriod === '30'
-        ? 'Last 30 Days (Month)'
-        : 'All Time Outstanding';
+    const periodName = dateRange.label;
 
     try {
       await WhatsAppService.sendBillViaWhatsApp(
@@ -254,39 +345,25 @@ export const DueReportsScreen = () => {
         periodName
       );
     } catch {
-      showAlert('Error', 'Could not launch WhatsApp.');
+      showAlert('त्रुटि (Error)', 'Could not launch WhatsApp.');
     }
   };
 
   const handleShareItemizedWhatsApp = async () => {
     if (!activeDetailSummary) return;
-    const periodName =
-      selectedPeriod === '10'
-        ? 'Last 10 Days'
-        : selectedPeriod === '20'
-        ? 'Last 20 Days'
-        : selectedPeriod === '30'
-        ? 'Last 30 Days (Month)'
-        : 'All Time';
+    const periodName = dateRange.label;
 
     try {
       await WhatsAppService.sendItemizedDatewiseBillViaWhatsApp(
         activeDetailSummary.customer.phone,
         activeDetailSummary,
         supplier?.businessName || 'Dairy Milk Seller',
-        periodLabelOrName(selectedPeriod),
+        periodName,
         auditDateList
       );
     } catch {
-      showAlert('Error', 'Could not open WhatsApp.');
+      showAlert('त्रुटि (Error)', 'Could not open WhatsApp.');
     }
-  };
-
-  const periodLabelOrName = (p: PeriodType) => {
-    if (p === '10') return 'Last 10 Days';
-    if (p === '20') return 'Last 20 Days';
-    if (p === '30') return 'Last 30 Days (Month)';
-    return 'All Time';
   };
 
   // Open Quick Entry modal for a specific missing date
@@ -353,52 +430,120 @@ export const DueReportsScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
-        {/* Period Selector Tabs */}
-        <View style={styles.periodTabs}>
+        {/* Mode Selector Tabs: Month-wise / Custom Range / All Dues */}
+        <View style={styles.modeTabs}>
           <TouchableOpacity
-            style={[styles.tab, selectedPeriod === '10' && styles.tabActive]}
-            onPress={() => setSelectedPeriod('10')}
+            style={[styles.modeTab, reportMode === 'month' && styles.modeTabActive]}
+            onPress={() => setReportMode('month')}
             activeOpacity={0.7}
             hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
-            <Text style={[styles.tabText, selectedPeriod === '10' && styles.tabTextActive]}>
-              {t.last10Days}
+            <Text style={[styles.modeTabText, reportMode === 'month' && styles.modeTabTextActive]}>
+              📅 {t.monthWise || 'महीने अनुसार'}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, selectedPeriod === '20' && styles.tabActive]}
-            onPress={() => setSelectedPeriod('20')}
+            style={[styles.modeTab, reportMode === 'custom' && styles.modeTabActive]}
+            onPress={() => setReportMode('custom')}
             activeOpacity={0.7}
             hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
-            <Text style={[styles.tabText, selectedPeriod === '20' && styles.tabTextActive]}>
-              {t.last20Days}
+            <Text style={[styles.modeTabText, reportMode === 'custom' && styles.modeTabTextActive]}>
+              🗓️ {t.customRange || 'कस्टम तारीख'}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tab, selectedPeriod === '30' && styles.tabActive]}
-            onPress={() => setSelectedPeriod('30')}
+            style={[styles.modeTab, reportMode === 'all' && styles.modeTabActive]}
+            onPress={() => setReportMode('all')}
             activeOpacity={0.7}
             hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
           >
-            <Text style={[styles.tabText, selectedPeriod === '30' && styles.tabTextActive]}>
-              {t.last30Days}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, selectedPeriod === 'all' && styles.tabActive]}
-            onPress={() => setSelectedPeriod('all')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-          >
-            <Text style={[styles.tabText, selectedPeriod === 'all' && styles.tabTextActive]}>
-              All Dues
+            <Text style={[styles.modeTabText, reportMode === 'all' && styles.modeTabTextActive]}>
+              ♾️ {t.allDues || 'कुल बकाया'}
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* When in Month Mode: Month Navigator Strip */}
+        {reportMode === 'month' && (
+          <View style={styles.monthNavRow}>
+            <TouchableOpacity
+              style={styles.monthNavBtn}
+              onPress={handlePrevMonth}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.monthNavBtnText}>◀ पिछला</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.monthSelectorBtn}
+              onPress={() => {
+                setPickerYear(selectedYear);
+                setMonthPickerVisible(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.monthSelectorText}>
+                {MONTH_NAMES[selectedMonth]?.en} {selectedYear} ({MONTH_NAMES[selectedMonth]?.hi}) ▾
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.monthNavBtn}
+              onPress={handleNextMonth}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={styles.monthNavBtnText}>अगला ▶</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* When in Custom Mode: Date Inputs & Quick Presets */}
+        {reportMode === 'custom' && (
+          <View style={styles.customDateBox}>
+            <View style={styles.customDateInputRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.customDateLabel}>{t.fromDate || 'प्रारंभ तारीख'} (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.customDateInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#94a3b8"
+                  value={customStartDate}
+                  onChangeText={setCustomStartDate}
+                />
+              </View>
+              <Text style={styles.customDateArrow}>→</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.customDateLabel}>{t.toDate || 'अंतिम तारीख'} (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.customDateInput}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#94a3b8"
+                  value={customEndDate}
+                  onChangeText={setCustomEndDate}
+                />
+              </View>
+            </View>
+
+            {/* Quick Presets */}
+            <View style={styles.presetRow}>
+              <Text style={styles.presetLabel}>त्वरित चुनें:</Text>
+              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('firstHalf')}>
+                <Text style={styles.presetBtnText}>1-15 तारीख</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('secondHalf')}>
+                <Text style={styles.presetBtnText}>16-अंतिम</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('fullMonth')}>
+                <Text style={styles.presetBtnText}>पूरा महीना</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Total Summary Banner with Billed, Received and Net Due */}
         <View style={styles.summaryBanner}>
@@ -641,19 +786,36 @@ export const DueReportsScreen = () => {
                     </View>
                   </View>
 
-                  {/* Inside-Modal Period Selector */}
-                  <View style={styles.modalPeriodTabs}>
-                    {(['10', '20', '30', 'all'] as PeriodType[]).map(p => (
-                      <TouchableOpacity
-                        key={p}
-                        style={[styles.modalPeriodTab, selectedPeriod === p && styles.modalPeriodTabActive]}
-                        onPress={() => setSelectedPeriod(p)}
-                      >
-                        <Text style={[styles.modalPeriodTabText, selectedPeriod === p && styles.modalPeriodTabTextActive]}>
-                          {p === '10' ? '10 Days' : p === '20' ? '20 Days' : p === '30' ? '30 Days' : 'All'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                  {/* Inside-Modal Active Date Range & Month Navigation */}
+                  <View style={styles.modalPeriodBadgeContainer}>
+                    <View style={styles.modalPeriodBadge}>
+                      <Text style={styles.modalPeriodBadgeIcon}>
+                        {reportMode === 'month' ? '📅' : reportMode === 'custom' ? '🗓️' : '♾️'}
+                      </Text>
+                      <Text style={styles.modalPeriodBadgeText} numberOfLines={1}>
+                        {dateRange.label}
+                      </Text>
+                    </View>
+                    {reportMode === 'month' && (
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          style={styles.modalMonthNavBtn}
+                          onPress={handlePrevMonth}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.modalMonthNavBtnText}>◀ पिछला</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.modalMonthNavBtn}
+                          onPress={handleNextMonth}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.modalMonthNavBtnText}>अगला ▶</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -984,6 +1146,70 @@ export const DueReportsScreen = () => {
             </View>
           </View>
         </Modal>
+
+        {/* ------------------------------------------------------------- */}
+        {/* MONTH PICKER MODAL */}
+        {/* ------------------------------------------------------------- */}
+        <Modal
+          visible={monthPickerVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMonthPickerVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.monthPickerCard}>
+              <View style={styles.monthPickerHeader}>
+                <TouchableOpacity
+                  style={styles.pickerYearBtn}
+                  onPress={() => setPickerYear(y => y - 1)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.pickerYearBtnText}>◀</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.pickerYearTitle}>{pickerYear}</Text>
+
+                <TouchableOpacity
+                  style={styles.pickerYearBtn}
+                  onPress={() => setPickerYear(y => y + 1)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.pickerYearBtnText}>▶</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Month Grid (12 Months) */}
+              <View style={styles.monthGrid}>
+                {MONTH_NAMES.map((m, idx) => {
+                  const isSelected = selectedMonth === idx && selectedYear === pickerYear;
+                  return (
+                    <TouchableOpacity
+                      key={m.en}
+                      style={[styles.monthGridItem, isSelected && styles.monthGridItemSelected]}
+                      onPress={() => handleSelectMonthYear(idx, pickerYear)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.monthGridEn, isSelected && styles.monthGridTextSelected]}>
+                        {m.en}
+                      </Text>
+                      <Text style={[styles.monthGridHi, isSelected && styles.monthGridTextSelected]}>
+                        {m.hi}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <TouchableOpacity
+                style={styles.monthPickerCloseBtn}
+                onPress={() => setMonthPickerVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.monthPickerCloseText}>{t.cancel || 'रद्द करें'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -992,17 +1218,85 @@ export const DueReportsScreen = () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, padding: 14 },
-  periodTabs: {
+  modeTabs: {
     flexDirection: 'row',
     backgroundColor: '#e2e8f0',
     borderRadius: 10,
     padding: 3,
+    marginBottom: 8
+  },
+  modeTab: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 8 },
+  modeTabActive: { backgroundColor: '#ffffff', elevation: 2 },
+  modeTabText: { fontSize: 12, color: '#64748b', fontWeight: '600' },
+  modeTabTextActive: { color: '#0284c7', fontWeight: 'bold' },
+  monthNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    padding: 6,
+    marginBottom: 10,
+    gap: 8
+  },
+  monthNavBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8
+  },
+  monthNavBtnText: { fontSize: 12, fontWeight: 'bold', color: '#0284c7' },
+  monthSelectorBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6
+  },
+  monthSelectorText: { fontSize: 14, fontWeight: 'bold', color: '#0f172a' },
+  customDateBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    padding: 10,
     marginBottom: 10
   },
-  tab: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 8 },
-  tabActive: { backgroundColor: '#ffffff', elevation: 2 },
-  tabText: { fontSize: 11, color: '#64748b', fontWeight: '600' },
-  tabTextActive: { color: '#0284c7', fontWeight: 'bold' },
+  customDateInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  customDateLabel: { fontSize: 11, color: '#475569', fontWeight: '600', marginBottom: 4 },
+  customDateInput: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    backgroundColor: '#f8fafc',
+    color: '#0f172a'
+  },
+  customDateArrow: { fontSize: 16, color: '#94a3b8', fontWeight: 'bold', marginTop: 16 },
+  presetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    flexWrap: 'wrap'
+  },
+  presetLabel: { fontSize: 11, color: '#64748b', fontWeight: '500' },
+  presetBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  presetBtnText: { fontSize: 11, color: '#0284c7', fontWeight: '600' },
   summaryBanner: {
     backgroundColor: '#0284c7',
     borderRadius: 14,
@@ -1231,17 +1525,32 @@ const styles = StyleSheet.create({
   },
   detailNetDueLabel: { fontSize: 11, color: '#64748b' },
   detailNetDueAmount: { fontSize: 18, fontWeight: 'bold', marginTop: 1 },
-  modalPeriodTabs: {
+  modalPeriodBadgeContainer: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
     borderRadius: 8,
-    padding: 2,
-    marginTop: 12
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginTop: 10
   },
-  modalPeriodTab: { flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6 },
-  modalPeriodTabActive: { backgroundColor: '#ffffff', elevation: 1 },
-  modalPeriodTabText: { fontSize: 11, color: '#64748b', fontWeight: '600' },
-  modalPeriodTabTextActive: { color: '#0284c7', fontWeight: 'bold' },
+  modalPeriodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1
+  },
+  modalPeriodBadgeIcon: { fontSize: 14 },
+  modalPeriodBadgeText: { fontSize: 12, fontWeight: 'bold', color: '#0284c7' },
+  modalMonthNavBtn: {
+    backgroundColor: '#e0f2fe',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 6
+  },
+  modalMonthNavBtnText: { fontSize: 11, fontWeight: 'bold', color: '#0284c7' },
   kpiContainer: {
     flexDirection: 'row',
     gap: 8,
@@ -1362,5 +1671,64 @@ const styles = StyleSheet.create({
     marginTop: 12,
     alignItems: 'center'
   },
-  quickTotalText: { fontSize: 14, fontWeight: 'bold', color: '#1d4ed8' }
+  quickTotalText: { fontSize: 14, fontWeight: 'bold', color: '#1d4ed8' },
+
+  // Month Picker Modal Styles
+  monthPickerCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    width: '90%',
+    maxWidth: 360,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 8
+  },
+  monthPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14
+  },
+  pickerYearBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8
+  },
+  pickerYearBtnText: { fontSize: 14, fontWeight: 'bold', color: '#0284c7' },
+  pickerYearTitle: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'space-between'
+  },
+  monthGridItem: {
+    width: '31%',
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  monthGridItemSelected: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0284c7'
+  },
+  monthGridEn: { fontSize: 12, fontWeight: 'bold', color: '#1e293b' },
+  monthGridHi: { fontSize: 10, color: '#64748b', marginTop: 2 },
+  monthGridTextSelected: { color: '#ffffff' },
+  monthPickerCloseBtn: {
+    marginTop: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center'
+  },
+  monthPickerCloseText: { color: '#475569', fontWeight: 'bold', fontSize: 13 }
 });
+
