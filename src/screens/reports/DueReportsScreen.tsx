@@ -584,45 +584,45 @@ export const DueReportsScreen = () => {
           <View style={styles.customDateBox}>
             <View style={styles.customDateInputRow}>
               <View style={{ flex: 1 }}>
-                <View style={styles.dateLabelRow}>
-                  <Text style={styles.customDateLabel}>{t.fromDate || 'से तारीख'} (DD-MMM-YYYY)</Text>
+                <Text style={styles.customDateLabel}>{t.fromDate || 'से तारीख'} (DD-MMM-YYYY)</Text>
+                <View style={styles.inputWithIcon}>
+                  <TextInput
+                    style={styles.customDateInputField}
+                    placeholder="01-SEP-2026"
+                    placeholderTextColor="#94a3b8"
+                    value={customStartDate}
+                    onChangeText={setCustomStartDate}
+                  />
                   <TouchableOpacity
-                    style={styles.calPickerTriggerBtn}
+                    style={styles.inputCalBtn}
                     onPress={() => openCalendarPicker('start')}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.calPickerTriggerText}>📅 {t.selectFromCalendar || 'कैलेंडर'}</Text>
+                    <Text style={styles.inputCalIcon}>📅</Text>
                   </TouchableOpacity>
                 </View>
-                <TextInput
-                  style={styles.customDateInput}
-                  placeholder="01-SEP-2026"
-                  placeholderTextColor="#94a3b8"
-                  value={customStartDate}
-                  onChangeText={setCustomStartDate}
-                />
               </View>
 
               <Text style={styles.customDateArrow}>→</Text>
 
               <View style={{ flex: 1 }}>
-                <View style={styles.dateLabelRow}>
-                  <Text style={styles.customDateLabel}>{t.toDate || 'तक तारीख'} (DD-MMM-YYYY)</Text>
+                <Text style={styles.customDateLabel}>{t.toDate || 'तक तारीख'} (DD-MMM-YYYY)</Text>
+                <View style={styles.inputWithIcon}>
+                  <TextInput
+                    style={styles.customDateInputField}
+                    placeholder="08-SEP-2026"
+                    placeholderTextColor="#94a3b8"
+                    value={customEndDate}
+                    onChangeText={setCustomEndDate}
+                  />
                   <TouchableOpacity
-                    style={styles.calPickerTriggerBtn}
+                    style={styles.inputCalBtn}
                     onPress={() => openCalendarPicker('end')}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.calPickerTriggerText}>📅 {t.selectFromCalendar || 'कैलेंडर'}</Text>
+                    <Text style={styles.inputCalIcon}>📅</Text>
                   </TouchableOpacity>
                 </View>
-                <TextInput
-                  style={styles.customDateInput}
-                  placeholder="08-SEP-2026"
-                  placeholderTextColor="#94a3b8"
-                  value={customEndDate}
-                  onChangeText={setCustomEndDate}
-                />
               </View>
             </View>
 
@@ -1527,33 +1527,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8
   },
-  dateLabelRow: {
+  customDateLabel: { fontSize: 11, color: '#475569', fontWeight: '600', marginBottom: 4 },
+  inputWithIcon: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4
-  },
-  customDateLabel: { fontSize: 11, color: '#475569', fontWeight: '600' },
-  calPickerTriggerBtn: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#bfdbfe'
-  },
-  calPickerTriggerText: { fontSize: 10, color: '#0284c7', fontWeight: '600' },
-  customDateInput: {
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
-    paddingHorizontal: 10,
+    paddingRight: 6
+  },
+  customDateInputField: {
+    flex: 1,
+    paddingHorizontal: 8,
     paddingVertical: 6,
-    fontSize: 13,
-    backgroundColor: '#f8fafc',
+    fontSize: 12,
     color: '#0f172a'
   },
-  customDateArrow: { fontSize: 16, color: '#94a3b8', fontWeight: 'bold', marginTop: 14 },
+  inputCalBtn: {
+    padding: 4
+  },
+  inputCalIcon: {
+    fontSize: 15
+  },
+  customDateArrow: { fontSize: 16, color: '#94a3b8', fontWeight: 'bold', marginTop: 18 },
   customActionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
