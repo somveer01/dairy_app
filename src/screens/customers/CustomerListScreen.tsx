@@ -538,15 +538,19 @@ export const CustomerListScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
-        {/* Search Bar & Add / Import Buttons */}
-        <View style={styles.topBar}>
+        {/* Search Bar Row */}
+        <View style={styles.searchRow}>
           <TextInput
             style={styles.searchInput}
-            placeholder={t.searchCustomers}
+            placeholder={`🔍 ${t.searchCustomers}`}
             placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={setSearch}
           />
+        </View>
+
+        {/* Action Buttons Row (Contacts & Add Customer) */}
+        <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.contactImportBtn}
             onPress={openContactsImportModal}
@@ -555,13 +559,14 @@ export const CustomerListScreen = () => {
           >
             <Text style={styles.contactImportBtnText}>📱 {t.contacts || 'Contacts'}</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.addButton}
             onPress={openAddModal}
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-            <Text style={styles.addButtonText}>+ {t.addCustomer || 'Add'}</Text>
+            <Text style={styles.addButtonText}>+ {t.addNewCustomer || t.addCustomer || 'Add Customer'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -955,9 +960,10 @@ export const CustomerListScreen = () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, padding: 14 },
-  topBar: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  searchRow: {
+    marginBottom: 8
+  },
   searchInput: {
-    flex: 1,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -967,19 +973,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0f172a'
   },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12
+  },
   contactImportBtn: {
+    flex: 1,
     backgroundColor: '#e0f2fe',
     borderWidth: 1,
     borderColor: '#38bdf8',
-    paddingHorizontal: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center'
   },
   contactImportBtnText: { color: '#0284c7', fontWeight: 'bold', fontSize: 13 },
   addButton: {
+    flex: 1.2,
     backgroundColor: '#0284c7',
-    paddingHorizontal: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center'
