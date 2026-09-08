@@ -16,7 +16,7 @@ import { StorageService } from '../../services/storageService';
 import { WhatsAppService, CustomerDateAuditItem } from '../../services/whatsappService';
 import { Customer, CustomerDueSummary, Payment, MilkEntry, MilkType, SessionType } from '../../types';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
-import { formatToDisplayDate, parseToIsoDate, getTodayDisplayDate } from '../../utils/dateUtils';
+import { formatToDisplayDate, parseToIsoDate, getTodayDisplayDate, shiftDisplayDate } from '../../utils/dateUtils';
 
 export type ReportMode = 'month' | 'custom' | 'all';
 type DueFilterType = 'all' | 'dueOnly' | 'paidOnly';
@@ -69,7 +69,7 @@ export const DueReportsScreen = () => {
 
   // Calendar Picker Modal State for Custom Date Range
   const [calendarPickerVisible, setCalendarPickerVisible] = useState<boolean>(false);
-  const [calendarTarget, setCalendarTarget] = useState<'start' | 'end'>('start');
+  const [calendarTarget, setCalendarTarget] = useState<'start' | 'end' | 'payment'>('start');
   const [calendarYear, setCalendarYear] = useState<number>(now.getFullYear());
   const [calendarMonth, setCalendarMonth] = useState<number>(now.getMonth());
 
@@ -80,6 +80,7 @@ export const DueReportsScreen = () => {
   // Payment Modal State
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentCustomer, setPaymentCustomer] = useState<Customer | null>(null);
+  const [payDate, setPayDate] = useState<string>(todayDisplayStr);
   const [payAmount, setPayAmount] = useState('');
   const [payNotes, setPayNotes] = useState('');
 
@@ -202,8 +203,11 @@ export const DueReportsScreen = () => {
     setAppliedEndDate(formatToDisplayDate(endIso));
   };
 
-  const openCalendarPicker = (target: 'start' | 'end') => {
-    const currentDateStr = target === 'start' ? customStartDate : customEndDate;
+  const openCalendarPicker = (target: 'start' | 'end' | 'payment') => {
+    if (target === 'payment') {
+      setPaymentModalVisible(false);
+    }
+    const currentDateStr = target === 'start' ? customStartDate : target === 'end' ? customEndDate : payDate;
     const iso = parseToIsoDate(currentDateStr);
     let y = now.getFullYear();
     let m = now.getMonth();
@@ -220,6 +224,13 @@ export const DueReportsScreen = () => {
     setCalendarPickerVisible(true);
   };
 
+  const handleCloseCalendarPicker = () => {
+    setCalendarPickerVisible(false);
+    if (calendarTarget === 'payment') {
+      setPaymentModalVisible(true);
+    }
+  };
+
   const handleSelectCalendarDay = (day: number) => {
     const mStr = String(calendarMonth + 1).padStart(2, '0');
     const dStr = String(day).padStart(2, '0');
@@ -229,9 +240,12 @@ export const DueReportsScreen = () => {
     if (calendarTarget === 'start') {
       setCustomStartDate(displayFormatted);
       setAppliedStartDate(displayFormatted);
-    } else {
+    } else if (calendarTarget === 'end') {
       setCustomEndDate(displayFormatted);
       setAppliedEndDate(displayFormatted);
+    } else if (calendarTarget === 'payment') {
+      setPayDate(displayFormatted);
+      setPaymentModalVisible(true);
     }
     setCalendarPickerVisible(false);
   };
@@ -404,6 +418,7 @@ export const DueReportsScreen = () => {
   const openPayModal = (cust: Customer) => {
     Keyboard.dismiss();
     setPaymentCustomer(cust);
+    setPayDate(getTodayDisplayDate());
     setPayAmount('');
     setPayNotes('Lump sum milk bill payment');
     setPaymentModalVisible(true);
@@ -421,13 +436,14 @@ export const DueReportsScreen = () => {
       return;
     }
 
-    // Use local date (not UTC) for payment date
+    const paymentIsoDate = parseToIsoDate(payDate) || toLocalIso(new Date());
+
     const newPayment: Payment = {
       id: 'pay_' + Date.now(),
       supplierId: supplier?.id || 'supp_default',
       customerId: paymentCustomer.id,
       customerName: paymentCustomer.name,
-      date: toLocalIso(new Date()),
+      date: paymentIsoDate,
       amountPaid: amountVal,
       notes: payNotes.trim(),
       createdAt: Date.now()
@@ -439,8 +455,8 @@ export const DueReportsScreen = () => {
     showAlert(
       lang === 'hi' ? '✓ भुगतान सहेजा गया' : '✓ Payment Saved',
       lang === 'hi'
-        ? `₹${amountVal} का भुगतान ${paymentCustomer.name} के लिए दर्ज किया गया।`
-        : `Payment of ₹${amountVal} recorded for ${paymentCustomer.name}.`
+        ? `₹${amountVal} का भुगतान (${formatToDisplayDate(paymentIsoDate)}) ${paymentCustomer.name} के लिए दर्ज किया गया।`
+        : `Payment of ₹${amountVal} (${formatToDisplayDate(paymentIsoDate)}) recorded for ${paymentCustomer.name}.`
     );
   };
 
@@ -1312,6 +1328,55 @@ export const DueReportsScreen = () => {
                 );
               })()}
 
+              {/* Payment Date Selector */}
+              <Text style={styles.label}>{lang === 'hi' ? 'भुगतान तारीख *' : 'Payment Date *'}</Text>
+              <View style={styles.payDateContainer}>
+                <TouchableOpacity
+                  style={styles.payDateStepperBtn}
+                  onPress={() => setPayDate(prev => shiftDisplayDate(prev, -1))}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.payDateStepperBtnText}>◀</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.payDateCard}
+                  onPress={() => openCalendarPicker('payment')}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.payDateCardContent}>
+                    <Text style={styles.payDateValueText}>{payDate}</Text>
+                    {payDate === todayDisplayStr ? (
+                      <View style={styles.payTodayTag}>
+                        <Text style={styles.payTodayTagText}>{lang === 'hi' ? 'आज' : 'Today'}</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.payDateChangePrompt}>{lang === 'hi' ? 'बदलें 📅' : 'Change 📅'}</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.payDateStepperBtn}
+                  onPress={() => setPayDate(prev => shiftDisplayDate(prev, 1))}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.payDateStepperBtnText}>▶</Text>
+                </TouchableOpacity>
+
+                {payDate !== todayDisplayStr && (
+                  <TouchableOpacity
+                    style={styles.payTodayResetBtn}
+                    onPress={() => setPayDate(todayDisplayStr)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.payTodayResetText}>{lang === 'hi' ? 'आज' : 'Today'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <Text style={styles.label}>{lang === 'hi' ? 'जमा राशि (₹) *' : 'Amount Paid (₹) *'}</Text>
               <TextInput
                 style={styles.modalInput}
@@ -1561,7 +1626,7 @@ export const DueReportsScreen = () => {
           visible={calendarPickerVisible}
           transparent
           animationType="fade"
-          onRequestClose={() => setCalendarPickerVisible(false)}
+          onRequestClose={handleCloseCalendarPicker}
         >
           <View style={styles.modalOverlay}>
             <View style={styles.calendarPickerCard}>
@@ -1569,10 +1634,12 @@ export const DueReportsScreen = () => {
                 <Text style={styles.calendarTargetBadge}>
                   {calendarTarget === 'start'
                     ? `📅 ${t.fromDate || 'से तारीख'}`
-                    : `📅 ${t.toDate || 'तक तारीख'}`}
+                    : calendarTarget === 'end'
+                    ? `📅 ${t.toDate || 'तक तारीख'}`
+                    : `📅 ${lang === 'hi' ? 'भुगतान तारीख' : 'Payment Date'}`}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => setCalendarPickerVisible(false)}
+                  onPress={handleCloseCalendarPicker}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={styles.modalCloseText}>✕</Text>
@@ -1639,7 +1706,12 @@ export const DueReportsScreen = () => {
                 {(() => {
                   const firstDayIndex = new Date(calendarYear, calendarMonth, 1).getDay();
                   const totalDaysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
-                  const currentSelectedDisplay = calendarTarget === 'start' ? customStartDate : customEndDate;
+                  const currentSelectedDisplay =
+                    calendarTarget === 'start'
+                      ? customStartDate
+                      : calendarTarget === 'end'
+                      ? customEndDate
+                      : payDate;
                   const currentSelectedIso = parseToIsoDate(currentSelectedDisplay);
 
                   const cells = [];
@@ -1689,7 +1761,7 @@ export const DueReportsScreen = () => {
 
               <TouchableOpacity
                 style={styles.monthPickerCloseBtn}
-                onPress={() => setCalendarPickerVisible(false)}
+                onPress={handleCloseCalendarPicker}
                 activeOpacity={0.7}
               >
                 <Text style={styles.monthPickerCloseText}>{t.cancel || 'रद्द करें'}</Text>
@@ -2522,5 +2594,79 @@ const styles = StyleSheet.create({
     color: '#334155',
     marginBottom: 10,
     textAlign: 'center'
+  },
+  // ─── Payment Date Selector ──────────────────────────────────────────────
+  payDateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  payDateStepperBtn: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  payDateStepperBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  payDateCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center'
+  },
+  payDateCardContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  payDateValueText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  payTodayTag: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#86efac'
+  },
+  payTodayTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d'
+  },
+  payDateChangePrompt: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0284c7'
+  },
+  payTodayResetBtn: {
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  payTodayResetText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284c7'
   }
 });
