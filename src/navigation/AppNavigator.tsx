@@ -12,7 +12,7 @@ import { useApp } from '../context/AppContext';
 const Tab = createBottomTabNavigator();
 
 export const AppNavigator = () => {
-  const { t } = useApp();
+  const { t, lang } = useApp();
   const insets = useSafeAreaInsets();
 
   // Calculate safe bottom padding ensuring plenty of vertical space for both icon AND full caption label
@@ -27,7 +27,9 @@ export const AppNavigator = () => {
 
   return (
     <Tab.Navigator
+      key={lang}
       screenOptions={{
+
         headerShown: true,
         headerStyle: {
           backgroundColor: '#ffffff',

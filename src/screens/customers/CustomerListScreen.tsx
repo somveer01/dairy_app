@@ -553,7 +553,7 @@ export const CustomerListScreen = () => {
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-            <Text style={styles.contactImportBtnText}>📱 Contacts</Text>
+            <Text style={styles.contactImportBtnText}>📱 {t.contacts || 'Contacts'}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.addButton}
@@ -561,9 +561,11 @@ export const CustomerListScreen = () => {
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-            <Text style={styles.addButtonText}>+ Add</Text>
+            <Text style={styles.addButtonText}>+ {t.addCustomer || 'Add'}</Text>
           </TouchableOpacity>
         </View>
+
+
 
         {/* Customer List */}
         <FlatList

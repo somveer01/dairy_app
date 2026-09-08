@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 import { CustomerDueSummary } from '../types';
+import { formatToDisplayDate } from '../utils/dateUtils';
 
 export interface CustomerDateAuditItem {
   date: string;
@@ -64,7 +65,8 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
       const d = parseInt(parts[2], 10);
       const dateObj = new Date(y, m - 1, d);
       const dayName = DAYS_SHORT[dateObj.getDay()] || '';
-      const dateFormatted = `${parts[2]}-${MONTHS_SHORT[m - 1]} (${dayName})`;
+      const dateFormatted = `${formatToDisplayDate(item.date)} (${dayName})`;
+
 
       if (item.isDelivered) {
         const details = item.entries

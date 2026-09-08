@@ -14,11 +14,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { InstallAppModal } from '../../components/InstallAppModal';
+import { formatToDisplayDate } from '../../utils/dateUtils';
 
 export const DashboardScreen = ({ navigation }: any) => {
   const { t, supplier, setSupplier, customers, milkEntries, payments } = useApp();
 
   const todayStr = new Date().toISOString().split('T')[0];
+
 
   // Metrics for Today
   const todayStats = useMemo(() => {
@@ -211,7 +213,8 @@ export const DashboardScreen = ({ navigation }: any) => {
         </View>
 
         {/* Today's Deliveries Section */}
-        <Text style={styles.sectionHeading}>{t.todayDeliveries} ({todayStr})</Text>
+        <Text style={styles.sectionHeading}>{t.todayDeliveries} ({formatToDisplayDate(todayStr)})</Text>
+
 
         <View style={styles.statsGrid}>
           {/* Cow Milk Box */}

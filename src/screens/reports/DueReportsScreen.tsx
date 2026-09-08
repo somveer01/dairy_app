@@ -16,6 +16,7 @@ import { StorageService } from '../../services/storageService';
 import { WhatsAppService, CustomerDateAuditItem } from '../../services/whatsappService';
 import { Customer, CustomerDueSummary, Payment, MilkEntry, MilkType, SessionType } from '../../types';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
+import { formatToDisplayDate, parseToIsoDate, getTodayDisplayDate } from '../../utils/dateUtils';
 
 export type ReportMode = 'month' | 'custom' | 'all';
 type DueFilterType = 'all' | 'dueOnly' | 'paidOnly';
@@ -48,16 +49,17 @@ export const DueReportsScreen = () => {
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth()); // 0-11
   const [pickerYear, setPickerYear] = useState<number>(now.getFullYear());
 
-  // Custom Date Range State
-  const firstOfCurrentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const todayStr = now.toISOString().split('T')[0];
+  // Custom Date Range State (Stored in DD-MMM-YYYY format e.g. 01-SEP-2026 to 08-SEP-2026)
+  const firstOfCurrentMonth = formatToDisplayDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
+  const todayDisplayStr = getTodayDisplayDate();
   const [customStartDate, setCustomStartDate] = useState<string>(firstOfCurrentMonth);
-  const [customEndDate, setCustomEndDate] = useState<string>(todayStr);
+  const [customEndDate, setCustomEndDate] = useState<string>(todayDisplayStr);
 
   // Month Picker Modal State
   const [monthPickerVisible, setMonthPickerVisible] = useState<boolean>(false);
 
   const [searchQuery, setSearchQuery] = useState('');
+
   const [dueFilter, setDueFilter] = useState<DueFilterType>('all');
   
   // Payment Modal State
@@ -91,10 +93,10 @@ export const DueReportsScreen = () => {
     }
 
     if (reportMode === 'custom') {
-      const start = customStartDate.trim() || '2000-01-01';
-      const end = customEndDate.trim() || '2099-12-31';
-      const label = `${start} to ${end}`;
-      return { startDate: start, endDate: end, label };
+      const startIso = parseToIsoDate(customStartDate) || '2000-01-01';
+      const endIso = parseToIsoDate(customEndDate) || '2099-12-31';
+      const label = `${formatToDisplayDate(startIso)} to ${formatToDisplayDate(endIso)}`;
+      return { startDate: startIso, endDate: endIso, label };
     }
 
     return {
@@ -133,16 +135,17 @@ export const DueReportsScreen = () => {
     const mStr = String(now.getMonth() + 1).padStart(2, '0');
     const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
     if (preset === 'firstHalf') {
-      setCustomStartDate(`${y}-${mStr}-01`);
-      setCustomEndDate(`${y}-${mStr}-15`);
+      setCustomStartDate(formatToDisplayDate(`${y}-${mStr}-01`));
+      setCustomEndDate(formatToDisplayDate(`${y}-${mStr}-15`));
     } else if (preset === 'secondHalf') {
-      setCustomStartDate(`${y}-${mStr}-16`);
-      setCustomEndDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`);
+      setCustomStartDate(formatToDisplayDate(`${y}-${mStr}-16`));
+      setCustomEndDate(formatToDisplayDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`));
     } else if (preset === 'fullMonth') {
-      setCustomStartDate(`${y}-${mStr}-01`);
-      setCustomEndDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`);
+      setCustomStartDate(formatToDisplayDate(`${y}-${mStr}-01`));
+      setCustomEndDate(formatToDisplayDate(`${y}-${mStr}-${String(lastDay).padStart(2, '0')}`));
     }
   };
+
 
   // All calculated due summaries for the selected period
   const allDueSummaries: CustomerDueSummary[] = useMemo(() => {
@@ -272,7 +275,7 @@ export const DueReportsScreen = () => {
       const d = parseInt(parts[2], 10);
       const dateObj = new Date(y, m - 1, d);
       const dayName = DAYS_SHORT[dateObj.getDay()] || '';
-      const formattedDate = `${parts[2]} ${MONTHS_SHORT[m - 1]} (${dayName})`;
+      const formattedDate = `${formatToDisplayDate(dateStr)} (${dayName})`;
 
       return {
         date: dateStr,
@@ -507,10 +510,10 @@ export const DueReportsScreen = () => {
           <View style={styles.customDateBox}>
             <View style={styles.customDateInputRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customDateLabel}>{t.fromDate || 'प्रारंभ तारीख'} (YYYY-MM-DD)</Text>
+                <Text style={styles.customDateLabel}>{t.fromDate || 'से तारीख'} (DD-MMM-YYYY)</Text>
                 <TextInput
                   style={styles.customDateInput}
-                  placeholder="YYYY-MM-DD"
+                  placeholder="DD-MMM-YYYY (e.g. 01-SEP-2026)"
                   placeholderTextColor="#94a3b8"
                   value={customStartDate}
                   onChangeText={setCustomStartDate}
@@ -518,10 +521,10 @@ export const DueReportsScreen = () => {
               </View>
               <Text style={styles.customDateArrow}>→</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customDateLabel}>{t.toDate || 'अंतिम तारीख'} (YYYY-MM-DD)</Text>
+                <Text style={styles.customDateLabel}>{t.toDate || 'तक तारीख'} (DD-MMM-YYYY)</Text>
                 <TextInput
                   style={styles.customDateInput}
-                  placeholder="YYYY-MM-DD"
+                  placeholder="DD-MMM-YYYY (e.g. 08-SEP-2026)"
                   placeholderTextColor="#94a3b8"
                   value={customEndDate}
                   onChangeText={setCustomEndDate}
@@ -531,35 +534,36 @@ export const DueReportsScreen = () => {
 
             {/* Quick Presets */}
             <View style={styles.presetRow}>
-              <Text style={styles.presetLabel}>त्वरित चुनें:</Text>
+              <Text style={styles.presetLabel}>{t.quickPresets || 'त्वरित चुनें'}:</Text>
               <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('firstHalf')}>
-                <Text style={styles.presetBtnText}>1-15 तारीख</Text>
+                <Text style={styles.presetBtnText}>{t.preset1_15 || '1-15 तारीख'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('secondHalf')}>
-                <Text style={styles.presetBtnText}>16-अंतिम</Text>
+                <Text style={styles.presetBtnText}>{t.preset16_End || '16-अंतिम'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('fullMonth')}>
-                <Text style={styles.presetBtnText}>पूरा महीना</Text>
+                <Text style={styles.presetBtnText}>{t.presetFullMonth || 'पूरा महीना'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
+
         {/* Total Summary Banner with Billed, Received and Net Due */}
         <View style={styles.summaryBanner}>
           <View style={styles.bannerRow}>
             <View style={styles.bannerItem}>
-              <Text style={styles.bannerSubLabel}>Total Billed</Text>
+              <Text style={styles.bannerSubLabel}>{t.totalBilled}</Text>
               <Text style={styles.bannerSubAmount}>₹{totalPeriodBilled.toFixed(0)}</Text>
             </View>
             <View style={styles.bannerItemDivider} />
             <View style={styles.bannerItem}>
-              <Text style={styles.bannerSubLabel}>Total Paid</Text>
+              <Text style={styles.bannerSubLabel}>{t.totalReceived}</Text>
               <Text style={styles.bannerSubAmount}>₹{totalPeriodPaid.toFixed(0)}</Text>
             </View>
             <View style={styles.bannerItemDivider} />
             <View style={styles.bannerItem}>
-              <Text style={styles.bannerSubLabel}>Net Due</Text>
+              <Text style={styles.bannerSubLabel}>{t.netDue}</Text>
               <Text style={[styles.bannerSubAmount, { color: '#fef08a' }]}>₹{totalPeriodDue.toFixed(0)}</Text>
             </View>
           </View>
@@ -569,7 +573,7 @@ export const DueReportsScreen = () => {
         <View style={styles.searchRow}>
           <TextInput
             style={styles.searchInput}
-            placeholder="🔍 Search customer name, phone, address..."
+            placeholder={`🔍 ${t.searchCustomers}`}
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -594,7 +598,7 @@ export const DueReportsScreen = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, dueFilter === 'all' && styles.filterChipTextActive]}>
-              All ({allDueSummaries.length})
+              {t.all} ({allDueSummaries.length})
             </Text>
           </TouchableOpacity>
 
@@ -604,7 +608,7 @@ export const DueReportsScreen = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, dueFilter === 'dueOnly' && styles.filterChipTextActiveDue]}>
-              🔴 Pending Due ({allDueSummaries.filter(d => d.netDue > 0).length})
+              🔴 {t.pendingDue} ({allDueSummaries.filter(d => d.netDue > 0).length})
             </Text>
           </TouchableOpacity>
 
@@ -614,7 +618,7 @@ export const DueReportsScreen = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, dueFilter === 'paidOnly' && styles.filterChipTextActivePaid]}>
-              ✓ Settled ({allDueSummaries.filter(d => d.netDue <= 0).length})
+              ✓ {t.settled} ({allDueSummaries.filter(d => d.netDue <= 0).length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -622,9 +626,10 @@ export const DueReportsScreen = () => {
         {/* Helper Hint: Tap customer for date-wise report */}
         <View style={styles.tapHintBox}>
           <Text style={styles.tapHintText}>
-            💡 Tap on any customer card to view date-wise milk delivery & missing days report
+            {t.tapHint}
           </Text>
         </View>
+
 
         {/* List of Customer Due Summaries */}
         <FlatList

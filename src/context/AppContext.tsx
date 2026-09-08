@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations, Language } from '../localization/i18n';
 import { StorageService } from '../services/storageService';
 import { Customer, MilkEntry, Payment, Supplier } from '../types';
@@ -20,11 +20,22 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [lang, setLangState] = useState<Language>('en');
+  const [lang, setLangState] = useState<Language>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored = window.localStorage.getItem('@dairy_lang');
+        if (stored === 'hi' || stored === 'en') return stored;
+      } catch {
+        // ignore
+      }
+    }
+    return 'en';
+  });
   const [supplier, setSupplier] = useState<Supplier | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [milkEntries, setMilkEntries] = useState<MilkEntry[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+
 
   useEffect(() => {
     loadInitialData();

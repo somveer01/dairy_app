@@ -15,6 +15,7 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { MilkEntry, MilkType, SessionType, Customer } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
+import { formatToDisplayDate } from '../../utils/dateUtils';
 
 export const DailyRegisterScreen = () => {
   const { t, customers, milkEntries, refreshMilkEntries, supplier } = useApp();
@@ -36,10 +37,15 @@ export const DailyRegisterScreen = () => {
   const [notes, setNotes] = useState('');
 
   const changeDateBy = (days: number) => {
-    const current = new Date(selectedDate);
+    const parts = selectedDate.split('-').map(Number);
+    const current = new Date(parts[0], parts[1] - 1, parts[2]);
     current.setDate(current.getDate() + days);
-    setSelectedDate(current.toISOString().split('T')[0]);
+    const y = current.getFullYear();
+    const m = String(current.getMonth() + 1).padStart(2, '0');
+    const d = String(current.getDate()).padStart(2, '0');
+    setSelectedDate(`${y}-${m}-${d}`);
   };
+
 
   const sessionEntriesMap = useMemo(() => {
     const map = new Map<string, MilkEntry>();
@@ -82,7 +88,7 @@ export const DailyRegisterScreen = () => {
 
     confirmAction(
       'दूध एंट्री हटाएं (Delete Milk Entry)',
-      `क्या आप वाकई यह एंट्री हटाना चाहते हैं?\n• ग्राहक (Customer): ${customerName}\n• मात्रा (Quantity): ${entry.quantityLitres} L (${milkLabel})\n• शिफ्ट (Session): ${sessionLabel}\n• तारीख (Date): ${entry.date}\n• कुल रकम (Amount): ₹${entry.amount.toFixed(0)}`,
+      `क्या आप वाकई यह एंट्री हटाना चाहते हैं?\n• ग्राहक (Customer): ${customerName}\n• मात्रा (Quantity): ${entry.quantityLitres} L (${milkLabel})\n• शिफ्ट (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(entry.date)}\n• कुल रकम (Amount): ₹${entry.amount.toFixed(0)}`,
       async () => {
         await StorageService.deleteMilkEntry(entry.id);
         await refreshMilkEntries();
@@ -131,8 +137,9 @@ export const DailyRegisterScreen = () => {
 
     confirmAction(
       'सभी का दूध मार्क करें (Mark All Deliveries)',
-      `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${selectedDate}`,
+      `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`,
       async () => {
+
         const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
           id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}`,
           supplierId: supplier?.id || 'supp_default',
@@ -225,7 +232,7 @@ export const DailyRegisterScreen = () => {
           </TouchableOpacity>
 
           <View style={styles.dateDisplay}>
-            <Text style={styles.dateText}>{selectedDate}</Text>
+            <Text style={styles.dateText}>{formatToDisplayDate(selectedDate)}</Text>
           </View>
 
           <TouchableOpacity
@@ -424,7 +431,7 @@ export const DailyRegisterScreen = () => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
-                {selectedCustomer?.name} — {session} ({selectedDate})
+                {selectedCustomer?.name} — {session} ({formatToDisplayDate(selectedDate)})
               </Text>
 
               {/* Milk Type */}

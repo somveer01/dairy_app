@@ -185,26 +185,33 @@ export const SettingsScreen = () => {
         <View style={styles.languageRow}>
           <TouchableOpacity
             style={[styles.langBtn, lang === 'en' && styles.langBtnActive]}
-            onPress={() => setLanguage('en')}
+            onPress={async () => {
+              await setLanguage('en');
+              showAlert('Language Changed', 'App language updated to English.');
+            }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
             <Text style={[styles.langText, lang === 'en' && styles.langTextActive]}>
-              English (EN)
+              {lang === 'en' ? '✓ ' : ''}English (EN)
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.langBtn, lang === 'hi' && styles.langBtnActive]}
-            onPress={() => setLanguage('hi')}
+            onPress={async () => {
+              await setLanguage('hi');
+              showAlert('भाषा बदली गई (Language Updated)', 'ऐप की भाषा हिंदी में अपडेट कर दी गई है।');
+            }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
             <Text style={[styles.langText, lang === 'hi' && styles.langTextActive]}>
-              हिंदी (Hindi)
+              {lang === 'hi' ? '✓ ' : ''}हिंदी (Hindi)
             </Text>
           </TouchableOpacity>
         </View>
+
 
         {/* Permanent Storage & Database Status */}
         <Text style={styles.sectionHeader}>📁 Permanent Storage & Database</Text>
@@ -334,7 +341,7 @@ export const SettingsScreen = () => {
         </View>
 
         {/* Data Management */}
-        <Text style={styles.sectionHeader}>Data Management</Text>
+        <Text style={styles.sectionHeader}>{t.dataManagement || 'Data Management'}</Text>
 
         <TouchableOpacity
           style={styles.menuItem}
@@ -344,7 +351,7 @@ export const SettingsScreen = () => {
         >
           <Text style={styles.menuIcon}>👥</Text>
           <View style={styles.menuContent}>
-            <Text style={[styles.menuTitle, { color: '#f59e0b' }]}>Remove All Customers</Text>
+            <Text style={[styles.menuTitle, { color: '#f59e0b' }]}>{t.removeAllCustomers || 'Remove All Customers'}</Text>
             <Text style={styles.menuSubtitle}>Wipe customer list clean ({customers.length} currently)</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
@@ -358,11 +365,12 @@ export const SettingsScreen = () => {
         >
           <Text style={styles.menuIcon}>🔄</Text>
           <View style={styles.menuContent}>
-            <Text style={[styles.menuTitle, { color: '#ef4444' }]}>Reset All Records</Text>
+            <Text style={[styles.menuTitle, { color: '#ef4444' }]}>{t.resetAllRecords || 'Reset All Records'}</Text>
             <Text style={styles.menuSubtitle}>Clear all customers, milk register & payments</Text>
           </View>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
+
 
         {/* Install App on Device */}
         <TouchableOpacity

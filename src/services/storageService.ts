@@ -150,13 +150,29 @@ export const StorageService = {
 
   // Language
   async getLanguage(): Promise<'en' | 'hi'> {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const local = window.localStorage.getItem(STORAGE_KEYS.LANGUAGE);
+        if (local === 'en' || local === 'hi') return local;
+      }
+    } catch {
+      // ignore
+    }
     const lang = await AsyncStorage.getItem(STORAGE_KEYS.LANGUAGE);
     return (lang as 'en' | 'hi') || 'en';
   },
 
   async saveLanguage(lang: 'en' | 'hi'): Promise<void> {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
+      }
+    } catch {
+      // ignore
+    }
     await AsyncStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
   },
+
 
   // Reset or seed fresh data
   async clearAllData(): Promise<void> {
