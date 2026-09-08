@@ -36,7 +36,7 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dairy_app/_expo/static/js/web/index-7974bcaf371595c8584ce1d765b9e8f1.js" defer></script>
+  <script src="/dairy_app/_expo/static/js/web/index-7da801d9c059bd2c85487f5df7d14641.js" defer></script>
 
   <!-- PWA Install Banner -->
   <div id="pwa-install-banner" style="display:none; position:fixed; top:12px; left:12px; right:12px; z-index:999999; background:linear-gradient(135deg, #0284c7, #0369a1); color:#ffffff; padding:10px 14px; border-radius:14px; box-shadow:0 6px 20px rgba(0,0,0,0.25); font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; align-items:center; justify-content:space-between;">
@@ -116,16 +116,47 @@
       initPwaBanner();
     }
 
-    // Register Service Worker for PWA installability
+    // Register Service Worker for PWA installability with immediate update detection
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/dairy_app/sw.js', { scope: '/dairy_app/' })
+        navigator.serviceWorker.register('/dairy_app/sw.js', { scope: '/dairy_app/', updateViaCache: 'none' })
           .then(function(reg) {
             console.log('Dairy PWA ServiceWorker active with scope:', reg.scope);
+
+            // Proactively check for updates immediately on launch
+            reg.update();
+
+            // Re-check for updates whenever user switches back to the app
+            document.addEventListener('visibilitychange', function() {
+              if (document.visibilityState === 'visible') {
+                reg.update();
+              }
+            });
+
+            // If a new update is found, activate it right away
+            reg.addEventListener('updatefound', function() {
+              var newWorker = reg.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    newWorker.postMessage({ action: 'skipWaiting' });
+                  }
+                });
+              }
+            });
           })
           .catch(function(err) {
             console.log('ServiceWorker registration error:', err);
           });
+
+        // Automatically reload once when the new version takes control
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+          }
+        });
       });
     }
   </script>
