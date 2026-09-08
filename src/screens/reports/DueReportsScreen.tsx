@@ -582,73 +582,64 @@ export const DueReportsScreen = () => {
         {/* When in Custom Mode: Date Inputs, Calendar Buttons, Presets & Search Button */}
         {reportMode === 'custom' && (
           <View style={styles.customDateBox}>
-            <View style={styles.customDateInputRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.customDateLabel}>{t.fromDate || 'से तारीख'} (DD-MMM-YYYY)</Text>
-                <View style={styles.inputWithIcon}>
-                  <TextInput
-                    style={styles.customDateInputField}
-                    placeholder="01-SEP-2026"
-                    placeholderTextColor="#94a3b8"
-                    value={customStartDate}
-                    onChangeText={setCustomStartDate}
-                  />
-                  <TouchableOpacity
-                    style={styles.inputCalBtn}
-                    onPress={() => openCalendarPicker('start')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.inputCalIcon}>📅</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              <Text style={styles.customDateArrow}>→</Text>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.customDateLabel}>{t.toDate || 'तक तारीख'} (DD-MMM-YYYY)</Text>
-                <View style={styles.inputWithIcon}>
-                  <TextInput
-                    style={styles.customDateInputField}
-                    placeholder="08-SEP-2026"
-                    placeholderTextColor="#94a3b8"
-                    value={customEndDate}
-                    onChangeText={setCustomEndDate}
-                  />
-                  <TouchableOpacity
-                    style={styles.inputCalBtn}
-                    onPress={() => openCalendarPicker('end')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.inputCalIcon}>📅</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* Quick Presets and Dedicated Search / Filter Button */}
-            <View style={styles.customActionRow}>
-              <View style={styles.presetRow}>
-                <Text style={styles.presetLabel}>{t.quickPresets || 'त्वरित'}:</Text>
-                <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('firstHalf')}>
-                  <Text style={styles.presetBtnText}>{t.preset1_15 || '1-15'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('secondHalf')}>
-                  <Text style={styles.presetBtnText}>{t.preset16_End || '16-अंतिम'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('fullMonth')}>
-                  <Text style={styles.presetBtnText}>{t.presetFullMonth || 'महीना'}</Text>
-                </TouchableOpacity>
-              </View>
-
+            {/* Single Row: From Date, Arrow, To Date, and Search Dues Button */}
+            <View style={styles.singleRowDateBar}>
+              {/* From Date Box */}
               <TouchableOpacity
-                style={styles.searchDuesBtn}
+                style={styles.compactDateCard}
+                onPress={() => openCalendarPicker('start')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.compactDateLabel}>{t.fromDate || 'से'} (DD-MMM-YYYY)</Text>
+                <View style={styles.compactDateValueRow}>
+                  <Text style={styles.compactDateValueText} numberOfLines={1}>
+                    {customStartDate}
+                  </Text>
+                  <Text style={styles.compactCalIcon}>📅</Text>
+                </View>
+              </TouchableOpacity>
+
+              <Text style={styles.compactDateArrow}>→</Text>
+
+              {/* To Date Box */}
+              <TouchableOpacity
+                style={styles.compactDateCard}
+                onPress={() => openCalendarPicker('end')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.compactDateLabel}>{t.toDate || 'तक'} (DD-MMM-YYYY)</Text>
+                <View style={styles.compactDateValueRow}>
+                  <Text style={styles.compactDateValueText} numberOfLines={1}>
+                    {customEndDate}
+                  </Text>
+                  <Text style={styles.compactCalIcon}>📅</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Search Dues Button in Same Row */}
+              <TouchableOpacity
+                style={styles.compactSearchBtn}
                 onPress={handleApplyCustomSearch}
                 activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               >
-                <Text style={styles.searchDuesBtnText}>
-                  🔍 {t.searchDuesBtn || (lang === 'hi' ? 'बकाया खोजें' : 'Search Dues')}
+                <Text style={styles.compactSearchBtnText}>
+                  🔍 {t.searchDuesBtn || (lang === 'hi' ? 'खोजें' : 'Search')}
                 </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Presets Row Below */}
+            <View style={styles.compactPresetRow}>
+              <Text style={styles.presetLabel}>{t.quickPresets || 'त्वरित'}:</Text>
+              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('firstHalf')}>
+                <Text style={styles.presetBtnText}>{t.preset1_15 || '1-15'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('secondHalf')}>
+                <Text style={styles.presetBtnText}>{t.preset16_End || '16-अंतिम'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('fullMonth')}>
+                <Text style={styles.presetBtnText}>{t.presetFullMonth || 'महीना'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1522,41 +1513,68 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 10
   },
-  customDateInputRow: {
+  singleRowDateBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: 6
   },
-  customDateLabel: { fontSize: 11, color: '#475569', fontWeight: '600', marginBottom: 4 },
-  inputWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  compactDateCard: {
+    flex: 1,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
-    paddingRight: 6
-  },
-  customDateInputField: {
-    flex: 1,
     paddingHorizontal: 8,
-    paddingVertical: 6,
-    fontSize: 12,
-    color: '#0f172a'
+    paddingVertical: 6
   },
-  inputCalBtn: {
-    padding: 4
+  compactDateLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
+    marginBottom: 2
   },
-  inputCalIcon: {
-    fontSize: 15
-  },
-  customDateArrow: { fontSize: 16, color: '#94a3b8', fontWeight: 'bold', marginTop: 18 },
-  customActionRow: {
+  compactDateValueRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
-    gap: 8,
+    justifyContent: 'space-between'
+  },
+  compactDateValueText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    flex: 1
+  },
+  compactCalIcon: {
+    fontSize: 14,
+    marginLeft: 4
+  },
+  compactDateArrow: {
+    fontSize: 14,
+    color: '#94a3b8',
+    fontWeight: 'bold'
+  },
+  compactSearchBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0284c7',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  compactSearchBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold'
+  },
+  compactPresetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
     flexWrap: 'wrap'
   },
   presetRow: {
@@ -1575,23 +1593,6 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   presetBtnText: { fontSize: 11, color: '#0284c7', fontWeight: '600' },
-  searchDuesBtn: {
-    backgroundColor: '#0284c7',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0284c7',
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2
-  },
-  searchDuesBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold'
-  },
   summaryBanner: {
     backgroundColor: '#0284c7',
     borderRadius: 14,
