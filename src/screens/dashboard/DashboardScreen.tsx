@@ -27,6 +27,15 @@ const toLocalIso = (d: Date): string => {
   return `${y}-${m}-${day}`;
 };
 
+interface CustPaymentSummary {
+  customerId: string;
+  customerName: string;
+  phone?: string;
+  count: number;
+  totalPaid: number;
+  latestDate: string;
+}
+
 export const DashboardScreen = ({ navigation }: any) => {
   const { t, lang, supplier, setSupplier, customers, milkEntries, payments, refreshPayments } = useApp();
 
@@ -68,7 +77,49 @@ export const DashboardScreen = ({ navigation }: any) => {
     return payments.reduce((sum, p) => sum + p.amountPaid, 0);
   }, [payments]);
 
-  // Sorted Payments for History Modal (Newest first)
+  // Customer-Wise Payment Summaries (Grouped by customer)
+  const customerPaymentSummaries = useMemo(() => {
+    const map = new Map<string, CustPaymentSummary>();
+
+    payments.forEach(p => {
+      const cust = customers.find(c => c.id === p.customerId);
+      const key = p.customerId || p.customerName;
+      const name = p.customerName || cust?.name || (isHindi ? 'अज्ञात ग्राहक' : 'Unknown Customer');
+      const phone = cust?.phone || '';
+
+      if (!map.has(key)) {
+        map.set(key, {
+          customerId: key,
+          customerName: name,
+          phone,
+          count: 1,
+          totalPaid: p.amountPaid,
+          latestDate: p.date
+        });
+      } else {
+        const item = map.get(key)!;
+        item.count += 1;
+        item.totalPaid += p.amountPaid;
+        if (p.date > item.latestDate) {
+          item.latestDate = p.date;
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.totalPaid - a.totalPaid);
+  }, [payments, customers, isHindi]);
+
+  // Filtered Customer Summaries by search term
+  const [paymentCustSearch, setPaymentCustSearch] = useState('');
+  const filteredCustSummaries = useMemo(() => {
+    if (!paymentCustSearch.trim()) return customerPaymentSummaries;
+    const q = paymentCustSearch.trim().toLowerCase();
+    return customerPaymentSummaries.filter(
+      c => c.customerName.toLowerCase().includes(q) || (c.phone && c.phone.includes(q))
+    );
+  }, [customerPaymentSummaries, paymentCustSearch]);
+
+  // All Payments sorted chronologically (Newest first)
   const sortedPayments = useMemo(() => {
     return [...payments].sort((a, b) => {
       const timeA = new Date(a.date).getTime() || a.createdAt || 0;
@@ -76,6 +127,26 @@ export const DashboardScreen = ({ navigation }: any) => {
       return timeB - timeA;
     });
   }, [payments]);
+
+  // Selected customer for drill-down view in Payment History modal
+  const [selectedPaymentCustId, setSelectedPaymentCustId] = useState<string | null>(null);
+  const [paymentViewMode, setPaymentViewMode] = useState<'customer' | 'all'>('customer');
+
+  const selectedCustPayments = useMemo(() => {
+    if (!selectedPaymentCustId) return [];
+    return payments
+      .filter(p => p.customerId === selectedPaymentCustId || (!p.customerId && p.customerName === selectedPaymentCustId) || p.customerName === selectedPaymentCustId)
+      .sort((a, b) => {
+        const timeA = new Date(a.date).getTime() || a.createdAt || 0;
+        const timeB = new Date(b.date).getTime() || b.createdAt || 0;
+        return timeB - timeA;
+      });
+  }, [payments, selectedPaymentCustId]);
+
+  const selectedCustSummary = useMemo(() => {
+    if (!selectedPaymentCustId) return null;
+    return customerPaymentSummaries.find(c => c.customerId === selectedPaymentCustId) || null;
+  }, [customerPaymentSummaries, selectedPaymentCustId]);
 
   // Dairy Name Setup / Edit Modal State
   const [editDairyModalVisible, setEditDairyModalVisible] = useState(false);
@@ -354,10 +425,15 @@ export const DashboardScreen = ({ navigation }: any) => {
             </View>
           </TouchableOpacity>
 
-          {/* Card 2: Payment History */}
+          {/* Card 2: Payment History (Tapping opens Customer-Wise Payment History) */}
           <TouchableOpacity
             style={styles.paymentCardCompact}
-            onPress={() => setPayHistoryVisible(true)}
+            onPress={() => {
+              setSelectedPaymentCustId(null);
+              setPaymentCustSearch('');
+              setPaymentViewMode('customer');
+              setPayHistoryVisible(true);
+            }}
             activeOpacity={0.85}
           >
             <View style={styles.metricCardHeader}>
@@ -502,78 +578,243 @@ export const DashboardScreen = ({ navigation }: any) => {
         ))}
       </ScrollView>
 
-      {/* EMBEDDED PAYMENT HISTORY MODAL */}
+      {/* EMBEDDED PAYMENT HISTORY MODAL (Customer-Wise & Drill-Down) */}
       <Modal visible={payHistoryVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.payHistoryModalContent}>
-            <View style={styles.payHistoryHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 24 }}>💰</Text>
-                <View>
-                  <Text style={styles.payHistoryTitle}>{isHindi ? 'भुगतान इतिहास' : 'Payment History'}</Text>
-                  <Text style={styles.payHistorySub}>
-                    {isHindi ? `कुल प्राप्त: ₹${totalReceivedAllTime.toFixed(0)} (${payments.length} रिकॉर्ड)` : `Total: ₹${totalReceivedAllTime.toFixed(0)} (${payments.length} records)`}
-                  </Text>
-                </View>
-              </View>
-              <TouchableOpacity
-                onPress={() => setPayHistoryVisible(false)}
-                style={styles.modalCloseBtn}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.modalCloseBtnText}>✕</Text>
-              </TouchableOpacity>
-            </View>
 
-            {sortedPayments.length === 0 ? (
-              <View style={styles.emptyPayState}>
-                <Text style={{ fontSize: 40, marginBottom: 8 }}>💳</Text>
-                <Text style={styles.emptyPayText}>
-                  {isHindi ? 'अभी तक कोई भुगतान दर्ज नहीं है।' : 'No payment records found.'}
-                </Text>
-                <Text style={styles.emptyPaySub}>
-                  {isHindi ? 'बकाया रिपोर्ट से भुगतान दर्ज करें।' : 'Record payments from the Due Reports tab.'}
-                </Text>
-              </View>
+            {/* SCENARIO A: CUSTOMER DETAIL DRILL-DOWN VIEW */}
+            {selectedPaymentCustId ? (
+              <>
+                <View style={styles.payHistoryHeader}>
+                  <TouchableOpacity
+                    style={styles.payBackBtn}
+                    onPress={() => setSelectedPaymentCustId(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.payBackBtnText}>‹ {isHindi ? 'वापस' : 'Back'}</Text>
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                    <Text style={styles.payHistoryTitle} numberOfLines={1}>
+                      {selectedCustSummary?.customerName || (isHindi ? 'ग्राहक भुगतान' : 'Customer Payments')}
+                    </Text>
+                    <Text style={styles.payHistorySub}>
+                      {isHindi
+                        ? `कुल भुगतान: ₹${selectedCustSummary?.totalPaid.toFixed(0) || 0} (${selectedCustPayments.length} बार)`
+                        : `Total Paid: ₹${selectedCustSummary?.totalPaid.toFixed(0) || 0} (${selectedCustPayments.length} payments)`}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setPayHistoryVisible(false)}
+                    style={styles.modalCloseBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.modalCloseBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {selectedCustPayments.length === 0 ? (
+                  <View style={styles.emptyPayState}>
+                    <Text style={{ fontSize: 36, marginBottom: 8 }}>💳</Text>
+                    <Text style={styles.emptyPayText}>
+                      {isHindi ? 'इस ग्राहक का कोई भुगतान रिकॉर्ड नहीं है।' : 'No payment records for this customer.'}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.backLinkBtn}
+                      onPress={() => setSelectedPaymentCustId(null)}
+                    >
+                      <Text style={styles.backLinkBtnText}>‹ {isHindi ? 'सभी ग्राहकों पर वापस जाएं' : 'Back to all customers'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={selectedCustPayments}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ paddingVertical: 8 }}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <View style={styles.payRecordCard}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.payRecordDate}>📅 {formatToDisplayDate(item.date)}</Text>
+                            <View style={styles.payModeBadge}>
+                              <Text style={styles.payModeText}>PAID</Text>
+                            </View>
+                          </View>
+                          {item.notes ? (
+                            <Text style={styles.payRecordNotes} numberOfLines={1}>📝 {item.notes}</Text>
+                          ) : null}
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
+                          <Text style={styles.payRecordAmount}>+₹{item.amountPaid.toFixed(0)}</Text>
+                          <TouchableOpacity
+                            style={styles.payDeleteBtn}
+                            onPress={() => handleDeletePayment(item)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={styles.payDeleteBtnText}>🗑️ {isHindi ? 'हटाएं' : 'Delete'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  />
+                )}
+              </>
             ) : (
-              <FlatList
-                data={sortedPayments}
-                keyExtractor={item => item.id}
-                contentContainerStyle={{ paddingVertical: 8 }}
-                showsVerticalScrollIndicator={false}
-                renderItem={({ item }) => {
-                  const cust = customers.find(c => c.id === item.customerId);
-                  const custName = cust?.name || (isHindi ? 'अज्ञात ग्राहक' : 'Unknown Customer');
-                  return (
-                    <View style={styles.payRecordCard}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={styles.payRecordName}>{item.customerName || custName}</Text>
-                          <View style={styles.payModeBadge}>
-                            <Text style={styles.payModeText}>PAID</Text>
+              /* SCENARIO B: MAIN PAYMENT OVERVIEW (Customer-Wise Totals & All Records) */
+              <>
+                <View style={styles.payHistoryHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 24 }}>💰</Text>
+                    <View>
+                      <Text style={styles.payHistoryTitle}>{isHindi ? 'भुगतान इतिहास' : 'Payment History'}</Text>
+                      <Text style={styles.payHistorySub}>
+                        {isHindi
+                          ? `कुल प्राप्त: ₹${totalReceivedAllTime.toFixed(0)} • ${customerPaymentSummaries.length} ग्राहक`
+                          : `Total: ₹${totalReceivedAllTime.toFixed(0)} • ${customerPaymentSummaries.length} Customers`}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setPayHistoryVisible(false)}
+                    style={styles.modalCloseBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.modalCloseBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* View Switcher: Customer-Wise (Default) vs All Records */}
+                <View style={styles.payTabRow}>
+                  <TouchableOpacity
+                    style={[styles.payTabBtn, paymentViewMode === 'customer' && styles.payTabBtnActive]}
+                    onPress={() => setPaymentViewMode('customer')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.payTabBtnText, paymentViewMode === 'customer' && styles.payTabBtnTextActive]}>
+                      👥 {isHindi ? 'ग्राहक अनुसार कुल' : 'Customer Wise'} ({customerPaymentSummaries.length})
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.payTabBtn, paymentViewMode === 'all' && styles.payTabBtnActive]}
+                    onPress={() => setPaymentViewMode('all')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.payTabBtnText, paymentViewMode === 'all' && styles.payTabBtnTextActive]}>
+                      📋 {isHindi ? 'सभी भुगतान' : 'All Payments'} ({payments.length})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {payments.length === 0 ? (
+                  <View style={styles.emptyPayState}>
+                    <Text style={{ fontSize: 40, marginBottom: 8 }}>💳</Text>
+                    <Text style={styles.emptyPayText}>
+                      {isHindi ? 'अभी तक कोई भुगतान दर्ज नहीं है।' : 'No payment records found.'}
+                    </Text>
+                    <Text style={styles.emptyPaySub}>
+                      {isHindi ? 'बकाया रिपोर्ट से भुगतान दर्ज करें।' : 'Record payments from the Due Reports tab.'}
+                    </Text>
+                  </View>
+                ) : paymentViewMode === 'customer' ? (
+                  /* 1. CUSTOMER-WISE TOTAL PAYMENTS LIST */
+                  <>
+                    <View style={styles.paySearchBox}>
+                      <Text style={{ fontSize: 13, marginRight: 6 }}>🔍</Text>
+                      <TextInput
+                        style={styles.paySearchInput}
+                        placeholder={isHindi ? 'ग्राहक का नाम या फ़ोन खोजें...' : 'Search customer name or phone...'}
+                        placeholderTextColor="#94a3b8"
+                        value={paymentCustSearch}
+                        onChangeText={setPaymentCustSearch}
+                      />
+                      {paymentCustSearch ? (
+                        <TouchableOpacity onPress={() => setPaymentCustSearch('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                          <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: 'bold' }}>✕</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+
+                    <Text style={styles.custWiseHint}>
+                      {isHindi ? '👇 ग्राहक पर क्लिक करके उसके सभी भुगतान देखें:' : '👇 Tap customer to view all their payments:'}
+                    </Text>
+
+                    <FlatList
+                      data={filteredCustSummaries}
+                      keyExtractor={item => item.customerId}
+                      contentContainerStyle={{ paddingVertical: 4 }}
+                      showsVerticalScrollIndicator={false}
+                      renderItem={({ item }) => (
+                        <TouchableOpacity
+                          style={styles.custPaySummaryCard}
+                          onPress={() => setSelectedPaymentCustId(item.customerId)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={{ flex: 1, paddingRight: 6 }}>
+                            <Text style={styles.custPaySummaryName}>{item.customerName}</Text>
+                            <Text style={styles.custPaySummarySub}>
+                              {item.phone ? `📞 ${item.phone} • ` : ''}
+                              {item.count} {isHindi ? 'बार भुगतान' : 'payments'}
+                            </Text>
+                            <Text style={styles.custPayLatestDate}>
+                              {isHindi ? `अंतिम: ${formatToDisplayDate(item.latestDate)}` : `Latest: ${formatToDisplayDate(item.latestDate)}`}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                            <View style={styles.custPayTotalBadge}>
+                              <Text style={styles.custPayTotalLabel}>{isHindi ? 'कुल' : 'Total'}</Text>
+                              <Text style={styles.custPayTotalText}>₹{item.totalPaid.toFixed(0)}</Text>
+                            </View>
+                            <Text style={styles.drillDownArrow}>›</Text>
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                    />
+                  </>
+                ) : (
+                  /* 2. CHRONOLOGICAL ALL PAYMENTS LIST */
+                  <FlatList
+                    data={sortedPayments}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ paddingVertical: 8 }}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => {
+                      const cust = customers.find(c => c.id === item.customerId);
+                      const custName = item.customerName || cust?.name || (isHindi ? 'अज्ञात ग्राहक' : 'Unknown Customer');
+                      return (
+                        <View style={styles.payRecordCard}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={styles.payRecordName}>{custName}</Text>
+                              <View style={styles.payModeBadge}>
+                                <Text style={styles.payModeText}>PAID</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.payRecordDate}>📅 {formatToDisplayDate(item.date)}</Text>
+                            {item.notes ? (
+                              <Text style={styles.payRecordNotes} numberOfLines={1}>📝 {item.notes}</Text>
+                            ) : null}
+                          </View>
+
+                          <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
+                            <Text style={styles.payRecordAmount}>+₹{item.amountPaid.toFixed(0)}</Text>
+                            <TouchableOpacity
+                              style={styles.payDeleteBtn}
+                              onPress={() => handleDeletePayment(item)}
+                              activeOpacity={0.7}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <Text style={styles.payDeleteBtnText}>🗑️ {isHindi ? 'हटाएं' : 'Delete'}</Text>
+                            </TouchableOpacity>
                           </View>
                         </View>
-                        <Text style={styles.payRecordDate}>📅 {formatToDisplayDate(item.date)}</Text>
-                        {item.notes ? (
-                          <Text style={styles.payRecordNotes} numberOfLines={1}>📝 {item.notes}</Text>
-                        ) : null}
-                      </View>
-
-                      <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
-                        <Text style={styles.payRecordAmount}>+₹{item.amountPaid.toFixed(0)}</Text>
-                        <TouchableOpacity
-                          style={styles.payDeleteBtn}
-                          onPress={() => handleDeletePayment(item)}
-                          activeOpacity={0.7}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                        >
-                          <Text style={styles.payDeleteBtnText}>🗑️ {isHindi ? 'हटाएं' : 'Delete'}</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                }}
-              />
+                      );
+                    }}
+                  />
+                )}
+              </>
             )}
 
             <TouchableOpacity
@@ -941,7 +1182,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 18,
     padding: 16,
-    maxHeight: '80%',
+    maxHeight: '85%',
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -951,11 +1192,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 12,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9'
   },
-  payHistoryTitle: { fontSize: 17, fontWeight: 'bold', color: '#0f172a' },
+  payHistoryTitle: { fontSize: 16, fontWeight: 'bold', color: '#0f172a' },
   payHistorySub: { fontSize: 11, color: '#059669', fontWeight: '600', marginTop: 1 },
   modalCloseBtn: {
     width: 32,
@@ -966,13 +1207,155 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   modalCloseBtnText: { fontSize: 14, color: '#64748b', fontWeight: 'bold' },
+
+  // Payment Tabs (Customer Wise vs All Records)
+  payTabRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 10
+  },
+  payTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  payTabBtnActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669'
+  },
+  payTabBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  payTabBtnTextActive: {
+    color: '#ffffff'
+  },
+
+  // Payment Search Box
+  paySearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 6
+  },
+  paySearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    padding: 0
+  },
+  custWiseHint: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '500',
+    marginBottom: 6,
+    marginTop: 2
+  },
+
+  // Customer Wise Payment Summary Card
+  custPaySummaryCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 10,
+    marginVertical: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1
+  },
+  custPaySummaryName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  custPaySummarySub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  custPayLatestDate: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 1
+  },
+  custPayTotalBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    alignItems: 'flex-end'
+  },
+  custPayTotalLabel: {
+    fontSize: 9,
+    color: '#047857',
+    fontWeight: '600',
+    textTransform: 'uppercase'
+  },
+  custPayTotalText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#059669'
+  },
+  drillDownArrow: {
+    fontSize: 18,
+    color: '#94a3b8',
+    fontWeight: 'bold',
+    marginLeft: 2
+  },
+
+  // Customer Drill-Down Detail
+  payBackBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
+  },
+  payBackBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#0284c7'
+  },
+  backLinkBtn: {
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: '#e0f2fe',
+    borderRadius: 8
+  },
+  backLinkBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#0284c7'
+  },
+
+  // Payment Record Card
   emptyPayState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 40
+    paddingVertical: 36
   },
-  emptyPayText: { fontSize: 14, fontWeight: '600', color: '#475569' },
-  emptyPaySub: { fontSize: 12, color: '#94a3b8', marginTop: 4, textAlign: 'center' },
+  emptyPayText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  emptyPaySub: { fontSize: 11, color: '#94a3b8', marginTop: 4, textAlign: 'center' },
   payRecordCard: {
     backgroundColor: '#f8fafc',
     borderRadius: 10,
@@ -994,7 +1377,7 @@ const styles = StyleSheet.create({
   payModeText: { fontSize: 9, fontWeight: 'bold', color: '#0369a1' },
   payRecordDate: { fontSize: 11, color: '#64748b', marginTop: 2 },
   payRecordNotes: { fontSize: 10, color: '#94a3b8', marginTop: 1, fontStyle: 'italic' },
-  payRecordAmount: { fontSize: 15, fontWeight: 'bold', color: '#059669' },
+  payRecordAmount: { fontSize: 14, fontWeight: 'bold', color: '#059669' },
   payDeleteBtn: {
     marginTop: 4,
     backgroundColor: '#fee2e2',
@@ -1005,10 +1388,10 @@ const styles = StyleSheet.create({
   payDeleteBtnText: { fontSize: 10, color: '#dc2626', fontWeight: 'bold' },
   payHistoryDoneBtn: {
     backgroundColor: '#0f172a',
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 10,
     alignItems: 'center',
-    marginTop: 10
+    marginTop: 8
   },
   payHistoryDoneBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 }
 });
