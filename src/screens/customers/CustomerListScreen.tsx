@@ -27,10 +27,19 @@ interface PhoneContactItem {
   email?: string;
   hasPhone: boolean;
   isSelected: boolean;
+  isNameUpdate?: boolean;
+  existingCustomerId?: string;
+  existingName?: string;
 }
 
+const normalizePhoneDigits = (raw?: string | null): string => {
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  return digits.length > 10 ? digits.slice(-10) : digits;
+};
+
 export const CustomerListScreen = () => {
-  const { t, customers, refreshCustomers, supplier } = useApp();
+  const { t, lang, customers, refreshCustomers, refreshMilkEntries, refreshPayments, supplier } = useApp();
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -81,12 +90,38 @@ export const CustomerListScreen = () => {
 
   const handleSave = async () => {
     Keyboard.dismiss();
-    if (!name.trim()) {
-      Alert.alert('Validation Error', 'Please enter customer name.');
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      showAlert(
+        lang === 'hi' ? 'नाम आवश्यक है' : 'Validation Error',
+        lang === 'hi' ? 'कृपया ग्राहक का नाम दर्ज करें।' : 'Please enter customer name.'
+      );
       return;
     }
-    if (!phone.trim()) {
-      Alert.alert('Validation Error', 'Please enter customer phone number.');
+
+    const normPhone = normalizePhoneDigits(phone);
+    if (!normPhone || normPhone.length < 10) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
+        lang === 'hi' ? 'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।' : 'Please enter a valid 10-digit mobile number.'
+      );
+      return;
+    }
+
+    // Check if phone number already exists under another customer
+    const existingMatch = customers.find(c => {
+      if (editingCustomer && c.id === editingCustomer.id) return false;
+      const cNorm = normalizePhoneDigits(c.phone);
+      return cNorm && cNorm === normPhone;
+    });
+
+    if (existingMatch) {
+      showAlert(
+        lang === 'hi' ? 'मोबाइल नंबर पहले से मौजूद है' : 'Phone Number Already Exists',
+        lang === 'hi'
+          ? `यह मोबाइल नंबर (${phone}) पहले से ग्राहक "${existingMatch.name}" के नाम पर दर्ज है। कृपया दूसरा नंबर दर्ज करें या मौजूदा ग्राहक का विवरण बदलें।`
+          : `This phone number (${phone}) is already registered under customer "${existingMatch.name}". Please enter a different number or edit the existing customer.`
+      );
       return;
     }
 
@@ -96,8 +131,8 @@ export const CustomerListScreen = () => {
     const customerData: Customer = {
       id: editingCustomer ? editingCustomer.id : 'cust_' + Date.now(),
       supplierId: supplier?.id || 'supp_default',
-      name: name.trim(),
-      phone: phone.trim(),
+      name: trimmedName,
+      phone: normPhone,
       address: address.trim(),
       milkType: milkType,
       defaultLitres: litres,
@@ -105,6 +140,13 @@ export const CustomerListScreen = () => {
       notes: notes.trim(),
       createdAt: editingCustomer ? editingCustomer.createdAt : Date.now()
     };
+
+    if (editingCustomer && editingCustomer.name.trim() !== trimmedName) {
+      // Customer name updated - update historical milk entries and payments as well
+      await StorageService.updateCustomerName(editingCustomer.id, trimmedName);
+      await refreshMilkEntries();
+      await refreshPayments();
+    }
 
     await StorageService.saveCustomer(customerData);
     await refreshCustomers();
@@ -152,7 +194,11 @@ export const CustomerListScreen = () => {
         return;
       }
 
-      const existingPhones = new Set(customers.map(c => c.phone.replace(/[^0-9]/g, '')));
+      const existingPhoneMap = new Map<string, Customer>();
+      customers.forEach(c => {
+        const norm = normalizePhoneDigits(c.phone);
+        if (norm) existingPhoneMap.set(norm, c);
+      });
       const validList: PhoneContactItem[] = [];
 
       // 2. Fetch contacts across all accounts (Device, SIM, Google, Outlook)
@@ -236,15 +282,29 @@ export const CustomerListScreen = () => {
           }
 
           if (extractedPhone || extractedEmail) {
-            const isAlreadyCustomer = extractedPhone && existingPhones.has(extractedPhone);
-            if (!isAlreadyCustomer) {
+            const existingCust = extractedPhone ? existingPhoneMap.get(extractedPhone) : undefined;
+            if (!existingCust) {
               validList.push({
                 id: c.id || `contact_${index}_${Math.random().toString(36).substring(7)}`,
                 name: displayName,
                 phone: extractedPhone,
                 email: extractedEmail,
                 hasPhone: extractedPhone.length >= 10,
-                isSelected: false
+                isSelected: false,
+                isNameUpdate: false
+              });
+            } else if (existingCust.name.trim().toLowerCase() !== displayName.trim().toLowerCase()) {
+              // Phone number already exists, but name in phonebook is different from Dairy App!
+              validList.push({
+                id: c.id || `contact_${index}_${Math.random().toString(36).substring(7)}`,
+                name: displayName,
+                phone: extractedPhone,
+                email: extractedEmail,
+                hasPhone: extractedPhone.length >= 10,
+                isSelected: true,
+                isNameUpdate: true,
+                existingCustomerId: existingCust.id,
+                existingName: existingCust.name
               });
             }
           }
@@ -266,6 +326,71 @@ export const CustomerListScreen = () => {
     }
   };
 
+  // Helper to process single picked contact (from Web or Native)
+  const handleSinglePickedContact = async (rawName: string, rawPhone: string) => {
+    const pName = (rawName || 'New Customer').trim();
+    const pPhone = normalizePhoneDigits(rawPhone);
+
+    if (!pPhone || pPhone.length < 10) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
+        lang === 'hi' ? 'इस संपर्क में कोई 10 अंकों का मान्य मोबाइल नंबर नहीं मिला।' : 'No valid 10-digit mobile number found in this contact.'
+      );
+      return;
+    }
+
+    const existingMatch = customers.find(cust => normalizePhoneDigits(cust.phone) === pPhone);
+    if (existingMatch) {
+      if (existingMatch.name.trim().toLowerCase() !== pName.toLowerCase()) {
+        // Phone number exists, but name is different! Prompt to update name
+        confirmAction(
+          lang === 'hi' ? 'ग्राहक का नाम अपडेट करें?' : 'Update Customer Name?',
+          lang === 'hi'
+            ? `यह मोबाइल नंबर (${pPhone}) पहले से ग्राहक "${existingMatch.name}" के नाम पर दर्ज है।\n\nक्या आप फोनबुक अनुसार नाम बदलकर "${pName}" करना चाहते हैं?`
+            : `This phone number (${pPhone}) is already registered under customer "${existingMatch.name}".\n\nDo you want to update the customer's name to "${pName}" as saved in your phonebook?`,
+          async () => {
+            await StorageService.updateCustomerName(existingMatch.id, pName);
+            await refreshCustomers();
+            await refreshMilkEntries();
+            await refreshPayments();
+            setContactModalVisible(false);
+            showAlert(
+              lang === 'hi' ? '✓ नाम अपडेट हुआ' : '✓ Name Updated',
+              lang === 'hi'
+                ? `ग्राहक का नाम बदलकर "${pName}" कर दिया गया है।`
+                : `Customer name updated to "${pName}".`
+            );
+          },
+          lang === 'hi' ? 'नाम अपडेट करें' : 'Update Name',
+          lang === 'hi' ? 'रद्द करें' : 'Cancel',
+          false
+        );
+        return;
+      } else {
+        // Phone number exists and name is identical
+        showAlert(
+          lang === 'hi' ? 'ग्राहक पहले से मौजूद है' : 'Customer Already Exists',
+          lang === 'hi'
+            ? `ग्राहक "${existingMatch.name}" (${pPhone}) पहले से आपकी ग्राहक लिस्ट में दर्ज है।`
+            : `Customer "${existingMatch.name}" (${pPhone}) is already present in your customer list.`
+        );
+        return;
+      }
+    }
+
+    // Phone number is new - open modal pre-filled
+    setContactModalVisible(false);
+    setEditingCustomer(null);
+    setName(pName);
+    setPhone(pPhone);
+    setAddress('');
+    setMilkType('cow');
+    setDefaultLitres('2.0');
+    setRatePerLitre('55');
+    setNotes('Picked from phone contacts');
+    setModalVisible(true);
+  };
+
   // Launch Android native contact picker or Web W3C Contact Picker for 1-tap single contact
   const handlePickFromNativeContacts = async () => {
     if (Platform.OS === 'web') {
@@ -275,20 +400,8 @@ export const CustomerListScreen = () => {
           if (selected && selected.length > 0) {
             const c = selected[0];
             const pName = (c.name && c.name[0]) || 'New Customer';
-            let pPhone = '';
-            if (c.tel && c.tel.length > 0) {
-              pPhone = c.tel[0].replace(/[^0-9]/g, '').slice(-10);
-            }
-            setContactModalVisible(false);
-            setEditingCustomer(null);
-            setName(pName);
-            setPhone(pPhone);
-            setAddress('');
-            setMilkType('cow');
-            setDefaultLitres('2.0');
-            setRatePerLitre('55');
-            setNotes('Picked from phone contacts');
-            setModalVisible(true);
+            const pPhone = (c.tel && c.tel.length > 0) ? c.tel[0] : '';
+            await handleSinglePickedContact(pName, pPhone);
             return;
           }
         } catch (pickerErr) {
@@ -315,7 +428,7 @@ export const CustomerListScreen = () => {
       }
 
       if (picked) {
-        let pName = picked.name || picked.fullName || `${picked.givenName || ''} ${picked.familyName || ''}`.trim() || 'New Customer';
+        const pName = picked.name || picked.fullName || `${picked.givenName || ''} ${picked.familyName || ''}`.trim() || 'New Customer';
         const phones = picked.phones || picked.phoneNumbers || [];
         let pPhone = '';
         if (Array.isArray(phones)) {
@@ -328,16 +441,7 @@ export const CustomerListScreen = () => {
           }
         }
 
-        setContactModalVisible(false);
-        setEditingCustomer(null);
-        setName(pName);
-        setPhone(pPhone);
-        setAddress('');
-        setMilkType('cow');
-        setDefaultLitres('2.0');
-        setRatePerLitre('55');
-        setNotes('Picked from phone contacts');
-        setModalVisible(true);
+        await handleSinglePickedContact(pName, pPhone);
       }
     } catch (pickerErr: any) {
       console.warn('Native picker error:', pickerErr);
@@ -352,27 +456,45 @@ export const CustomerListScreen = () => {
         setIsLoadingContacts(true);
         const selected = await (navigator as any).contacts.select(['name', 'tel', 'email'], { multiple: true });
         if (selected && selected.length > 0) {
-          const existingPhones = new Set(customers.map(c => c.phone.replace(/[^0-9]/g, '')));
+          const existingCustMap = new Map<string, Customer>();
+          customers.forEach(c => {
+            const norm = normalizePhoneDigits(c.phone);
+            if (norm) existingCustMap.set(norm, c);
+          });
           const newItems: PhoneContactItem[] = [];
 
           selected.forEach((c: any, index: number) => {
-            const pName = (c.name && c.name[0]) || `Contact ${index + 1}`;
+            const pName = ((c.name && c.name[0]) || `Contact ${index + 1}`).trim();
             let pPhone = '';
             if (c.tel && c.tel.length > 0) {
-              pPhone = c.tel[0].replace(/[^0-9]/g, '').slice(-10);
+              pPhone = normalizePhoneDigits(c.tel[0]);
             }
             const pEmail = (c.email && c.email[0]) || '';
 
             if (pPhone || pEmail) {
-              const isAlready = pPhone && existingPhones.has(pPhone);
-              if (!isAlready) {
+              const existingCust = pPhone ? existingCustMap.get(pPhone) : undefined;
+              if (!existingCust) {
                 newItems.push({
                   id: `web_contact_${Date.now()}_${index}`,
                   name: pName,
                   phone: pPhone,
                   email: pEmail,
                   hasPhone: pPhone.length >= 10,
-                  isSelected: true
+                  isSelected: true,
+                  isNameUpdate: false
+                });
+              } else if (existingCust.name.trim().toLowerCase() !== pName.toLowerCase()) {
+                // Name mismatch - candidate for name update
+                newItems.push({
+                  id: `web_contact_${Date.now()}_${index}`,
+                  name: pName,
+                  phone: pPhone,
+                  email: pEmail,
+                  hasPhone: pPhone.length >= 10,
+                  isSelected: true,
+                  isNameUpdate: true,
+                  existingCustomerId: existingCust.id,
+                  existingName: existingCust.name
                 });
               }
             }
@@ -380,9 +502,17 @@ export const CustomerListScreen = () => {
 
           if (newItems.length > 0) {
             setDeviceContacts(prev => [...newItems, ...prev]);
-            showAlert('Contacts Loaded', `Loaded ${newItems.length} contact(s) from phone! Review below and tap 'Import'.`);
+            const updatesCount = newItems.filter(i => i.isNameUpdate).length;
+            const newCount = newItems.length - updatesCount;
+            let loadedMsg = `Loaded ${newItems.length} contact(s) from phone!`;
+            if (updatesCount > 0 && newCount > 0) {
+              loadedMsg = `Loaded ${newCount} new contact(s) and ${updatesCount} name update(s)! Review below and tap 'Import'.`;
+            } else if (updatesCount > 0) {
+              loadedMsg = `Found ${updatesCount} contact(s) with updated names! Review below and tap 'Import / Update'.`;
+            }
+            showAlert('Contacts Loaded', loadedMsg);
           } else {
-            showAlert('Notice', 'All selected contacts are already present in your customer list.');
+            showAlert('Notice', 'All selected contacts are already up to date in your customer list.');
           }
         }
       } catch (err) {
@@ -412,7 +542,11 @@ export const CustomerListScreen = () => {
           setIsLoadingContacts(true);
           const text = await file.text();
           const parsedContacts: PhoneContactItem[] = [];
-          const existingPhones = new Set(customers.map(c => c.phone.replace(/[^0-9]/g, '')));
+          const existingCustMap = new Map<string, Customer>();
+          customers.forEach(c => {
+            const norm = normalizePhoneDigits(c.phone);
+            if (norm) existingCustMap.set(norm, c);
+          });
           const cards = text.split(/BEGIN:VCARD/i);
 
           cards.forEach((card: string, idx: number) => {
@@ -445,15 +579,30 @@ export const CustomerListScreen = () => {
             if (emailMatch) cEmail = emailMatch[1].trim();
 
             if (cName || cPhone) {
-              const isAlready = cPhone && existingPhones.has(cPhone);
-              if (!isAlready) {
+              const displayName = cName || `Contact ${cPhone}`;
+              const existingCust = cPhone ? existingCustMap.get(cPhone) : undefined;
+              if (!existingCust) {
                 parsedContacts.push({
                   id: `vcf_${Date.now()}_${idx}`,
-                  name: cName || `Contact ${cPhone}`,
+                  name: displayName,
                   phone: cPhone,
                   email: cEmail,
                   hasPhone: cPhone.length >= 10,
-                  isSelected: true
+                  isSelected: true,
+                  isNameUpdate: false
+                });
+              } else if (existingCust.name.trim().toLowerCase() !== displayName.toLowerCase()) {
+                // Name mismatch - candidate for name update
+                parsedContacts.push({
+                  id: `vcf_${Date.now()}_${idx}`,
+                  name: displayName,
+                  phone: cPhone,
+                  email: cEmail,
+                  hasPhone: cPhone.length >= 10,
+                  isSelected: true,
+                  isNameUpdate: true,
+                  existingCustomerId: existingCust.id,
+                  existingName: existingCust.name
                 });
               }
             }
@@ -462,9 +611,17 @@ export const CustomerListScreen = () => {
           if (parsedContacts.length > 0) {
             parsedContacts.sort((a, b) => a.name.localeCompare(b.name));
             setDeviceContacts(parsedContacts);
-            showAlert('Contacts Loaded', `Loaded ${parsedContacts.length} contacts from file! Review and tap 'Import' below.`);
+            const updatesCount = parsedContacts.filter(i => i.isNameUpdate).length;
+            const newCount = parsedContacts.length - updatesCount;
+            let loadedMsg = `Loaded ${parsedContacts.length} contacts from file! Review and tap 'Import'.`;
+            if (updatesCount > 0 && newCount > 0) {
+              loadedMsg = `Loaded ${newCount} new contact(s) and ${updatesCount} name update(s)! Review below and tap 'Import'.`;
+            } else if (updatesCount > 0) {
+              loadedMsg = `Found ${updatesCount} contact(s) with updated names! Review below and tap 'Import / Update'.`;
+            }
+            showAlert('Contacts Loaded', loadedMsg);
           } else {
-            showAlert('No Contacts Found', 'Could not find valid contacts in the selected file.');
+            showAlert('No New Contacts', 'All contacts in the selected file are already up to date in your customer list.');
           }
         } catch {
           showAlert('Error', 'Failed to read contacts file.');
@@ -489,34 +646,69 @@ export const CustomerListScreen = () => {
     setDeviceContacts(prev => prev.map(c => ({ ...c, isSelected: hasUnselected })));
   };
 
-  // Import selected contacts in batch
+  // Import selected contacts in batch (processes both new contacts and name updates)
   const handleImportSelected = async () => {
     const selected = deviceContacts.filter(c => c.isSelected);
     if (selected.length === 0) {
-      Alert.alert('No Selection', 'Please select at least one contact to import.');
+      showAlert(
+        lang === 'hi' ? 'कोई संपर्क नहीं चुना' : 'No Selection',
+        lang === 'hi' ? 'कृपया इम्पोर्ट करने के लिए कम से कम एक संपर्क चुनें।' : 'Please select at least one contact to import.'
+      );
       return;
     }
 
     const litres = parseFloat(importLitres) || 2.0;
     const rate = parseFloat(importRate) || (importMilkType === 'cow' ? 55 : 70);
 
-    const newCustomers: Customer[] = selected.map((c, idx) => ({
-      id: `cust_contact_${Date.now()}_${idx}`,
-      supplierId: supplier?.id || 'supp_default',
-      name: c.name,
-      phone: c.phone || '9876500000',
-      address: c.email ? `Email: ${c.email}` : '',
-      milkType: importMilkType,
-      defaultLitres: litres,
-      ratePerLitre: rate,
-      notes: c.email ? `Google contact: ${c.email}` : 'Imported from phone contacts',
-      createdAt: Date.now()
-    }));
+    const nameUpdates = selected.filter(c => c.isNameUpdate && c.existingCustomerId);
+    const newContacts = selected.filter(c => !c.isNameUpdate);
 
-    await StorageService.saveCustomersBatch(newCustomers);
+    // 1. Process Name Updates
+    for (const updateItem of nameUpdates) {
+      if (updateItem.existingCustomerId && updateItem.name.trim()) {
+        await StorageService.updateCustomerName(updateItem.existingCustomerId, updateItem.name.trim());
+      }
+    }
+
+    // 2. Process New Customers
+    if (newContacts.length > 0) {
+      const newCustomers: Customer[] = newContacts.map((c, idx) => ({
+        id: `cust_contact_${Date.now()}_${idx}`,
+        supplierId: supplier?.id || 'supp_default',
+        name: c.name.trim(),
+        phone: c.phone || '9876500000',
+        address: c.email ? `Email: ${c.email}` : '',
+        milkType: importMilkType,
+        defaultLitres: litres,
+        ratePerLitre: rate,
+        notes: c.email ? `Google contact: ${c.email}` : 'Imported from phone contacts',
+        createdAt: Date.now()
+      }));
+      await StorageService.saveCustomersBatch(newCustomers);
+    }
+
     await refreshCustomers();
+    if (nameUpdates.length > 0) {
+      await refreshMilkEntries();
+      await refreshPayments();
+    }
     setContactModalVisible(false);
-    Alert.alert('Success', `Successfully imported ${selected.length} customer(s) from contacts!`);
+
+    // 3. Construct user feedback message
+    let msgHi = '';
+    let msgEn = '';
+    if (newContacts.length > 0 && nameUpdates.length > 0) {
+      msgHi = `✓ ${newContacts.length} नए ग्राहक जोड़े गए और ${nameUpdates.length} ग्राहकों के नाम फोनबुक अनुसार अपडेट किए गए!`;
+      msgEn = `✓ Added ${newContacts.length} new customer(s) and updated ${nameUpdates.length} customer name(s) from phonebook!`;
+    } else if (nameUpdates.length > 0) {
+      msgHi = `✓ ${nameUpdates.length} ग्राहकों के नाम फोनबुक अनुसार सफलतापूर्वक अपडेट किए गए!`;
+      msgEn = `✓ Successfully updated ${nameUpdates.length} customer name(s) from phonebook!`;
+    } else {
+      msgHi = `✓ ${newContacts.length} नए ग्राहक सफलतापूर्वक जोड़े गए!`;
+      msgEn = `✓ Successfully imported ${newContacts.length} new customer(s) from contacts!`;
+    }
+
+    showAlert(lang === 'hi' ? 'सफलता (Success)' : 'Success', lang === 'hi' ? msgHi : msgEn);
   };
 
   const filteredCustomers = customers.filter(
@@ -788,14 +980,26 @@ export const CustomerListScreen = () => {
                         {item.isSelected && <Text style={styles.checkmarkText}>✓</Text>}
                       </View>
                       <View style={styles.contactInfo}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                           <Text style={styles.contactName} numberOfLines={1}>{item.name}</Text>
+                          {item.isNameUpdate && (
+                            <View style={styles.nameUpdateBadge}>
+                              <Text style={styles.nameUpdateBadgeText}>
+                                🔄 {lang === 'hi' ? 'नाम अपडेट' : 'Update Name'}
+                              </Text>
+                            </View>
+                          )}
                           {item.email && !item.hasPhone && (
                             <View style={styles.emailBadge}>
                               <Text style={styles.emailBadgeText}>Google Account</Text>
                             </View>
                           )}
                         </View>
+                        {item.isNameUpdate && item.existingName && (
+                          <Text style={styles.nameUpdateDetailText}>
+                            {lang === 'hi' ? 'ऐप में नाम:' : 'In Dairy App:'} {item.existingName} ➔ {item.name}
+                          </Text>
+                        )}
                         <Text style={styles.contactPhone}>
                           {item.hasPhone ? `📞 +91 ${item.phone}` : `📧 ${item.email}`}
                           {item.hasPhone && item.email ? ` • ${item.email}` : ''}
@@ -827,7 +1031,7 @@ export const CustomerListScreen = () => {
                   activeOpacity={0.8}
                 >
                   <Text style={styles.importConfirmBtnText}>
-                    Import ({selectedCount})
+                    {lang === 'hi' ? `इम्पोर्ट / अपडेट (${selectedCount})` : `Import / Update (${selectedCount})`}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1277,5 +1481,25 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center'
   },
-  vcfPickerBtnText: { color: '#334155', fontWeight: '700', fontSize: 12 }
+  vcfPickerBtnText: { color: '#334155', fontWeight: '700', fontSize: 12 },
+  nameUpdateBadge: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4
+  },
+  nameUpdateBadgeText: {
+    fontSize: 9.5,
+    color: '#c2410c',
+    fontWeight: '700'
+  },
+  nameUpdateDetailText: {
+    fontSize: 11,
+    color: '#ea580c',
+    fontWeight: '600',
+    marginTop: 2,
+    marginBottom: 2
+  }
 });

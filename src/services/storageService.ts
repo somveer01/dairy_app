@@ -80,6 +80,42 @@ export const StorageService = {
     await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(filtered));
   },
 
+  async updateCustomerName(id: string, newName: string): Promise<void> {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    // 1. Update in Customers
+    const customers = await this.getCustomers();
+    const custIdx = customers.findIndex(c => c.id === id);
+    if (custIdx >= 0) {
+      customers[custIdx].name = trimmed;
+      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+    }
+    // 2. Update customerName in Milk Entries
+    const entries = await this.getMilkEntries();
+    let entriesChanged = false;
+    entries.forEach(e => {
+      if (e.customerId === id && e.customerName !== trimmed) {
+        e.customerName = trimmed;
+        entriesChanged = true;
+      }
+    });
+    if (entriesChanged) {
+      await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(entries));
+    }
+    // 3. Update customerName in Payments
+    const payments = await this.getPayments();
+    let paymentsChanged = false;
+    payments.forEach(p => {
+      if (p.customerId === id && p.customerName !== trimmed) {
+        p.customerName = trimmed;
+        paymentsChanged = true;
+      }
+    });
+    if (paymentsChanged) {
+      await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments));
+    }
+  },
+
   // Milk Entries - Clean real entries only (no dummy deliveries)
   async getMilkEntries(): Promise<MilkEntry[]> {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.MILK_ENTRIES);
