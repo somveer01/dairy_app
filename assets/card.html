@@ -601,10 +601,16 @@
       border-radius: 14px;
       padding: 10px 14px;
       display: flex;
+      flex-direction: column;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.08);
+    }
+
+    .shortcut-main-row {
+      display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 10px;
-      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.08);
+      width: 100%;
     }
 
     .shortcut-left {
@@ -654,6 +660,39 @@
 
     .shortcut-btn:active {
       background: #0369a1;
+    }
+
+    /* Install Progress Styles */
+    .install-progress-box {
+      display: none;
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .install-progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .install-progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0284c7, #10b981);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .install-status-text {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0284c7;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
     /* Guide Modal & Tabs */
@@ -768,16 +807,27 @@
 
     <!-- Add to Home Screen / App Shortcut Banner -->
     <div class="shortcut-banner" id="shortcutBanner">
-      <div class="shortcut-left">
-        <div class="shortcut-icon-circle">📲</div>
-        <div>
-          <div class="shortcut-title" id="shortcutTitle">ऐप की तरह होम स्क्रीन पर जोड़ें</div>
-          <div class="shortcut-subtitle" id="shortcutSubtitle">1-टैप में सीधे कार्ड देखने के लिए</div>
+      <div class="shortcut-main-row">
+        <div class="shortcut-left">
+          <div class="shortcut-icon-circle">📲</div>
+          <div>
+            <div class="shortcut-title" id="shortcutTitle">ऐप की तरह होम स्क्रीन पर जोड़ें</div>
+            <div class="shortcut-subtitle" id="shortcutSubtitle">1-टैप में सीधे कार्ड देखने के लिए</div>
+          </div>
+        </div>
+        <button class="shortcut-btn" id="shortcutActionBtn" onclick="handleInstallShortcut()">
+          <span id="shortcutBtnText">+ शॉर्टकट</span>
+        </button>
+      </div>
+      <div class="install-progress-box" id="installProgressBox">
+        <div class="install-progress-bar-bg">
+          <div class="install-progress-bar-fill" id="installProgressBarFill"></div>
+        </div>
+        <div class="install-status-text">
+          <span id="installStatusMessage">इंस्टॉल हो रहा है... / Installing...</span>
+          <span id="installPercent">0%</span>
         </div>
       </div>
-      <button class="shortcut-btn" onclick="handleInstallShortcut()">
-        <span id="shortcutBtnText">+ शॉर्टकट</span>
-      </button>
     </div>
 
     <!-- Customer Information Card -->
@@ -982,6 +1032,9 @@
         shortcutBtn: '+ Milk Card जोड़ें',
         shortcutModalTitle: '📲 फोन पर "Milk Card" ऐप जोड़ें',
         guideGotIt: '✓ समझ गया (Got it)',
+        installingText: 'दूध कार्ड ऐप इंस्टॉल हो रहा है...',
+        installSuccessText: '✓ Milk Card सफलतापूर्वक इंस्टॉल हो गया!',
+        installGuideText: 'ब्राउज़र मेनू से इंस्टॉल करें (नीचे देखें)',
         weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
         months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
       },
@@ -1020,6 +1073,9 @@
         shortcutBtn: '+ Add Milk Card',
         shortcutModalTitle: '📲 Add "Milk Card" to Home Screen',
         guideGotIt: '✓ Got it',
+        installingText: 'Installing Milk Card App...',
+        installSuccessText: '✓ Milk Card successfully installed!',
+        installGuideText: 'Install via Browser Menu (see guide below)',
         weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
       }
@@ -1065,9 +1121,61 @@
       console.log('beforeinstallprompt ready for Milk Card');
     });
 
+    let installProgressInterval = null;
+
+    function showInstallProgress(onComplete) {
+      const progressBox = document.getElementById('installProgressBox');
+      const progressBar = document.getElementById('installProgressBarFill');
+      const statusMsg = document.getElementById('installStatusMessage');
+      const percentEl = document.getElementById('installPercent');
+      const actionBtn = document.getElementById('shortcutActionBtn');
+      const t = I18N[currentLang];
+
+      if (progressBox) progressBox.style.display = 'block';
+      if (actionBtn) {
+        actionBtn.disabled = true;
+        actionBtn.style.opacity = '0.6';
+      }
+
+      let currentPercent = 10;
+      if (progressBar) progressBar.style.width = currentPercent + '%';
+      if (percentEl) percentEl.innerText = currentPercent + '%';
+      if (statusMsg) statusMsg.innerText = t.installingText;
+
+      clearInterval(installProgressInterval);
+      installProgressInterval = setInterval(() => {
+        if (currentPercent < 85) {
+          currentPercent += Math.floor(Math.random() * 12) + 8;
+          if (currentPercent > 85) currentPercent = 85;
+          if (progressBar) progressBar.style.width = currentPercent + '%';
+          if (percentEl) percentEl.innerText = currentPercent + '%';
+        }
+      }, 250);
+
+      return function finishProgress(success = true) {
+        clearInterval(installProgressInterval);
+        if (progressBar) progressBar.style.width = '100%';
+        if (percentEl) percentEl.innerText = '100%';
+        if (statusMsg) {
+          statusMsg.innerText = success ? t.installSuccessText : t.installGuideText;
+          statusMsg.style.color = success ? '#10b981' : '#0284c7';
+        }
+        if (actionBtn) {
+          actionBtn.disabled = false;
+          actionBtn.style.opacity = '1';
+        }
+        if (typeof onComplete === 'function') {
+          setTimeout(onComplete, 1200);
+        }
+      };
+    }
+
     window.addEventListener('appinstalled', () => {
-      const banner = document.getElementById('shortcutBanner');
-      if (banner) banner.style.display = 'none';
+      const finish = showInstallProgress(() => {
+        const banner = document.getElementById('shortcutBanner');
+        if (banner) banner.style.display = 'none';
+      });
+      finish(true);
       deferredPrompt = null;
     });
 
@@ -1081,19 +1189,44 @@
     }
 
     function handleInstallShortcut() {
+      const t = I18N[currentLang];
       if (deferredPrompt) {
+        const finish = showInstallProgress(() => {
+          const banner = document.getElementById('shortcutBanner');
+          if (banner) banner.style.display = 'none';
+        });
+
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then((choiceResult) => {
           if (choiceResult.outcome === 'accepted') {
-            const banner = document.getElementById('shortcutBanner');
-            if (banner) banner.style.display = 'none';
+            finish(true);
+          } else {
+            // User cancelled the prompt
+            clearInterval(installProgressInterval);
+            const progressBox = document.getElementById('installProgressBox');
+            if (progressBox) progressBox.style.display = 'none';
+            const actionBtn = document.getElementById('shortcutActionBtn');
+            if (actionBtn) {
+              actionBtn.disabled = false;
+              actionBtn.style.opacity = '1';
+            }
           }
           deferredPrompt = null;
+        }).catch(() => {
+          clearInterval(installProgressInterval);
+          const progressBox = document.getElementById('installProgressBox');
+          if (progressBox) progressBox.style.display = 'none';
         });
       } else {
-        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        switchGuideTab(isIos ? 'ios' : 'android');
-        document.getElementById('shortcutModal').style.display = 'flex';
+        // Native prompt not available (e.g. inside in-app browser or Safari)
+        const finish = showInstallProgress(() => {
+          const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+          switchGuideTab(isIos ? 'ios' : 'android');
+          document.getElementById('shortcutModal').style.display = 'flex';
+          const progressBox = document.getElementById('installProgressBox');
+          if (progressBox) progressBox.style.display = 'none';
+        });
+        finish(false);
       }
     }
 
