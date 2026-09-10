@@ -859,7 +859,7 @@ export const CustomerListScreen = () => {
                   style={styles.viewCardBtn}
                   onPress={async () => {
                     await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
-                    const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id);
+                    const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true);
                     Linking.openURL(url);
                   }}
                   activeOpacity={0.7}

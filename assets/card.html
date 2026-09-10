@@ -83,6 +83,7 @@
     }
 
     .back-app-btn {
+      display: none;
       background: rgba(255, 255, 255, 0.25);
       border: 1px solid rgba(255, 255, 255, 0.45);
       color: #ffffff;
@@ -91,7 +92,6 @@
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
-      display: flex;
       align-items: center;
       gap: 4px;
       transition: background 0.2s;
@@ -748,7 +748,7 @@
           </div>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="back-app-btn" id="backToAppBtn" onclick="goBackToApp()">
+          <button class="back-app-btn" id="backToAppBtn" style="display: none;" onclick="goBackToApp()">
             ◀ <span id="backAppText">ऐप पर जाएं</span>
           </button>
           <button class="lang-toggle-btn" id="langToggleBtn" onclick="toggleLanguage()">
@@ -1164,8 +1164,17 @@
       if (!cardData) return;
       const t = I18N[currentLang];
 
+      // Back to App button - ONLY shown for supplier view
+      const isSupplier = (urlParams.get('role') === 'supplier');
+      const backAppBtn = document.getElementById('backToAppBtn');
+      if (backAppBtn) {
+        backAppBtn.style.display = isSupplier ? 'flex' : 'none';
+        if (isSupplier) {
+          document.getElementById('backAppText').innerText = t.backApp;
+        }
+      }
+
       // Update Header Text & Language Toggle
-      document.getElementById('backAppText').innerText = t.backApp;
       document.getElementById('langLabel').innerText = t.langToggleText;
       document.getElementById('liveStatusText').innerText = t.liveStatus;
       document.getElementById('lastSyncText').innerText = t.justUpdated;

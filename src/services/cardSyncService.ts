@@ -36,9 +36,10 @@ export interface CustomerCardData {
 }
 
 export const CardSyncService = {
-  getCardUrl(supplierId: string, customerId: string): string {
+  getCardUrl(supplierId: string, customerId: string, isSupplierView = false): string {
     const cleanSuppId = supplierId || 'supp_1';
-    return `https://somveer01.github.io/dairy_app/card.html?s=${encodeURIComponent(cleanSuppId)}&c=${encodeURIComponent(customerId)}`;
+    const base = `https://somveer01.github.io/dairy_app/card.html?s=${encodeURIComponent(cleanSuppId)}&c=${encodeURIComponent(customerId)}`;
+    return isSupplierView ? `${base}&role=supplier` : base;
   },
 
   async shareCardViaWhatsApp(customer: Customer, supplier: Supplier | null, lang: 'hi' | 'en' = 'hi'): Promise<void> {
