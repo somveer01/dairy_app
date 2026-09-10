@@ -1,0 +1,26 @@
+{
+  "short_name": "Milk Card",
+  "name": "Milk Card",
+  "description": "Daily Milk Delivery & Due Card",
+  "id": "/dairy_app/card.html",
+  "icons": [
+    {
+      "src": "/dairy_app/assets/icon.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/dairy_app/assets/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/dairy_app/card.html",
+  "background_color": "#ffffff",
+  "theme_color": "#0284c7",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/dairy_app/"
+}

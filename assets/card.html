@@ -8,9 +8,9 @@
   <meta name="theme-color" content="#0284c7">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="दूध कार्ड">
+  <meta name="apple-mobile-web-app-title" content="Milk Card">
   <link rel="apple-touch-icon" href="./assets/icon.png">
-  <link id="dynamicManifest" rel="manifest">
+  <link rel="manifest" href="./manifest-card.json">
   <style>
     * {
       box-sizing: border-box;
@@ -977,10 +977,10 @@
         sessionCustom: 'अन्य समय',
         today: 'आज',
         backApp: 'ऐप पर जाएं',
-        shortcutTitle: 'ऐप की तरह होम स्क्रीन पर जोड़ें',
+        shortcutTitle: 'फोन पर "Milk Card" ऐप जोड़ें',
         shortcutSubtitle: '1-टैप में सीधे कार्ड देखने के लिए',
-        shortcutBtn: '+ शॉर्टकट',
-        shortcutModalTitle: '📲 होम स्क्रीन पर शॉर्टकट बनाएं',
+        shortcutBtn: '+ Milk Card जोड़ें',
+        shortcutModalTitle: '📲 फोन पर "Milk Card" ऐप जोड़ें',
         guideGotIt: '✓ समझ गया (Got it)',
         weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
         months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
@@ -1015,10 +1015,10 @@
         sessionCustom: 'Custom',
         today: 'Today',
         backApp: 'Back to App',
-        shortcutTitle: 'Add App Shortcut to Home Screen',
-        shortcutSubtitle: '1-Tap instant access like real app',
-        shortcutBtn: '+ Shortcut',
-        shortcutModalTitle: '📲 Add Shortcut to Home Screen',
+        shortcutTitle: 'Add "Milk Card" App to Home Screen',
+        shortcutSubtitle: '1-Tap instant access like mobile app',
+        shortcutBtn: '+ Add Milk Card',
+        shortcutModalTitle: '📲 Add "Milk Card" to Home Screen',
         guideGotIt: '✓ Got it',
         weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -1046,11 +1046,29 @@
       }
     }
 
+    // Register Service Worker for PWA Add to Home Screen support
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+          console.log('SW registered for Milk Card PWA:', reg.scope);
+        }).catch((err) => {
+          console.warn('SW registration error:', err);
+        });
+      });
+    }
+
     // Capture Native PWA Install Prompt (Chrome / Android)
     let deferredPrompt = null;
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
+      console.log('beforeinstallprompt ready for Milk Card');
+    });
+
+    window.addEventListener('appinstalled', () => {
+      const banner = document.getElementById('shortcutBanner');
+      if (banner) banner.style.display = 'none';
+      deferredPrompt = null;
     });
 
     // Check if running in standalone display mode
@@ -1163,30 +1181,6 @@
       if (shortcutModalTitleEl) shortcutModalTitleEl.innerText = t.shortcutModalTitle;
       const guideGotItEl = document.getElementById('guideGotItText');
       if (guideGotItEl) guideGotItEl.innerText = t.guideGotIt;
-
-      // Dynamic Web App Manifest with Customer Name for Home Screen Shortcut
-      try {
-        const custName = cardData.customerName || 'दूध कार्ड';
-        const manifestObj = {
-          name: `${custName} — डिजिटल दूध कार्ड`,
-          short_name: 'दूध कार्ड',
-          description: 'मासिक डिजिटल दूध कार्ड',
-          start_url: window.location.href,
-          display: 'standalone',
-          background_color: '#ffffff',
-          theme_color: '#0284c7',
-          icons: [
-            { src: './assets/icon.png', sizes: '192x192', type: 'image/png' },
-            { src: './assets/icon.png', sizes: '512x512', type: 'image/png' }
-          ]
-        };
-        const blob = new Blob([JSON.stringify(manifestObj)], { type: 'application/json' });
-        const manifestUrl = URL.createObjectURL(blob);
-        const manifestLink = document.getElementById('dynamicManifest');
-        if (manifestLink) manifestLink.setAttribute('href', manifestUrl);
-      } catch (e) {
-        console.warn('Manifest setup error:', e);
-      }
 
       // Brand Info
       document.getElementById('businessName').innerText = cardData.supplierBusinessName || 'डेयरी फ़ार्म';

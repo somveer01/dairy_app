@@ -42,6 +42,9 @@ if (fs.existsSync('assets/training.html')) {
 if (fs.existsSync('assets/card.html')) {
   fs.copyFileSync('assets/card.html', 'dist/card.html');
 }
+if (fs.existsSync('assets/manifest-card.json')) {
+  fs.copyFileSync('assets/manifest-card.json', 'dist/manifest-card.json');
+}
 fs.writeFileSync('dist/.nojekyll', '');
 
 // 3. PWA Service Worker (dist/sw.js)
@@ -53,7 +56,9 @@ const CACHE_NAME = '${CACHE_NAME}';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
+  '/dairy_app/card.html',
   '/dairy_app/manifest.json',
+  '/dairy_app/manifest-card.json',
   '/dairy_app/favicon.ico',
   '/dairy_app/assets/icon.png'
 ];
