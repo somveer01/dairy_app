@@ -87,18 +87,20 @@
       background: rgba(255, 255, 255, 0.25);
       border: 1px solid rgba(255, 255, 255, 0.45);
       color: #ffffff;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 700;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
       cursor: pointer;
       align-items: center;
-      gap: 4px;
-      transition: background 0.2s;
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+      padding: 0;
     }
 
     .back-app-btn:active {
       background: rgba(255, 255, 255, 0.45);
+      transform: scale(0.92);
     }
 
     .lang-toggle-btn {
@@ -717,8 +719,11 @@
           </div>
         </div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="back-app-btn" id="backToAppBtn" style="display: none;" onclick="goBackToApp()">
-            ◀ <span id="backAppText">ऐप पर जाएं</span>
+          <button class="back-app-btn" id="backToAppBtn" style="display: none;" onclick="goBackToApp()" title="Back to App" aria-label="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
           </button>
           <button class="lang-toggle-btn" id="langToggleBtn" onclick="toggleLanguage()">
             🌐 <span id="langLabel">English</span>
@@ -1225,7 +1230,8 @@
       if (backAppBtn) {
         backAppBtn.style.display = isSupplier ? 'flex' : 'none';
         if (isSupplier) {
-          document.getElementById('backAppText').innerText = t.backApp;
+          backAppBtn.title = t.backApp || 'Back to App';
+          backAppBtn.setAttribute('aria-label', t.backApp || 'Back to App');
         }
       }
 
