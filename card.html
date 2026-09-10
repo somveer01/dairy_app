@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>डिजिटल दूध कार्ड — Digital Milk Card</title>
+  <link rel="icon" href="./assets/icon.png">
+  <meta name="theme-color" content="#0284c7">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans Devanagari', Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      min-height: 100vh;
+      padding-bottom: 40px;
+    }
+
+    .container {
+      max-width: 540px;
+      margin: 0 auto;
+      background: #ffffff;
+      min-height: 100vh;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+      position: relative;
+    }
+
+    /* Top Brand Header */
+    .brand-header {
+      background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+      color: #ffffff;
+      padding: 16px 18px;
+      border-bottom-left-radius: 20px;
+      border-bottom-right-radius: 20px;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+    }
+
+    .brand-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .brand-title-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-icon {
+      font-size: 32px;
+      background: rgba(255, 255, 255, 0.2);
+      width: 46px;
+      height: 46px;
+      border-radius: 23px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-name {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-owner {
+      font-size: 12px;
+      color: #e0f2fe;
+      margin-top: 2px;
+    }
+
+    .lang-toggle-btn {
+      background: rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: #ffffff;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.2s;
+    }
+
+    .lang-toggle-btn:active {
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    .live-badge-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.15);
+      padding: 6px 12px;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px;
+      box-shadow: 0 0 6px #4ade80;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+
+    /* Customer Info Banner */
+    .customer-card {
+      margin: 14px 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .cust-main-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .cust-name {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .cust-phone {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+
+    .rate-badge {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 6px 12px;
+      border-radius: 10px;
+      text-align: right;
+    }
+
+    .rate-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: #1e40af;
+      text-transform: uppercase;
+    }
+
+    .rate-amount {
+      font-size: 17px;
+      font-weight: 800;
+      color: #0284c7;
+    }
+
+    .cust-badges-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .pill-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 9px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pill-cow {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    .pill-buf {
+      background: #e0e7ff;
+      color: #3730a3;
+      border: 1px solid #c7d2fe;
+    }
+
+    .pill-qty {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+
+    /* Month Navigator */
+    .month-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 0 16px 12px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      padding: 8px 12px;
+      border-radius: 12px;
+    }
+
+    .month-nav-btn {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #0369a1;
+      cursor: pointer;
+    }
+
+    .month-nav-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .month-current-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      text-align: center;
+    }
+
+    /* Calendar Grid */
+    .calendar-container {
+      margin: 0 16px 16px;
+    }
+
+    .calendar-weekdays-row {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .weekday-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      padding: 2px 0;
+    }
+
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+    }
+
+    .day-box {
+      aspect-ratio: 1 / 1.05;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.15s ease;
+    }
+
+    .day-box:active {
+      transform: scale(0.95);
+    }
+
+    .day-box.empty-slot {
+      background: transparent;
+      border-color: transparent;
+      cursor: default;
+    }
+
+    .day-box.delivered {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+    }
+
+    .day-box.skipped {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+
+    .day-box.today {
+      border: 2px solid #0284c7;
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.2);
+    }
+
+    .day-num {
+      font-size: 11px;
+      font-weight: 800;
+      color: #475569;
+      align-self: flex-start;
+      line-height: 1;
+    }
+
+    .day-box.today .day-num {
+      color: #0284c7;
+      font-weight: 900;
+    }
+
+    .day-qty {
+      font-size: 12px;
+      font-weight: 800;
+      color: #059669;
+      line-height: 1;
+      margin: auto 0;
+      text-align: center;
+    }
+
+    .day-box.skipped .day-qty {
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .day-subtag {
+      font-size: 8px;
+      font-weight: 700;
+      color: #047857;
+      background: rgba(16, 185, 129, 0.15);
+      padding: 1px 3px;
+      border-radius: 3px;
+      line-height: 1;
+    }
+
+    .day-box.skipped .day-subtag {
+      display: none;
+    }
+
+    /* Billing Summary Card */
+    .summary-card {
+      margin: 16px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    }
+
+    .summary-card-header {
+      background: #f8fafc;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .summary-card-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #1e293b;
+    }
+
+    .summary-rows {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .summary-val {
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .due-hero-banner {
+      background: #fef2f2;
+      border-top: 1px dashed #fecaca;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .due-hero-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #991b1b;
+    }
+
+    .due-hero-amount {
+      font-size: 24px;
+      font-weight: 900;
+      color: #dc2626;
+    }
+
+    /* Payments History List */
+    .payments-section {
+      margin: 0 16px 20px;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+
+    .payment-item {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pay-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .pay-date {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .pay-note {
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    .pay-amount {
+      font-size: 15px;
+      font-weight: 800;
+      color: #059669;
+    }
+
+    /* Footer / Contact Bar */
+    .contact-bar {
+      margin: 20px 16px 10px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .contact-btn {
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      border: none;
+      font-size: 13px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .contact-btn-call {
+      background: #0284c7;
+      color: #ffffff;
+    }
+
+    .contact-btn-wa {
+      background: #22c55e;
+      color: #ffffff;
+    }
+
+    /* Loading Spinner */
+    .loading-overlay {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      gap: 12px;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid #e2e8f0;
+      border-top-color: #0284c7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Day Detail Modal Popup */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 200;
+    }
+
+    .modal-box {
+      background: #ffffff;
+      border-radius: 18px;
+      width: 100%;
+      max-width: 360px;
+      padding: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 8px;
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .modal-close {
+      background: #f1f5f9;
+      border: none;
+      width: 28px;
+      height: 28px;
+      border-radius: 14px;
+      font-size: 14px;
+      font-weight: 800;
+      color: #64748b;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Loading Skeleton Screen -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="spinner"></div>
+      <div style="font-weight: 700; color: #475569;" id="loadingText">दूध कार्ड लोड हो रहा है...</div>
+      <div style="font-size: 12px; color: #94a3b8;">Loading Live Milk Card...</div>
+    </div>
+
+    <!-- Top Brand Header -->
+    <header class="brand-header">
+      <div class="brand-top-row">
+        <div class="brand-title-box">
+          <div class="brand-icon">🥛</div>
+          <div>
+            <div class="brand-name" id="businessName">डेयरी फ़ार्म</div>
+            <div class="brand-owner" id="supplierName">सप्लायर</div>
+          </div>
+        </div>
+        <button class="lang-toggle-btn" id="langToggleBtn" onclick="toggleLanguage()">
+          🌐 <span id="langLabel">English</span>
+        </button>
+      </div>
+
+      <div class="live-badge-strip">
+        <div>
+          <span class="live-dot"></span>
+          <span id="liveStatusText">लाइव ऑटो-अपडेट कार्ड</span>
+        </div>
+        <div id="lastSyncText" style="opacity: 0.85;">अभी अपडेटेड</div>
+      </div>
+    </header>
+
+    <!-- Customer Information Card -->
+    <section class="customer-card">
+      <div class="cust-main-info">
+        <div>
+          <div class="cust-name" id="customerName">ग्राहक का नाम</div>
+          <div class="cust-phone" id="customerPhone">📞 -</div>
+        </div>
+        <div class="rate-badge">
+          <div class="rate-label" id="rateLabel">दूध का भाव</div>
+          <div class="rate-amount" id="rateValue">₹- / L</div>
+        </div>
+      </div>
+
+      <div class="cust-badges-row">
+        <div class="pill-badge pill-buf" id="milkTypeBadge">🐃 भैंस का दूध</div>
+        <div class="pill-badge pill-qty" id="defaultQtyBadge">📦 रोज़: - L</div>
+      </div>
+    </section>
+
+    <!-- Month Navigation Bar -->
+    <div class="month-nav">
+      <button class="month-nav-btn" id="prevMonthBtn" onclick="changeMonth(-1)">◀ <span id="prevBtnText">पिछला</span></button>
+      <div class="month-current-title" id="currentMonthDisplay">सितंबर 2026</div>
+      <button class="month-nav-btn" id="nextMonthBtn" onclick="changeMonth(1)"><span id="nextBtnText">अगला</span> ▶</button>
+    </div>
+
+    <!-- Full Month Box Calendar -->
+    <section class="calendar-container">
+      <div class="calendar-weekdays-row" id="weekdaysRow">
+        <!-- Weekday labels injected dynamically by JS -->
+      </div>
+      <div class="calendar-grid" id="calendarGrid">
+        <!-- 30/31 Day Boxes injected dynamically by JS -->
+      </div>
+    </section>
+
+    <!-- Month Billing Summary Card -->
+    <section class="summary-card">
+      <div class="summary-card-header">
+        <span class="summary-card-title" id="summaryCardTitle">📊 इस महीने का हिसाब</span>
+        <span style="font-size: 11px; color: #64748b;" id="summaryRangeLabel">01 से अंत तक</span>
+      </div>
+
+      <div class="summary-rows">
+        <div class="summary-row">
+          <span id="labelTotalDelivered">कुल डिलीवर दूध:</span>
+          <span class="summary-val" id="valTotalLitres">0.0 L</span>
+        </div>
+        <div class="summary-row">
+          <span id="labelDeliveredDays">दूध लिए गए दिन:</span>
+          <span class="summary-val" id="valDeliveredDays">0 दिन</span>
+        </div>
+        <div class="summary-row">
+          <span id="labelTotalBill">कुल बिल राशि:</span>
+          <span class="summary-val" id="valTotalBill">₹0.00</span>
+        </div>
+        <div class="summary-row">
+          <span id="labelTotalPaid">जमा किया गया भुगतान:</span>
+          <span class="summary-val" style="color: #059669;" id="valTotalPaid">₹0.00</span>
+        </div>
+      </div>
+
+      <div class="due-hero-banner">
+        <div>
+          <div class="due-hero-title" id="labelNetDue">🔴 कुल बकाया राशि (Net Due)</div>
+          <div style="font-size: 10px; color: #991b1b;" id="subNetDue">कृपया समय पर भुगतान करें</div>
+        </div>
+        <div class="due-hero-amount" id="valNetDue">₹0.00</div>
+      </div>
+    </section>
+
+    <!-- Payments Received List -->
+    <section class="payments-section" id="paymentsSection">
+      <div class="section-title" id="paymentsTitle">💳 हालिया भुगतान रसीदें</div>
+      <div id="paymentsList">
+        <!-- Payments injected dynamically -->
+      </div>
+    </section>
+
+    <!-- Bottom Contact Actions -->
+    <div class="contact-bar">
+      <a class="contact-btn contact-btn-call" id="callSupplierBtn" href="tel:">
+        📞 <span id="callBtnText">सप्लायर को कॉल करें</span>
+      </a>
+      <a class="contact-btn contact-btn-wa" id="waSupplierBtn" href="#" target="_blank">
+        💬 <span id="waBtnText">व्हाट्सएप पर संपर्क</span>
+      </a>
+    </div>
+
+  </div>
+
+  <!-- Day Detail Modal -->
+  <div class="modal-overlay" id="dayDetailModal" onclick="closeDayModal(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title" id="modalDayTitle">तारीख विवरण</div>
+        <button class="modal-close" onclick="closeDayModal()">✕</button>
+      </div>
+      <div id="modalDayContent" style="font-size: 13px; line-height: 1.6; color: #334155;">
+        <!-- Day entries injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Client Script for Live Firebase REST Data & Bilingual Render -->
+  <script>
+    const FIREBASE_RTDB_BASE = 'https://diaryapp-28278-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+    // Translations Dictionary
+    const I18N = {
+      hi: {
+        langToggleText: 'English',
+        liveStatus: 'लाइव ऑटो-अपडेट कार्ड',
+        justUpdated: 'अभी अपडेटेड',
+        rateLabel: 'दूध का भाव',
+        perLitre: '/ लीटर',
+        cowMilk: '🐄 गाय का दूध',
+        bufMilk: '🐃 भैंस का दूध',
+        dailyQty: 'रोज़:',
+        prev: 'पिछला',
+        next: 'अगला',
+        summaryTitle: '📊 इस महीने का हिसाब',
+        summaryRange: '01 से अंत तक',
+        totalDelivered: 'कुल डिलीवर दूध:',
+        deliveredDays: 'दूध लिए गए दिन:',
+        daysUnit: 'दिन',
+        totalBill: 'कुल बिल राशि:',
+        totalPaid: 'जमा किया गया भुगतान:',
+        netDue: '🔴 कुल बकाया राशि (Net Due)',
+        netDueSub: 'कृपया समय पर भुगतान करें',
+        paymentsTitle: '💳 हालिया भुगतान रसीदें',
+        noPayments: 'इस महीने कोई भुगतान दर्ज नहीं है।',
+        callSupplier: 'सप्लायर को कॉल करें',
+        waSupplier: 'व्हाट्सएप पर संपर्क',
+        noMilkDay: 'कोई डिलीवरी नहीं (छूटा हुआ)',
+        sessionMorning: 'सुबह',
+        sessionEvening: 'शाम',
+        sessionCustom: 'अन्य समय',
+        today: 'आज',
+        weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
+        months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
+      },
+      en: {
+        langToggleText: 'हिंदी',
+        liveStatus: 'Live Auto-Synced Card',
+        justUpdated: 'Updated just now',
+        rateLabel: 'Milk Rate',
+        perLitre: '/ Litre',
+        cowMilk: '🐄 Cow Milk',
+        bufMilk: '🐃 Buffalo Milk',
+        dailyQty: 'Daily:',
+        prev: 'Prev',
+        next: 'Next',
+        summaryTitle: '📊 Month Billing Summary',
+        summaryRange: '01 to Month End',
+        totalDelivered: 'Total Milk Delivered:',
+        deliveredDays: 'Delivered Days:',
+        daysUnit: 'Days',
+        totalBill: 'Total Billed Amount:',
+        totalPaid: 'Payments Received (Paid):',
+        netDue: '🔴 Net Pending Due Balance',
+        netDueSub: 'Please clear at your earliest',
+        paymentsTitle: '💳 Recent Payment Receipts',
+        noPayments: 'No payment records for this month.',
+        callSupplier: 'Call Supplier',
+        waSupplier: 'WhatsApp Supplier',
+        noMilkDay: 'No Milk Delivered (Skipped)',
+        sessionMorning: 'Morning',
+        sessionEvening: 'Evening',
+        sessionCustom: 'Custom',
+        today: 'Today',
+        weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+      }
+    };
+
+    let currentLang = localStorage.getItem('dairy_card_lang') || 'hi';
+    let cardData = null;
+    let selectedYear = new Date().getFullYear();
+    let selectedMonth = new Date().getMonth(); // 0 - 11
+
+    // Parse URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const supplierId = urlParams.get('s') || '';
+    const customerId = urlParams.get('c') || '';
+
+    function toggleLanguage() {
+      currentLang = currentLang === 'hi' ? 'en' : 'hi';
+      localStorage.setItem('dairy_card_lang', currentLang);
+      renderAll();
+    }
+
+    async function fetchCardData() {
+      if (!supplierId || !customerId) {
+        document.getElementById('loadingText').innerText = 'कार्ड लिंक अमान्य है / Invalid Card Link';
+        return;
+      }
+
+      try {
+        const url = `${FIREBASE_RTDB_BASE}/cards/${encodeURIComponent(supplierId)}/${encodeURIComponent(customerId)}.json`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Network error');
+        const data = await res.json();
+
+        if (!data) {
+          document.getElementById('loadingText').innerText = 'कार्ड डेटा अभी उपलब्ध नहीं है।\nकृप्या सप्लायर से संपर्क करें।';
+          return;
+        }
+
+        cardData = data;
+        document.getElementById('loadingOverlay').style.display = 'none';
+        renderAll();
+      } catch (err) {
+        console.warn('Fetch card error:', err);
+        document.getElementById('loadingText').innerText = 'कनेक्शन त्रुटि। कृपया पुनः प्रयास करें।';
+      }
+    }
+
+    function changeMonth(delta) {
+      selectedMonth += delta;
+      if (selectedMonth < 0) {
+        selectedMonth = 11;
+        selectedYear -= 1;
+      } else if (selectedMonth > 11) {
+        selectedMonth = 0;
+        selectedYear += 1;
+      }
+      renderAll();
+    }
+
+    function renderAll() {
+      if (!cardData) return;
+      const t = I18N[currentLang];
+
+      // Update Header Text & Language Toggle
+      document.getElementById('langLabel').innerText = t.langToggleText;
+      document.getElementById('liveStatusText').innerText = t.liveStatus;
+      document.getElementById('lastSyncText').innerText = t.justUpdated;
+
+      // Brand Info
+      document.getElementById('businessName').innerText = cardData.supplierBusinessName || 'डेयरी फ़ार्म';
+      document.getElementById('supplierName').innerText = (cardData.supplierName ? cardData.supplierName + ' (सप्लायर)' : 'सप्लायर');
+
+      // Customer Info
+      document.getElementById('customerName').innerText = cardData.customerName || 'ग्राहक';
+      document.getElementById('customerPhone').innerText = cardData.customerPhone ? '📞 ' + cardData.customerPhone : '';
+
+      // Rate & Milk Type
+      const rate = cardData.ratePerLitre || 60;
+      document.getElementById('rateLabel').innerText = t.rateLabel;
+      document.getElementById('rateValue').innerText = `₹${rate} ${t.perLitre}`;
+
+      const milkType = (cardData.milkType || 'buffalo').toLowerCase();
+      document.getElementById('milkTypeBadge').innerText = milkType === 'cow' ? t.cowMilk : t.bufMilk;
+      document.getElementById('milkTypeBadge').className = 'pill-badge ' + (milkType === 'cow' ? 'pill-cow' : 'pill-buf');
+      document.getElementById('defaultQtyBadge').innerText = `${t.dailyQty} ${cardData.defaultLitres || 1} L`;
+
+      // Month Title
+      document.getElementById('prevBtnText').innerText = t.prev;
+      document.getElementById('nextBtnText').innerText = t.next;
+      document.getElementById('currentMonthDisplay').innerText = `${t.months[selectedMonth]} ${selectedYear}`;
+
+      // Contacts
+      const suppPhone = cardData.supplierPhone || '';
+      document.getElementById('callSupplierBtn').href = suppPhone ? `tel:${suppPhone}` : '#';
+      document.getElementById('callBtnText').innerText = t.callSupplier;
+      
+      const cleanWaPhone = suppPhone.replace(/\D/g, '');
+      const waLink = cleanWaPhone ? `https://wa.me/91${cleanWaPhone.slice(-10)}?text=${encodeURIComponent('नमस्ते, दूध कार्ड के संबंध में...')}` : '#';
+      document.getElementById('waSupplierBtn').href = waLink;
+      document.getElementById('waBtnText').innerText = t.waSupplier;
+
+      // Render Weekday headers
+      const weekdaysRow = document.getElementById('weekdaysRow');
+      weekdaysRow.innerHTML = '';
+      t.weekdays.forEach(day => {
+        const span = document.createElement('div');
+        span.className = 'weekday-label';
+        span.innerText = day;
+        weekdaysRow.appendChild(span);
+      });
+
+      // Render Calendar Grid
+      renderCalendarGrid(t);
+
+      // Render Billing Summary & Payments
+      renderSummaryAndPayments(t);
+    }
+
+    function renderCalendarGrid(t) {
+      const grid = document.getElementById('calendarGrid');
+      grid.innerHTML = '';
+
+      const firstDayDate = new Date(selectedYear, selectedMonth, 1, 12, 0, 0);
+      // getDay() gives 0 for Sun, 1 for Mon... we want Mon = 0, Sun = 6
+      let startDayOfWeek = (firstDayDate.getDay() + 6) % 7; 
+
+      const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
+      const today = new Date();
+      const isCurrentMonth = (today.getFullYear() === selectedYear && today.getMonth() === selectedMonth);
+      const todayDateNum = today.getDate();
+
+      // Empty slots before 1st of month
+      for (let i = 0; i < startDayOfWeek; i++) {
+        const emptyBox = document.createElement('div');
+        emptyBox.className = 'day-box empty-slot';
+        grid.appendChild(emptyBox);
+      }
+
+      const entriesMap = cardData.entries || {};
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const dayEntries = entriesMap[dateKey] || [];
+
+        let totalDayLitres = 0;
+        let dayAmount = 0;
+        dayEntries.forEach(e => {
+          totalDayLitres += Number(e.quantityLitres) || 0;
+          dayAmount += Number(e.amount) || 0;
+        });
+
+        const isDelivered = totalDayLitres > 0;
+        const isToday = isCurrentMonth && day === todayDateNum;
+
+        const box = document.createElement('div');
+        box.className = `day-box ${isDelivered ? 'delivered' : 'skipped'} ${isToday ? 'today' : ''}`;
+        box.onclick = () => openDayModal(day, dateKey, dayEntries, totalDayLitres, dayAmount);
+
+        // Date Number
+        const numDiv = document.createElement('div');
+        numDiv.className = 'day-num';
+        numDiv.innerText = day < 10 ? '0' + day : day;
+        box.appendChild(numDiv);
+
+        // Quantity
+        const qtyDiv = document.createElement('div');
+        qtyDiv.className = 'day-qty';
+        qtyDiv.innerText = isDelivered ? `${totalDayLitres.toFixed(1)}L` : '—';
+        box.appendChild(qtyDiv);
+
+        // Subtag
+        if (isDelivered) {
+          const subtag = document.createElement('div');
+          subtag.className = 'day-subtag';
+          subtag.innerText = `₹${dayAmount.toFixed(0)}`;
+          box.appendChild(subtag);
+        } else if (isToday) {
+          const subtag = document.createElement('div');
+          subtag.className = 'day-subtag';
+          subtag.style.background = 'rgba(2, 132, 199, 0.15)';
+          subtag.style.color = '#0284c7';
+          subtag.innerText = t.today;
+          box.appendChild(subtag);
+        }
+
+        grid.appendChild(box);
+      }
+    }
+
+    function renderSummaryAndPayments(t) {
+      const entriesMap = cardData.entries || {};
+      const payments = cardData.payments || [];
+
+      // Calculate totals for selected month
+      let totalMonthLitres = 0;
+      let deliveredDaysCount = 0;
+      let totalMonthBilled = 0;
+
+      const prefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+      Object.keys(entriesMap).forEach(d => {
+        if (d.startsWith(prefix)) {
+          const dayEntries = entriesMap[d] || [];
+          let dayLitres = 0;
+          dayEntries.forEach(e => {
+            dayLitres += Number(e.quantityLitres) || 0;
+            totalMonthBilled += Number(e.amount) || 0;
+          });
+          if (dayLitres > 0) {
+            deliveredDaysCount++;
+            totalMonthLitres += dayLitres;
+          }
+        }
+      });
+
+      // Calculate payments in this month & all-time
+      let totalMonthPaid = 0;
+      let allTimeDeliveries = 0;
+      let allTimePaid = 0;
+
+      // All time sum
+      Object.keys(entriesMap).forEach(d => {
+        (entriesMap[d] || []).forEach(e => {
+          allTimeDeliveries += Number(e.amount) || 0;
+        });
+      });
+      payments.forEach(p => {
+        const amt = Number(p.amountPaid) || 0;
+        allTimePaid += amt;
+        if (p.date && p.date.startsWith(prefix)) {
+          totalMonthPaid += amt;
+        }
+      });
+
+      const netDue = Math.max(0, allTimeDeliveries - allTimePaid);
+
+      // Inject into Summary
+      document.getElementById('summaryCardTitle').innerText = t.summaryTitle;
+      document.getElementById('summaryRangeLabel').innerText = t.summaryRange;
+
+      document.getElementById('labelTotalDelivered').innerText = t.totalDelivered;
+      document.getElementById('valTotalLitres').innerText = `${totalMonthLitres.toFixed(1)} L`;
+
+      document.getElementById('labelDeliveredDays').innerText = t.deliveredDays;
+      document.getElementById('valDeliveredDays').innerText = `${deliveredDaysCount} ${t.daysUnit}`;
+
+      document.getElementById('labelTotalBill').innerText = t.totalBill;
+      document.getElementById('valTotalBill').innerText = `₹${totalMonthBilled.toFixed(2)}`;
+
+      document.getElementById('labelTotalPaid').innerText = t.totalPaid;
+      document.getElementById('valTotalPaid').innerText = `₹${totalMonthPaid.toFixed(2)}`;
+
+      document.getElementById('labelNetDue').innerText = t.netDue;
+      document.getElementById('subNetDue').innerText = t.netDueSub;
+      document.getElementById('valNetDue').innerText = `₹${netDue.toFixed(2)}`;
+
+      // Render Payments List
+      document.getElementById('paymentsTitle').innerText = t.paymentsTitle;
+      const payListContainer = document.getElementById('paymentsList');
+      payListContainer.innerHTML = '';
+
+      const monthPayments = payments.filter(p => p.date && p.date.startsWith(prefix));
+
+      if (monthPayments.length === 0) {
+        payListContainer.innerHTML = `<div style="font-size: 12px; color: #94a3b8; text-align: center; padding: 12px;">${t.noPayments}</div>`;
+      } else {
+        monthPayments.forEach(p => {
+          const item = document.createElement('div');
+          item.className = 'payment-item';
+          item.innerHTML = `
+            <div class="pay-info">
+              <div class="pay-date">📅 ${p.date}</div>
+              <div class="pay-note">${p.notes ? '📝 ' + p.notes : '✓ ' + (p.paymentMode || 'CASH')}</div>
+            </div>
+            <div class="pay-amount">+₹${Number(p.amountPaid).toFixed(0)}</div>
+          `;
+          payListContainer.appendChild(item);
+        });
+      }
+    }
+
+    function openDayModal(dayNum, dateStr, entries, litres, amount) {
+      const t = I18N[currentLang];
+      document.getElementById('modalDayTitle').innerText = `📅 ${dateStr}`;
+      const content = document.getElementById('modalDayContent');
+
+      if (!entries || entries.length === 0) {
+        content.innerHTML = `
+          <div style="text-align: center; padding: 16px 0;">
+            <div style="font-size: 32px; margin-bottom: 6px;">⚪</div>
+            <div style="font-weight: 700; color: #64748b;">${t.noMilkDay}</div>
+          </div>
+        `;
+      } else {
+        let html = '';
+        entries.forEach((e, idx) => {
+          const sessLabel = e.session === 'Morning' ? t.sessionMorning : e.session === 'Evening' ? t.sessionEvening : t.sessionCustom;
+          html += `
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px;">
+              <div style="display: flex; justify-content: space-between; font-weight: 800; color: #0f172a; margin-bottom: 4px;">
+                <span>🥛 ${sessLabel} (${e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buf'})</span>
+                <span style="color: #059669;">${e.quantityLitres} L</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
+                <span>@ ₹${e.ratePerLitre} /L</span>
+                <span style="font-weight: 700; color: #0284c7;">= ₹${e.amount}</span>
+              </div>
+            </div>
+          `;
+        });
+        html += `
+          <div style="border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 4px; display: flex; justify-content: space-between; font-weight: 800;">
+            <span>कुल (Total):</span>
+            <span style="color: #059669;">${litres.toFixed(1)} L = ₹${amount.toFixed(0)}</span>
+          </div>
+        `;
+        content.innerHTML = html;
+      }
+
+      document.getElementById('dayDetailModal').style.display = 'flex';
+    }
+
+    function closeDayModal() {
+      document.getElementById('dayDetailModal').style.display = 'none';
+    }
+
+    // Auto load on start
+    fetchCardData();
+
+    // Auto poll updates every 30 seconds
+    setInterval(fetchCardData, 30000);
+  </script>
+</body>
+</html>
