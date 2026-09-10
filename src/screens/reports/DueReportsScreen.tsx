@@ -894,9 +894,9 @@ export const DueReportsScreen = () => {
                     openPayModal(item.customer);
                   }}
                   activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
-                  <Text style={styles.payBtnText}>💵 {t.recordPayment}</Text>
+                  <Text style={styles.payBtnText}>💵 {lang === 'hi' ? 'भुगतान दर्ज' : 'Record Pay'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -906,8 +906,8 @@ export const DueReportsScreen = () => {
                     await CardSyncService.syncCustomerCard(item.customer.id, supplier, customers, milkEntries, payments);
                     await CardSyncService.shareCardViaWhatsApp(item.customer, supplier, lang);
                   }}
-                  activeOpacity={0.8}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
                   <Text style={styles.liveCardBtnText}>🔗 {lang === 'hi' ? 'लाइव कार्ड' : 'Live Card'}</Text>
                 </TouchableOpacity>
@@ -918,10 +918,10 @@ export const DueReportsScreen = () => {
                     e.stopPropagation();
                     handleShareWhatsAppSummary(item);
                   }}
-                  activeOpacity={0.8}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 >
-                  <Text style={styles.whatsappBtnText}>💬 {t.shareWhatsApp}</Text>
+                  <Text style={styles.whatsappBtnText}>💬 {lang === 'hi' ? 'व्हाट्सएप' : 'WhatsApp'}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
@@ -2060,35 +2060,57 @@ const styles = StyleSheet.create({
   },
   finText: { fontSize: 12, color: '#64748b' },
   cardTapPromptText: { fontSize: 11, color: '#0284c7', fontWeight: '600' },
-  cardActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  payBtn: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    paddingVertical: 10,
-    borderRadius: 8,
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
     alignItems: 'center'
   },
-  payBtnText: { fontSize: 12, fontWeight: '600', color: '#334155' },
+  payBtn: {
+    flex: 1,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1.5,
+    borderColor: '#a7f3d0',
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  payBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065f46'
+  },
   liveCardBtn: {
     flex: 1,
     backgroundColor: '#eff6ff',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#bfdbfe',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center'
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  liveCardBtnText: { fontSize: 12, fontWeight: 'bold', color: '#0284c7' },
+  liveCardBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284c7'
+  },
   whatsappBtn: {
     flex: 1,
-    backgroundColor: '#25D366',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center'
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
-  whatsappBtnText: { fontSize: 12, fontWeight: 'bold', color: '#ffffff' },
+  whatsappBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d'
+  },
   emptyContainer: { alignItems: 'center', marginTop: 50 },
   emptyEmoji: { fontSize: 40, marginBottom: 8 },
   emptyText: { color: '#64748b', fontSize: 14, marginBottom: 12 },
