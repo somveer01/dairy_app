@@ -34,10 +34,13 @@
         {
           "name": "file",
           "accept": [
-            ".txt",
-            ".zip",
             "text/plain",
-            "application/zip"
+            "text/*",
+            "application/zip",
+            "application/x-zip-compressed",
+            "application/octet-stream",
+            ".txt",
+            ".zip"
           ]
         }
       ]
