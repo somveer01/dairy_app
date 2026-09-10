@@ -116,7 +116,17 @@ export const translations = {
     noPaymentsFound: 'No payments recorded yet.',
     deletePayment: 'Delete',
     lifetimePaid: 'Total Paid (All Time)',
-    outstandingDue: 'Outstanding Due'
+    outstandingDue: 'Outstanding Due',
+    whatsappImport: 'WhatsApp',
+    whatsappImportTitle: 'Import from WhatsApp',
+    whatsappImportSubtitle: 'Import customers from WhatsApp Group or Chat Export',
+    pasteWhatsAppText: 'Paste WhatsApp messages, customer list, or member numbers here...',
+    uploadChatFile: '📁 Upload WhatsApp Chat (.txt)',
+    pasteClipboard: '📋 Paste from Clipboard',
+    detectedCustomersTitle: 'Detected Customers',
+    importSelectedBtn: 'Import Selected Customers',
+    noNumbersFound: 'No 10-digit mobile numbers found in text. Please check pasted text or export chat without media.',
+    howToExportHint: '💡 How to export group: Open WhatsApp Group > tap 3 dots (⋮) > More > Export Chat > Without Media'
   },
 
   hi: {
@@ -234,8 +244,16 @@ export const translations = {
     noPaymentsFound: 'कोई भुगतान दर्ज नहीं है।',
     deletePayment: 'हटाएं',
     lifetimePaid: 'कुल जमा (अब तक)',
-    outstandingDue: 'बकाया राशि'
+    outstandingDue: 'बकाया राशि',
+    whatsappImport: 'व्हाट्सएप',
+    whatsappImportTitle: 'व्हाट्सएप से ग्राहक जोड़ें',
+    whatsappImportSubtitle: 'व्हाट्सएप ग्रुप चैट एक्सपोर्ट या लिस्ट से ग्राहक इंपोर्ट करें',
+    pasteWhatsAppText: 'व्हाट्सएप ग्रुप मैसेज, ग्राहकों की लिस्ट या नंबर यहाँ पेस्ट करें...',
+    uploadChatFile: '📁 व्हाट्सएप चैट (.txt) अपलोड करें',
+    pasteClipboard: '📋 क्लिपबोर्ड से पेस्ट करें',
+    detectedCustomersTitle: 'पहचाने गए ग्राहक',
+    importSelectedBtn: 'चुने हुए ग्राहक जोड़ें',
+    noNumbersFound: 'टेक्स्ट में कोई 10-अंकों का मोबाइल नंबर नहीं मिला। कृपया टेक्स्ट जांचें या बिना मीडिया चैट एक्सपोर्ट करें।',
+    howToExportHint: '💡 ग्रुप एक्सपोर्ट तरीका: व्हाट्सएप ग्रुप खोलें > 3 डॉट्स (⋮) > More > Export Chat > Without Media'
   }
 };
-
-
