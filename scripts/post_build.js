@@ -26,7 +26,22 @@ const manifest = {
   theme_color: '#0284c7',
   display: 'standalone',
   orientation: 'portrait',
-  scope: '/dairy_app/'
+  scope: '/dairy_app/',
+  share_target: {
+    action: '/dairy_app/share-target/',
+    method: 'POST',
+    enctype: 'multipart/form-data',
+    params: {
+      title: 'title',
+      text: 'text',
+      files: [
+        {
+          name: 'file',
+          accept: ['.txt', '.zip', 'text/plain', 'application/zip']
+        }
+      ]
+    }
+  }
 };
 
 fs.writeFileSync('dist/manifest.json', JSON.stringify(manifest, null, 2));
@@ -90,6 +105,36 @@ self.addEventListener('message', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+
+  // Handle WhatsApp / Android Web Share Target POST request
+  if (e.request.method === 'POST' && url.pathname.includes('/share-target/')) {
+    e.respondWith((async () => {
+      try {
+        const formData = await e.request.formData();
+        const file = formData.get('file');
+        const text = formData.get('text') || '';
+
+        const cache = await caches.open('dairy-shared-cache');
+        if (file && typeof file !== 'string') {
+          const headers = new Headers();
+          headers.append('X-Shared-Filename', encodeURIComponent(file.name || 'whatsapp_chat.txt'));
+          headers.append('Content-Type', file.type || 'application/octet-stream');
+          await cache.put('/dairy_app/last-shared-file', new Response(file, { headers }));
+        } else if (text) {
+          const headers = new Headers();
+          headers.append('X-Shared-Filename', encodeURIComponent('whatsapp_chat.txt'));
+          headers.append('Content-Type', 'text/plain');
+          await cache.put('/dairy_app/last-shared-file', new Response(text, { headers }));
+        }
+      } catch (err) {
+        console.error('Share target handling error:', err);
+      }
+      return Response.redirect('/dairy_app/?action=whatsapp_share', 303);
+    })());
+    return;
+  }
+
   if (e.request.method !== 'GET') return;
 
   // For HTML navigation requests: NETWORK FIRST, fallback to cache when offline

@@ -111,6 +111,60 @@ export const CustomerListScreen = () => {
     setWhatsappModalVisible(true);
   };
 
+  // Check for incoming shared WhatsApp chat files from Android Share Sheet (Web Share Target)
+  React.useEffect(() => {
+    const checkIncomingSharedFile = async () => {
+      if (Platform.OS !== 'web' || typeof window === 'undefined' || !('caches' in window)) return;
+      try {
+        const cache = await caches.open('dairy-shared-cache');
+        const match = await cache.match('/dairy_app/last-shared-file');
+        if (match) {
+          const rawFileName = match.headers.get('X-Shared-Filename') || 'whatsapp_chat.txt';
+          const fileName = decodeURIComponent(rawFileName);
+          const blob = await match.blob();
+          await cache.delete('/dairy_app/last-shared-file');
+
+          // Clean up URL without page reload
+          if (window.location.search.includes('whatsapp_share')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+
+          setIsScanningWhatsApp(true);
+          setWhatsappModalVisible(true);
+
+          let text = '';
+          if (fileName.toLowerCase().endsWith('.zip')) {
+            const zip = await JSZip.loadAsync(blob);
+            const txtEntry = Object.values(zip.files).find(
+              f => f.name.toLowerCase().endsWith('.txt') && !f.dir
+            );
+            if (txtEntry) {
+              text = await txtEntry.async('text');
+            }
+          } else {
+            text = await blob.text();
+          }
+
+          if (text) {
+            const extractedGroupName = extractWhatsAppGroupName(fileName, text) || fileName.replace(/\.[^/.]+$/, '');
+            setWhatsappGroupName(extractedGroupName);
+
+            const cowR = parseFloat(whatsappDefaultCowRate) || 55;
+            const buffR = parseFloat(whatsappDefaultBuffaloRate) || 70;
+            const parsed = parseWhatsAppText(text, customers, cowR, buffR);
+            setParsedWhatsAppCustomers(parsed);
+          }
+          setIsScanningWhatsApp(false);
+        }
+      } catch (e) {
+        console.warn('Error checking shared file:', e);
+        setIsScanningWhatsApp(false);
+      }
+    };
+
+    checkIncomingSharedFile();
+  }, [customers]);
+
   const handleSelectWhatsAppGroupFile = () => {
     if (typeof document !== 'undefined') {
       const input = document.createElement('input');
