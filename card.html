@@ -6,6 +6,11 @@
   <title>डिजिटल दूध कार्ड — Digital Milk Card</title>
   <link rel="icon" href="./assets/icon.png">
   <meta name="theme-color" content="#0284c7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="दूध कार्ड">
+  <link rel="apple-touch-icon" href="./assets/icon.png">
+  <link id="dynamicManifest" rel="manifest">
   <style>
     * {
       box-sizing: border-box;
@@ -587,6 +592,139 @@
       color: #64748b;
       cursor: pointer;
     }
+
+    /* Shortcut Banner */
+    .shortcut-banner {
+      margin: 12px 16px 0;
+      background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+      border: 1.5px solid #bfdbfe;
+      border-radius: 14px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.08);
+    }
+
+    .shortcut-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .shortcut-icon-circle {
+      width: 36px;
+      height: 36px;
+      background: #0284c7;
+      color: #ffffff;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .shortcut-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .shortcut-subtitle {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 1px;
+    }
+
+    .shortcut-btn {
+      background: #0284c7;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s;
+    }
+
+    .shortcut-btn:active {
+      background: #0369a1;
+    }
+
+    /* Guide Modal & Tabs */
+    .guide-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 8px;
+    }
+
+    .guide-tab {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #f1f5f9;
+      color: #475569;
+      cursor: pointer;
+    }
+
+    .guide-tab.active {
+      background: #0284c7;
+      color: #ffffff;
+    }
+
+    .guide-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 10px;
+      background: #f8fafc;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .step-num {
+      width: 22px;
+      height: 22px;
+      background: #0284c7;
+      color: #ffffff;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .step-text {
+      font-size: 12px;
+      line-height: 1.5;
+      color: #1e293b;
+    }
+
+    .shortcut-confirm-btn {
+      width: 100%;
+      background: #059669;
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -627,6 +765,20 @@
         <div id="lastSyncText" style="opacity: 0.85;">अभी अपडेटेड</div>
       </div>
     </header>
+
+    <!-- Add to Home Screen / App Shortcut Banner -->
+    <div class="shortcut-banner" id="shortcutBanner">
+      <div class="shortcut-left">
+        <div class="shortcut-icon-circle">📲</div>
+        <div>
+          <div class="shortcut-title" id="shortcutTitle">ऐप की तरह होम स्क्रीन पर जोड़ें</div>
+          <div class="shortcut-subtitle" id="shortcutSubtitle">1-टैप में सीधे कार्ड देखने के लिए</div>
+        </div>
+      </div>
+      <button class="shortcut-btn" onclick="handleInstallShortcut()">
+        <span id="shortcutBtnText">+ शॉर्टकट</span>
+      </button>
+    </div>
 
     <!-- Customer Information Card -->
     <section class="customer-card">
@@ -732,6 +884,63 @@
     </div>
   </div>
 
+  <!-- Step-by-Step Install Guide Modal -->
+  <div class="modal-overlay" id="shortcutModal" onclick="closeShortcutModal(event)">
+    <div class="modal-box" style="max-width: 400px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title" id="shortcutModalTitle">📲 होम स्क्रीन पर शॉर्टकट बनाएं</div>
+        <button class="modal-close" onclick="closeShortcutModal()">✕</button>
+      </div>
+      
+      <div class="guide-tabs">
+        <button class="guide-tab active" id="tabAndroid" onclick="switchGuideTab('android')">🤖 Android / Chrome</button>
+        <button class="guide-tab" id="tabIos" onclick="switchGuideTab('ios')">🍎 iPhone / Safari</button>
+      </div>
+
+      <div id="guideAndroid" class="guide-content">
+        <div class="guide-step">
+          <div class="step-num">1</div>
+          <div class="step-text" id="stepA1">अगर आप <b>WhatsApp</b> में हैं, तो ऊपर दाएँ कोने में <b>⋮ (3 डॉट्स)</b> दबाकर <b>'Open in Chrome'</b> चुनें।</div>
+        </div>
+        <div class="guide-step">
+          <div class="step-num">2</div>
+          <div class="step-text" id="stepA2">Chrome ब्राउज़र में ऊपर दाएँ कोने में <b>⋮ (3 डॉट्स)</b> मेनू दबाएं।</div>
+        </div>
+        <div class="guide-step">
+          <div class="step-num">3</div>
+          <div class="step-text" id="stepA3">सूची में से <b>'📲 Add to Home screen'</b> (या <b>'Install app'</b>) पर टैप करें।</div>
+        </div>
+        <div class="guide-step">
+          <div class="step-num">4</div>
+          <div class="step-text" id="stepA4"><b>'Add'</b> दबाएं। अब आपके फोन के मुख्य स्क्रीन पर <b>दूध कार्ड</b> का ऐप आइकॉन आ जाएगा!</div>
+        </div>
+      </div>
+
+      <div id="guideIos" class="guide-content" style="display: none;">
+        <div class="guide-step">
+          <div class="step-num">1</div>
+          <div class="step-text" id="stepI1">इस लिंक को Apple <b>Safari</b> ब्राउज़र में खोलें।</div>
+        </div>
+        <div class="guide-step">
+          <div class="step-num">2</div>
+          <div class="step-text" id="stepI2">नीचे बीच में शेयर आइकॉन <b>⎋ (Share)</b> पर टैप करें।</div>
+        </div>
+        <div class="guide-step">
+          <div class="step-num">3</div>
+          <div class="step-text" id="stepI3">नीचे स्क्रॉल करके <b>'➕ Add to Home Screen'</b> चुनें।</div>
+        </div>
+        <div class="guide-step">
+          <div class="step-num">4</div>
+          <div class="step-text" id="stepI4">ऊपर दाएँ कोने में <b>'Add'</b> दबाएं। अब आपके iPhone स्क्रीन पर शॉर्टकट बन जाएगा!</div>
+        </div>
+      </div>
+
+      <button class="shortcut-confirm-btn" onclick="closeShortcutModal()">
+        <span id="guideGotItText">✓ समझ गया (Got it)</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Client Script for Live Firebase REST Data & Bilingual Render -->
   <script>
     const FIREBASE_RTDB_BASE = 'https://diaryapp-28278-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -768,6 +977,11 @@
         sessionCustom: 'अन्य समय',
         today: 'आज',
         backApp: 'ऐप पर जाएं',
+        shortcutTitle: 'ऐप की तरह होम स्क्रीन पर जोड़ें',
+        shortcutSubtitle: '1-टैप में सीधे कार्ड देखने के लिए',
+        shortcutBtn: '+ शॉर्टकट',
+        shortcutModalTitle: '📲 होम स्क्रीन पर शॉर्टकट बनाएं',
+        guideGotIt: '✓ समझ गया (Got it)',
         weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
         months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
       },
@@ -801,6 +1015,11 @@
         sessionCustom: 'Custom',
         today: 'Today',
         backApp: 'Back to App',
+        shortcutTitle: 'Add App Shortcut to Home Screen',
+        shortcutSubtitle: '1-Tap instant access like real app',
+        shortcutBtn: '+ Shortcut',
+        shortcutModalTitle: '📲 Add Shortcut to Home Screen',
+        guideGotIt: '✓ Got it',
         weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
       }
@@ -811,10 +1030,65 @@
     let selectedYear = new Date().getFullYear();
     let selectedMonth = new Date().getMonth(); // 0 - 11
 
-    // Parse URL params
+    // Parse URL params or restore from LocalStorage
     const urlParams = new URLSearchParams(window.location.search);
-    const supplierId = urlParams.get('s') || '';
-    const customerId = urlParams.get('c') || '';
+    let supplierId = urlParams.get('s') || '';
+    let customerId = urlParams.get('c') || '';
+
+    if (supplierId && customerId) {
+      localStorage.setItem('dairy_card_s', supplierId);
+      localStorage.setItem('dairy_card_c', customerId);
+    } else if (!supplierId || !customerId) {
+      const savedS = localStorage.getItem('dairy_card_s');
+      const savedC = localStorage.getItem('dairy_card_c');
+      if (savedS && savedC) {
+        window.location.replace(`card.html?s=${encodeURIComponent(savedS)}&c=${encodeURIComponent(savedC)}`);
+      }
+    }
+
+    // Capture Native PWA Install Prompt (Chrome / Android)
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+    });
+
+    // Check if running in standalone display mode
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone) {
+      setTimeout(() => {
+        const banner = document.getElementById('shortcutBanner');
+        if (banner) banner.style.display = 'none';
+      }, 100);
+    }
+
+    function handleInstallShortcut() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            const banner = document.getElementById('shortcutBanner');
+            if (banner) banner.style.display = 'none';
+          }
+          deferredPrompt = null;
+        });
+      } else {
+        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        switchGuideTab(isIos ? 'ios' : 'android');
+        document.getElementById('shortcutModal').style.display = 'flex';
+      }
+    }
+
+    function switchGuideTab(tab) {
+      document.getElementById('tabAndroid').className = 'guide-tab ' + (tab === 'android' ? 'active' : '');
+      document.getElementById('tabIos').className = 'guide-tab ' + (tab === 'ios' ? 'active' : '');
+      document.getElementById('guideAndroid').style.display = tab === 'android' ? 'block' : 'none';
+      document.getElementById('guideIos').style.display = tab === 'ios' ? 'block' : 'none';
+    }
+
+    function closeShortcutModal() {
+      document.getElementById('shortcutModal').style.display = 'none';
+    }
 
     function goBackToApp() {
       if (window.history.length > 1) {
@@ -877,6 +1151,42 @@
       document.getElementById('langLabel').innerText = t.langToggleText;
       document.getElementById('liveStatusText').innerText = t.liveStatus;
       document.getElementById('lastSyncText').innerText = t.justUpdated;
+
+      // Update Shortcut Banner & Modal Text
+      const shortcutTitleEl = document.getElementById('shortcutTitle');
+      if (shortcutTitleEl) shortcutTitleEl.innerText = t.shortcutTitle;
+      const shortcutSubEl = document.getElementById('shortcutSubtitle');
+      if (shortcutSubEl) shortcutSubEl.innerText = t.shortcutSubtitle;
+      const shortcutBtnEl = document.getElementById('shortcutBtnText');
+      if (shortcutBtnEl) shortcutBtnEl.innerText = t.shortcutBtn;
+      const shortcutModalTitleEl = document.getElementById('shortcutModalTitle');
+      if (shortcutModalTitleEl) shortcutModalTitleEl.innerText = t.shortcutModalTitle;
+      const guideGotItEl = document.getElementById('guideGotItText');
+      if (guideGotItEl) guideGotItEl.innerText = t.guideGotIt;
+
+      // Dynamic Web App Manifest with Customer Name for Home Screen Shortcut
+      try {
+        const custName = cardData.customerName || 'दूध कार्ड';
+        const manifestObj = {
+          name: `${custName} — डिजिटल दूध कार्ड`,
+          short_name: 'दूध कार्ड',
+          description: 'मासिक डिजिटल दूध कार्ड',
+          start_url: window.location.href,
+          display: 'standalone',
+          background_color: '#ffffff',
+          theme_color: '#0284c7',
+          icons: [
+            { src: './assets/icon.png', sizes: '192x192', type: 'image/png' },
+            { src: './assets/icon.png', sizes: '512x512', type: 'image/png' }
+          ]
+        };
+        const blob = new Blob([JSON.stringify(manifestObj)], { type: 'application/json' });
+        const manifestUrl = URL.createObjectURL(blob);
+        const manifestLink = document.getElementById('dynamicManifest');
+        if (manifestLink) manifestLink.setAttribute('href', manifestUrl);
+      } catch (e) {
+        console.warn('Manifest setup error:', e);
+      }
 
       // Brand Info
       document.getElementById('businessName').innerText = cardData.supplierBusinessName || 'डेयरी फ़ार्म';
