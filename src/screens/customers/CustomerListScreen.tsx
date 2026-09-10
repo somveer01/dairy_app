@@ -22,7 +22,8 @@ import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
 import { Customer, MilkType } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
-import { parseWhatsAppText, ParsedWhatsAppCustomer } from '../../utils/whatsappParser';
+import { parseWhatsAppText, ParsedWhatsAppCustomer, extractWhatsAppGroupName } from '../../utils/whatsappParser';
+import JSZip from 'jszip';
 
 interface PhoneContactItem {
   id: string;
@@ -97,7 +98,7 @@ export const CustomerListScreen = () => {
 
   // WhatsApp Import Modal State
   const [whatsappModalVisible, setWhatsappModalVisible] = useState(false);
-  const [whatsappRawText, setWhatsappRawText] = useState('');
+  const [whatsappGroupName, setWhatsappGroupName] = useState('');
   const [parsedWhatsAppCustomers, setParsedWhatsAppCustomers] = useState<ParsedWhatsAppCustomer[]>([]);
   const [isScanningWhatsApp, setIsScanningWhatsApp] = useState(false);
   const [whatsappDefaultCowRate, setWhatsappDefaultCowRate] = useState('55');
@@ -105,58 +106,59 @@ export const CustomerListScreen = () => {
 
   const openWhatsAppModal = () => {
     Keyboard.dismiss();
-    setWhatsappRawText('');
+    setWhatsappGroupName('');
     setParsedWhatsAppCustomers([]);
     setWhatsappModalVisible(true);
   };
 
-  const handleScanWhatsAppText = (text: string) => {
-    setWhatsappRawText(text);
-    if (!text.trim()) {
-      setParsedWhatsAppCustomers([]);
-      return;
-    }
-    const cowR = parseFloat(whatsappDefaultCowRate) || 55;
-    const buffR = parseFloat(whatsappDefaultBuffaloRate) || 70;
-    const parsed = parseWhatsAppText(text, customers, cowR, buffR);
-    setParsedWhatsAppCustomers(parsed);
-  };
-
-  const handlePasteWhatsAppClipboard = async () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
-      try {
-        const text = await navigator.clipboard.readText();
-        if (text && text.trim()) {
-          handleScanWhatsAppText(text);
-          return;
-        }
-      } catch (e) {
-        console.warn('Clipboard read failed:', e);
-      }
-    }
-    showAlert(
-      lang === 'hi' ? 'पेस्ट करें' : 'Paste Text',
-      lang === 'hi'
-        ? 'कृपया कॉपी किया गया टेक्स्ट नीचे दिए गए बॉक्स में सीधे पेस्ट करें।'
-        : 'Please paste the copied text directly into the text box below.'
-    );
-  };
-
-  const handleUploadWhatsAppChatFile = () => {
+  const handleSelectWhatsAppGroupFile = () => {
     if (typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.txt,text/plain';
+      input.accept = '.txt,.zip,text/plain,application/zip';
       input.onchange = async (event: any) => {
         const file = event.target?.files?.[0];
         if (!file) return;
         try {
           setIsScanningWhatsApp(true);
-          const text = await file.text();
-          setWhatsappRawText(text.slice(0, 1500));
-          handleScanWhatsAppText(text);
+          let text = '';
+          if (file.name.toLowerCase().endsWith('.zip')) {
+            const zip = await JSZip.loadAsync(file);
+            const txtEntry = Object.values(zip.files).find(
+              f => f.name.toLowerCase().endsWith('.txt') && !f.dir
+            );
+            if (!txtEntry) {
+              showAlert(
+                lang === 'hi' ? 'चैट फाइल नहीं मिली' : 'No Chat File Found',
+                lang === 'hi'
+                  ? 'इस .zip फाइल में कोई .txt चैट फाइल नहीं मिली। कृपया व्हाट्सएप से चैट बिना मीडिया (Without Media) एक्सपोर्ट करें।'
+                  : 'No .txt chat file found inside this .zip file. Please export without media from WhatsApp.'
+              );
+              return;
+            }
+            text = await txtEntry.async('text');
+          } else {
+            text = await file.text();
+          }
+
+          const extractedGroupName = extractWhatsAppGroupName(file.name, text) || file.name.replace(/\.[^/.]+$/, '');
+          setWhatsappGroupName(extractedGroupName);
+
+          const cowR = parseFloat(whatsappDefaultCowRate) || 55;
+          const buffR = parseFloat(whatsappDefaultBuffaloRate) || 70;
+          const parsed = parseWhatsAppText(text, customers, cowR, buffR);
+          setParsedWhatsAppCustomers(parsed);
+
+          if (parsed.length === 0) {
+            showAlert(
+              lang === 'hi' ? 'कोई संपर्क नहीं मिला' : 'No Contacts Found',
+              lang === 'hi'
+                ? 'इस ग्रुप फाइल में कोई 10-अंकों का मोबाइल नंबर नहीं मिला। कृपया सुनिश्चित करें कि आपने ग्राहक ग्रुप का चैट एक्सपोर्ट चुना है।'
+                : 'No 10-digit mobile numbers found in this group file. Please ensure you selected a customer group chat export.'
+            );
+          }
         } catch (err) {
-          showAlert('Error', 'Could not read chat file.');
+          showAlert('Error', 'Could not read WhatsApp group file.');
         } finally {
           setIsScanningWhatsApp(false);
         }
@@ -1256,7 +1258,7 @@ export const CustomerListScreen = () => {
           </View>
         </Modal>
 
-        {/* --- WHATSAPP GROUP & CHAT IMPORT MODAL --- */}
+        {/* --- WHATSAPP GROUP MEMBER IMPORT MODAL --- */}
         <Modal visible={whatsappModalVisible} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.contactModalContent}>
@@ -1264,10 +1266,10 @@ export const CustomerListScreen = () => {
               <View style={styles.contactModalHeader}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.contactModalTitle}>
-                    💬 {t.whatsappImportTitle || 'Import from WhatsApp'}
+                    👥 {t.whatsappImportTitle || 'Select WhatsApp Group'}
                   </Text>
                   <Text style={styles.contactModalSubtitle}>
-                    {t.whatsappImportSubtitle || 'Import from Customer WhatsApp Group or Chat Export'}
+                    {t.whatsappImportSubtitle || 'Select your customer WhatsApp group to view and import members.'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -1280,67 +1282,90 @@ export const CustomerListScreen = () => {
               </View>
 
               <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="always">
-                {/* Action Buttons: Upload .txt file & Paste Clipboard */}
-                <View style={{ gap: 8, marginBottom: 10 }}>
-                  <TouchableOpacity
-                    style={styles.waUploadBtn}
-                    onPress={handleUploadWhatsAppChatFile}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.waUploadBtnText}>
-                      {t.uploadChatFile || '📁 Upload WhatsApp Chat (.txt)'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity
-                      style={styles.waPasteBtn}
-                      onPress={handlePasteWhatsAppClipboard}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.waPasteBtnText}>
-                        {t.pasteClipboard || '📋 Paste from Clipboard'}
+                {parsedWhatsAppCustomers.length === 0 ? (
+                  /* --- STEP 1: SELECT WHATSAPP GROUP --- */
+                  <View style={{ paddingVertical: 8 }}>
+                    {/* Big Prominent Group Selector Card */}
+                    <View style={styles.waGroupSelectCard}>
+                      <TouchableOpacity
+                        style={styles.waUploadBtn}
+                        onPress={handleSelectWhatsAppGroupFile}
+                        activeOpacity={0.8}
+                        disabled={isScanningWhatsApp}
+                      >
+                        {isScanningWhatsApp ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <ActivityIndicator size="small" color="#ffffff" />
+                            <Text style={styles.waUploadBtnText}>
+                              {lang === 'hi' ? 'ग्रुप लोड हो रहा है...' : 'Reading Group...'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Text style={styles.waUploadBtnText}>
+                            {t.selectWhatsAppGroupBtn || '📁 Select WhatsApp Group (.txt / .zip)'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                      <Text style={styles.waSelectHintText}>
+                        {lang === 'hi'
+                          ? 'व्हाट्सएप ग्रुप की एक्सपोर्ट की गई .txt या .zip फाइल चुनें'
+                          : 'Pick the .txt or .zip file exported from your WhatsApp group'}
                       </Text>
-                    </TouchableOpacity>
+                    </View>
 
-                    <TouchableOpacity
-                      style={styles.waScanBtn}
-                      onPress={() => handleScanWhatsAppText(whatsappRawText)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.waScanBtnText}>
-                        🔍 {lang === 'hi' ? 'स्कैन करें' : 'Scan Text'}
+                    {/* Clear 3-Step Visual Instruction Guide */}
+                    <View style={styles.waGuideBox}>
+                      <Text style={styles.waGuideTitle}>
+                        {t.howToExportGroupTitle || 'How to select your WhatsApp Group:'}
                       </Text>
-                    </TouchableOpacity>
+                      <View style={styles.waGuideStep}>
+                        <Text style={styles.waStepBadge}>1</Text>
+                        <Text style={styles.waStepText}>
+                          {t.step1Export || 'Open WhatsApp ➔ Open your customer group'}
+                        </Text>
+                      </View>
+                      <View style={styles.waGuideStep}>
+                        <Text style={styles.waStepBadge}>2</Text>
+                        <Text style={styles.waStepText}>
+                          {t.step2Export || 'Tap 3 dots (⋮) ➔ More ➔ Export Chat ➔ Without Media'}
+                        </Text>
+                      </View>
+                      <View style={styles.waGuideStep}>
+                        <Text style={styles.waStepBadge}>3</Text>
+                        <Text style={styles.waStepText}>
+                          {t.step3Export || 'Tap "Select WhatsApp Group" above to pick the file'}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                </View>
-
-                {/* Paste Text Area */}
-                <View style={{ marginBottom: 10 }}>
-                  <TextInput
-                    style={styles.waTextInput}
-                    placeholder={t.pasteWhatsAppText || 'Paste WhatsApp messages, customer list, or member numbers here...'}
-                    placeholderTextColor="#94a3b8"
-                    multiline
-                    numberOfLines={4}
-                    value={whatsappRawText}
-                    onChangeText={handleScanWhatsAppText}
-                  />
-                </View>
-
-                {/* Helpful Instruction Tip */}
-                <View style={styles.tipBanner}>
-                  <Text style={styles.tipText}>
-                    {t.howToExportHint || '💡 How to export group: Open WhatsApp Group > tap 3 dots (⋮) > More > Export Chat > Without Media'}
-                  </Text>
-                </View>
-
-                {/* Detected Customers Section */}
-                {parsedWhatsAppCustomers.length > 0 ? (
+                ) : (
+                  /* --- STEP 2: GROUP SELECTED & MEMBERS SHOWN --- */
                   <View style={{ marginBottom: 14 }}>
+                    {/* Active Group Banner with Change Group Button */}
+                    <View style={styles.waActiveGroupBanner}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.waActiveGroupTitle} numberOfLines={1}>
+                          👥 {whatsappGroupName || t.groupFoundTitle || 'WhatsApp Group'}
+                        </Text>
+                        <Text style={styles.waActiveGroupSubtitle}>
+                          {parsedWhatsAppCustomers.length} {t.groupMembersFound || 'Group Members Found'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.waChangeGroupBtn}
+                        onPress={handleSelectWhatsAppGroupFile}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.waChangeGroupBtnText}>
+                          🔄 {t.changeGroupBtn || 'Change Group'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Quick Select / Deselect Bar */}
                     <View style={styles.detectedHeaderRow}>
                       <Text style={styles.detectedTitle}>
-                        {t.detectedCustomersTitle || 'Detected Customers'} ({parsedWhatsAppCustomers.length})
+                        {parsedWhatsAppCustomers.filter(c => c.isSelected).length} of {parsedWhatsAppCustomers.length} selected
                       </Text>
                       <View style={{ flexDirection: 'row', gap: 10 }}>
                         <TouchableOpacity onPress={() => handleToggleAllWhatsApp(true)}>
@@ -1352,6 +1377,7 @@ export const CustomerListScreen = () => {
                       </View>
                     </View>
 
+                    {/* Members List */}
                     {parsedWhatsAppCustomers.map((cust) => (
                       <View
                         key={cust.id}
@@ -1361,8 +1387,8 @@ export const CustomerListScreen = () => {
                           cust.isExisting && styles.waCustomerCardExisting
                         ]}
                       >
-                        {/* Checkbox and Primary Info */}
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        {/* Top Row: Checkbox, Name Input & Badges */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           <TouchableOpacity
                             style={[styles.checkbox, cust.isSelected && styles.checkboxChecked]}
                             onPress={() => handleToggleWhatsAppCustomer(cust.id)}
@@ -1371,40 +1397,35 @@ export const CustomerListScreen = () => {
                             {cust.isSelected && <Text style={styles.checkmark}>✓</Text>}
                           </TouchableOpacity>
 
-                          <View style={{ flex: 1 }}>
-                            {/* Editable Name Field */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <TextInput
-                                style={styles.waNameInput}
-                                value={cust.name}
-                                onChangeText={(val) => handleUpdateWhatsAppCustomerName(cust.id, val)}
-                                placeholder="Customer Name"
-                                placeholderTextColor="#94a3b8"
-                              />
-                              <Text style={{ fontSize: 11, color: '#94a3b8' }}>✏️</Text>
-                            </View>
+                          <TextInput
+                            style={styles.waNameInput}
+                            value={cust.name}
+                            onChangeText={(text) => handleUpdateWhatsAppCustomerName(cust.id, text)}
+                            placeholder="Customer Name"
+                            placeholderTextColor="#94a3b8"
+                          />
 
-                            {/* Phone & Source Note */}
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                              <Text style={styles.waPhoneText}>📞 {cust.displayPhone}</Text>
-                              {cust.isExisting ? (
-                                <View style={styles.waExistingBadge}>
-                                  <Text style={styles.waExistingBadgeText}>
-                                    {lang === 'hi' ? 'पहले से मौजूद' : 'Already in App'}
-                                  </Text>
-                                </View>
-                              ) : (
-                                <View style={styles.waNewBadge}>
-                                  <Text style={styles.waNewBadgeText}>
-                                    {lang === 'hi' ? 'नया' : 'New'}
-                                  </Text>
-                                </View>
-                              )}
+                          {cust.isExisting ? (
+                            <View style={styles.waExistingBadge}>
+                              <Text style={styles.waExistingBadgeText}>
+                                {lang === 'hi' ? 'पहले से है' : 'Existing'}
+                              </Text>
                             </View>
-                          </View>
+                          ) : (
+                            <View style={styles.waNewBadge}>
+                              <Text style={styles.waNewBadgeText}>
+                                {lang === 'hi' ? 'नया' : 'New'}
+                              </Text>
+                            </View>
+                          )}
                         </View>
 
-                        {/* Order Details: Litres & Milk Type */}
+                        {/* Phone Number */}
+                        <View style={{ marginTop: 4, marginLeft: 28 }}>
+                          <Text style={styles.waPhoneText}>📞 +91 {cust.displayPhone}</Text>
+                        </View>
+
+                        {/* Default Order Settings Row */}
                         <View style={styles.waOrderRow}>
                           {/* Litres Stepper */}
                           <View style={styles.waStepperBox}>
@@ -1423,8 +1444,8 @@ export const CustomerListScreen = () => {
                             </TouchableOpacity>
                           </View>
 
-                          {/* Milk Type Toggle */}
-                          <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {/* Milk Type Chips */}
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
                             <TouchableOpacity
                               style={[styles.waTypeChip, cust.milkType === 'cow' && styles.waTypeChipCowActive]}
                               onPress={() => handleUpdateWhatsAppCustomerMilkType(cust.id, 'cow')}
@@ -1446,37 +1467,32 @@ export const CustomerListScreen = () => {
                       </View>
                     ))}
                   </View>
-                ) : whatsappRawText.trim().length > 0 ? (
-                  <View style={{ padding: 16, alignItems: 'center' }}>
-                    <Text style={{ fontSize: 24, marginBottom: 6 }}>🔍</Text>
-                    <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center' }}>
-                      {t.noNumbersFound || 'No 10-digit mobile numbers found in text. Please check pasted text or export chat without media.'}
-                    </Text>
-                  </View>
-                ) : null}
+                )}
               </ScrollView>
 
-              {/* Modal Footer */}
-              <View style={styles.importActionBar}>
-                <Text style={styles.selectedCountText}>
-                  {parsedWhatsAppCustomers.filter(c => c.isSelected).length} selected
-                </Text>
-                <TouchableOpacity
-                  style={[
-                    styles.waImportConfirmBtn,
-                    parsedWhatsAppCustomers.filter(c => c.isSelected).length === 0 && styles.importConfirmDisabled
-                  ]}
-                  onPress={handleBatchImportWhatsApp}
-                  disabled={parsedWhatsAppCustomers.filter(c => c.isSelected).length === 0 || isScanningWhatsApp}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.importConfirmBtnText}>
-                    {lang === 'hi'
-                      ? `✓ ग्राहक जोड़ें (${parsedWhatsAppCustomers.filter(c => c.isSelected).length})`
-                      : `✓ Import Customers (${parsedWhatsAppCustomers.filter(c => c.isSelected).length})`}
+              {/* Modal Footer (Only shown when group members are loaded) */}
+              {parsedWhatsAppCustomers.length > 0 && (
+                <View style={styles.importActionBar}>
+                  <Text style={styles.selectedCountText}>
+                    {parsedWhatsAppCustomers.filter(c => c.isSelected).length} selected
                   </Text>
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.waImportConfirmBtn,
+                      parsedWhatsAppCustomers.filter(c => c.isSelected).length === 0 && styles.importConfirmDisabled
+                    ]}
+                    onPress={handleBatchImportWhatsApp}
+                    disabled={parsedWhatsAppCustomers.filter(c => c.isSelected).length === 0 || isScanningWhatsApp}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.importConfirmBtnText}>
+                      {lang === 'hi'
+                        ? `✓ सदस्य जोड़ें (${parsedWhatsAppCustomers.filter(c => c.isSelected).length})`
+                        : `✓ Import Customers (${parsedWhatsAppCustomers.filter(c => c.isSelected).length})`}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           </View>
         </Modal>
@@ -1976,43 +1992,102 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   whatsappImportBtnText: { color: '#15803d', fontWeight: 'bold', fontSize: 12.5 },
+  waGroupSelectCard: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#86efac',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 14
+  },
   waUploadBtn: {
     backgroundColor: '#16a34a',
     borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: 'center'
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    width: '100%'
   },
-  waUploadBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
-  waPasteBtn: {
-    flex: 1,
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#86efac',
-    borderRadius: 10,
-    paddingVertical: 9,
-    alignItems: 'center'
+  waUploadBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13.5 },
+  waSelectHintText: {
+    fontSize: 11.5,
+    color: '#16a34a',
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center'
   },
-  waPasteBtnText: { color: '#16a34a', fontWeight: '700', fontSize: 12 },
-  waScanBtn: {
-    flex: 1,
+  waGuideBox: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    paddingVertical: 9,
-    alignItems: 'center'
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16
   },
-  waScanBtnText: { color: '#334155', fontWeight: '700', fontSize: 12 },
-  waTextInput: {
+  waGuideTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 10
+  },
+  waGuideStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8
+  },
+  waStepBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#0284c7',
+    color: '#ffffff',
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: 'bold',
+    lineHeight: 20
+  },
+  waStepText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '500',
+    flex: 1
+  },
+  waActiveGroupBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12
+  },
+  waActiveGroupTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#15803d'
+  },
+  waActiveGroupSubtitle: {
+    fontSize: 11.5,
+    color: '#16a34a',
+    fontWeight: '600',
+    marginTop: 2
+  },
+  waChangeGroupBtn: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    padding: 10,
-    fontSize: 12,
-    color: '#0f172a',
-    minHeight: 70,
-    textAlignVertical: 'top'
+    borderColor: '#86efac',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10
+  },
+  waChangeGroupBtnText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#15803d'
   },
   detectedHeaderRow: {
     flexDirection: 'row',

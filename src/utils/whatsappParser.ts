@@ -83,6 +83,26 @@ const cleanNameCandidate = (name: string): string => {
   return cleaned;
 };
 
+// Extract WhatsApp Group Name from filename or chat text
+export const extractWhatsAppGroupName = (fileName: string, rawText: string): string => {
+  if (fileName) {
+    const fileMatch = fileName.match(/WhatsApp Chat (?:with|-)\s*(.+?)(?:\.(?:txt|zip))?$/i);
+    if (fileMatch && fileMatch[1]) {
+      const gName = fileMatch[1].replace(/\.(txt|zip)$/i, '').trim();
+      if (gName) return gName;
+    }
+  }
+
+  if (rawText) {
+    const groupCreatedMatch = rawText.match(/(?:created group|changed the subject to|changed the group name to)\s*["“]([^"”\r\n]+)["”]/i);
+    if (groupCreatedMatch && groupCreatedMatch[1]) {
+      return groupCreatedMatch[1].trim();
+    }
+  }
+
+  return '';
+};
+
 export const parseWhatsAppText = (
   rawText: string,
   existingCustomers: Customer[] = [],
