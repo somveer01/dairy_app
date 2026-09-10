@@ -37,7 +37,15 @@ const manifest = {
       files: [
         {
           name: 'file',
-          accept: ['.txt', '.zip', 'text/plain', 'application/zip']
+          accept: [
+            'text/plain',
+            'text/*',
+            'application/zip',
+            'application/x-zip-compressed',
+            'application/octet-stream',
+            '.txt',
+            '.zip'
+          ]
         }
       ]
     }
