@@ -48,30 +48,33 @@ export const DailyRegisterScreen = () => {
   };
 
 
-  const sessionEntriesMap = useMemo(() => {
+  const { sessionEntriesMap, stats } = useMemo(() => {
     const map = new Map<string, MilkEntry>();
-    milkEntries
-      .filter(e => e.date === selectedDate && e.session === activeSession)
-      .forEach(e => map.set(e.customerId, e));
-    return map;
-  }, [milkEntries, selectedDate, activeSession]);
-
-  const stats = useMemo(() => {
-    const entries = milkEntries.filter(e => e.date === selectedDate && e.session === activeSession);
     let cowQty = 0;
     let buffaloQty = 0;
     let totalAmt = 0;
-    entries.forEach(e => {
-      if (e.milkType === 'cow') cowQty += e.quantityLitres;
-      if (e.milkType === 'buffalo') buffaloQty += e.quantityLitres;
-      totalAmt += e.amount;
-    });
+    let count = 0;
+
+    for (let i = 0; i < milkEntries.length; i++) {
+      const e = milkEntries[i];
+      if (e.date === selectedDate && e.session === activeSession) {
+        map.set(e.customerId, e);
+        if (e.milkType === 'cow') cowQty += e.quantityLitres;
+        if (e.milkType === 'buffalo') buffaloQty += e.quantityLitres;
+        totalAmt += e.amount;
+        count++;
+      }
+    }
+
     return {
-      count: entries.length,
-      cowQty,
-      buffaloQty,
-      totalLitres: cowQty + buffaloQty,
-      totalAmt
+      sessionEntriesMap: map,
+      stats: {
+        count,
+        cowQty,
+        buffaloQty,
+        totalLitres: cowQty + buffaloQty,
+        totalAmt
+      }
     };
   }, [milkEntries, selectedDate, activeSession]);
 

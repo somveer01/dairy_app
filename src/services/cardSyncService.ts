@@ -156,10 +156,77 @@ Thank you! — ${dairyName}`;
     paymentsParam?: Payment[]
   ): Promise<void> {
     try {
+      const supplier = supplierParam || (await StorageService.getSupplier());
+      const suppId = supplier?.id || 'supp_1';
       const customers = customersParam || (await StorageService.getCustomers());
-      for (const c of customers) {
-        await this.syncCustomerCard(c.id, supplierParam, customersParam, entriesParam, paymentsParam);
+      if (!customers || customers.length === 0) return;
+
+      const allEntries = entriesParam || (await StorageService.getMilkEntries());
+      const allPayments = paymentsParam || (await StorageService.getPayments());
+
+      // Pre-group entries by customerId and date in single pass: O(E)
+      const entriesByCust = new Map<string, Record<string, CardEntryItem[]>>();
+      for (let i = 0; i < allEntries.length; i++) {
+        const e = allEntries[i];
+        let custMap = entriesByCust.get(e.customerId);
+        if (!custMap) {
+          custMap = {};
+          entriesByCust.set(e.customerId, custMap);
+        }
+        if (!custMap[e.date]) {
+          custMap[e.date] = [];
+        }
+        custMap[e.date].push({
+          id: e.id,
+          session: e.session,
+          milkType: e.milkType,
+          quantityLitres: e.quantityLitres,
+          ratePerLitre: e.ratePerLitre,
+          amount: e.amount
+        });
       }
+
+      // Pre-group payments by customerId in single pass: O(P)
+      const paymentsByCust = new Map<string, CardPaymentItem[]>();
+      for (let i = 0; i < allPayments.length; i++) {
+        const p = allPayments[i];
+        let list = paymentsByCust.get(p.customerId);
+        if (!list) {
+          list = [];
+          paymentsByCust.set(p.customerId, list);
+        }
+        list.push({
+          id: p.id,
+          date: p.date,
+          amountPaid: p.amountPaid,
+          notes: p.notes
+        });
+      }
+
+      const now = Date.now();
+      const cardsBatch: Record<string, CustomerCardData> = {};
+
+      for (let i = 0; i < customers.length; i++) {
+        const customer = customers[i];
+        cardsBatch[customer.id] = {
+          supplierBusinessName: supplier?.businessName || 'डेयरी फ़ार्म',
+          supplierName: supplier?.name || 'सप्लायर',
+          supplierPhone: supplier?.phone || '',
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          milkType: customer.milkType,
+          ratePerLitre: customer.ratePerLitre,
+          defaultLitres: customer.defaultLitres,
+          entries: entriesByCust.get(customer.id) || {},
+          payments: paymentsByCust.get(customer.id) || [],
+          lastUpdated: now
+        };
+      }
+
+      // 1 single atomic batch write to Firebase Realtime Database
+      const cardsRef = ref(rtdb, `cards/${suppId}`);
+      await set(cardsRef, cardsBatch);
     } catch (err) {
       console.warn('Sync all cards error:', err);
     }
