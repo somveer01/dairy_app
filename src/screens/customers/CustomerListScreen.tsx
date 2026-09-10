@@ -38,6 +38,35 @@ const normalizePhoneDigits = (raw?: string | null): string => {
   return digits.length > 10 ? digits.slice(-10) : digits;
 };
 
+const cleanPhoneInput = (raw?: string | null): string => {
+  if (!raw) return '';
+  const text = raw.trim();
+  const digits = text.replace(/\D/g, '');
+
+  // If text starts with '+' and starts with '91' with at least 12 digits (e.g. +91 8721873433)
+  if (text.startsWith('+') && digits.startsWith('91') && digits.length >= 12) {
+    return digits.slice(2, 12);
+  }
+
+  // If 12 digits starting with 91 (e.g. 918721873433 without plus)
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2, 12);
+  }
+
+  // If 11 digits starting with 0 (e.g. 08721873433)
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(1, 11);
+  }
+
+  // If more than 10 digits, take the last 10 digits
+  if (digits.length > 10) {
+    return digits.slice(-10);
+  }
+
+  // 10 or fewer digits (user typing or 10-digit paste)
+  return digits;
+};
+
 export const CustomerListScreen = () => {
   const { t, lang, customers, refreshCustomers, refreshMilkEntries, refreshPayments, supplier } = useApp();
   const [search, setSearch] = useState('');
@@ -1062,9 +1091,9 @@ export const CustomerListScreen = () => {
                 placeholder="10-digit mobile"
                 placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
-                maxLength={10}
+                maxLength={20}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(val) => setPhone(cleanPhoneInput(val))}
               />
 
               <Text style={styles.label}>{t.addressLabel || 'Address'}</Text>

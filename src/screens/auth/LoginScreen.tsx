@@ -16,6 +16,26 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { Supplier } from '../../types';
 
+const cleanPhoneInput = (raw?: string | null): string => {
+  if (!raw) return '';
+  const text = raw.trim();
+  const digits = text.replace(/\D/g, '');
+
+  if (text.startsWith('+') && digits.startsWith('91') && digits.length >= 12) {
+    return digits.slice(2, 12);
+  }
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2, 12);
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(1, 11);
+  }
+  if (digits.length > 10) {
+    return digits.slice(-10);
+  }
+  return digits;
+};
+
 export const LoginScreen = ({ navigation }: any) => {
   const { t, setSupplier } = useApp();
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
@@ -139,9 +159,9 @@ export const LoginScreen = ({ navigation }: any) => {
                 placeholder="Enter 10-digit mobile number"
                 placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
-                maxLength={10}
+                maxLength={20}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(val) => setPhone(cleanPhoneInput(val))}
               />
 
               {otpSent ? (
