@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dairy-pwa-1789038314820';
+const CACHE_NAME = 'dairy-pwa-1789039494806';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
