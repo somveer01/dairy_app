@@ -22,5 +22,25 @@
   "theme_color": "#0284c7",
   "display": "standalone",
   "orientation": "portrait",
-  "scope": "/dairy_app/"
+  "scope": "/dairy_app/",
+  "share_target": {
+    "action": "/dairy_app/share-target/",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "file",
+          "accept": [
+            ".txt",
+            ".zip",
+            "text/plain",
+            "application/zip"
+          ]
+        }
+      ]
+    }
+  }
 }
