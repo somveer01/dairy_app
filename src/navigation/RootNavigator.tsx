@@ -1,4 +1,5 @@
-﻿import React from 'react';
+import React from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AppNavigator } from './AppNavigator';
@@ -8,7 +9,15 @@ import { useApp } from '../context/AppContext';
 const Stack = createNativeStackNavigator();
 
 export const RootNavigator = () => {
-  const { supplier } = useApp();
+  const { supplier, isLoading } = useApp();
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+        <ActivityIndicator size="large" color="#0284c7" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer>

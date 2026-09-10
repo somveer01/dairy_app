@@ -1142,11 +1142,33 @@
     }
 
     function goBackToApp() {
+      // 1. If opened in a new tab/window by target="_blank", try closing it to switch back to open app tab
+      try {
+        if (window.opener && !window.opener.closed) {
+          window.close();
+        }
+      } catch (e) {}
+
+      // 2. If navigated in same tab from the app, go back in history
+      if (document.referrer && (document.referrer.includes('dairy_app') || document.referrer.includes('localhost') || document.referrer.includes('127.0.0.1'))) {
+        window.history.back();
+        return;
+      }
+
       if (window.history.length > 1) {
         window.history.back();
+        // Fallback safety timeout if history.back has nowhere to go in this tab
+        setTimeout(() => {
+          navigateToAppRoot();
+        }, 300);
       } else {
-        window.location.href = './index.html';
+        navigateToAppRoot();
       }
+    }
+
+    function navigateToAppRoot() {
+      const appBase = window.location.pathname.replace(/card\.html.*$/, '') || '/dairy_app/';
+      window.location.href = appBase;
     }
 
     function toggleLanguage() {

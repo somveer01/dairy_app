@@ -860,7 +860,11 @@ export const CustomerListScreen = () => {
                   onPress={async () => {
                     await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
                     const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true);
-                    Linking.openURL(url);
+                    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                      window.location.href = url;
+                    } else {
+                      Linking.openURL(url);
+                    }
                   }}
                   activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}

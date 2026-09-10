@@ -15,6 +15,7 @@ interface AppContextType {
   refreshMilkEntries: () => Promise<void>;
   payments: Payment[];
   refreshPayments: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -31,10 +32,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return 'en';
   });
-  const [supplier, setSupplier] = useState<Supplier | null>(null);
+  const [supplier, setSupplier] = useState<Supplier | null>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored = window.localStorage.getItem('@dairy_supplier');
+        if (stored) return JSON.parse(stored);
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  });
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [milkEntries, setMilkEntries] = useState<MilkEntry[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
 
   useEffect(() => {
@@ -42,20 +54,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const loadInitialData = async () => {
-    const savedLang = await StorageService.getLanguage();
-    setLangState(savedLang);
+    try {
+      const savedLang = await StorageService.getLanguage();
+      setLangState(savedLang);
 
-    const savedSupplier = await StorageService.getSupplier();
-    setSupplier(savedSupplier);
+      const savedSupplier = await StorageService.getSupplier();
+      setSupplier(savedSupplier);
 
-    const custs = await StorageService.getCustomers();
-    setCustomers(custs);
+      const custs = await StorageService.getCustomers();
+      setCustomers(custs);
 
-    const entries = await StorageService.getMilkEntries();
-    setMilkEntries(entries);
+      const entries = await StorageService.getMilkEntries();
+      setMilkEntries(entries);
 
-    const pays = await StorageService.getPayments();
-    setPayments(pays);
+      const pays = await StorageService.getPayments();
+      setPayments(pays);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const setLanguage = async (newLang: Language) => {
@@ -91,7 +107,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         milkEntries,
         refreshMilkEntries,
         payments,
-        refreshPayments
+        refreshPayments,
+        isLoading
       }}
     >
       {children}
