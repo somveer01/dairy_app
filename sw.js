@@ -1,8 +1,10 @@
-const CACHE_NAME = 'dairy-pwa-1789030742453';
+const CACHE_NAME = 'dairy-pwa-1789031618233';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
+  '/dairy_app/card.html',
   '/dairy_app/manifest.json',
+  '/dairy_app/manifest-card.json',
   '/dairy_app/favicon.ico',
   '/dairy_app/assets/icon.png'
 ];
