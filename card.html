@@ -1032,8 +1032,9 @@
         shortcutBtn: '+ Milk Card जोड़ें',
         shortcutModalTitle: '📲 फोन पर "Milk Card" ऐप जोड़ें',
         guideGotIt: '✓ समझ गया (Got it)',
-        installingText: 'दूध कार्ड ऐप इंस्टॉल हो रहा है...',
-        installSuccessText: '✓ Milk Card सफलतापूर्वक इंस्टॉल हो गया!',
+        installingText: 'दूध कार्ड ऐप तैयार हो रहा है...',
+        installAddingText: 'फोन पर ऐप आइकॉन जोड़ा जा रहा है...',
+        installSuccessText: '✓ Milk Card ऐप सफलतापूर्वक इंस्टॉल हो गया!',
         installGuideText: 'ब्राउज़र मेनू से इंस्टॉल करें (नीचे देखें)',
         weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
         months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
@@ -1073,8 +1074,9 @@
         shortcutBtn: '+ Add Milk Card',
         shortcutModalTitle: '📲 Add "Milk Card" to Home Screen',
         guideGotIt: '✓ Got it',
-        installingText: 'Installing Milk Card App...',
-        installSuccessText: '✓ Milk Card successfully installed!',
+        installingText: 'Preparing Milk Card App...',
+        installAddingText: 'Adding app icon to your phone...',
+        installSuccessText: '✓ Milk Card app successfully installed!',
         installGuideText: 'Install via Browser Menu (see guide below)',
         weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -1122,60 +1124,67 @@
     });
 
     let installProgressInterval = null;
+    let installState = 'idle'; // 'idle' | 'prompted' | 'installing' | 'installed'
 
-    function showInstallProgress(onComplete) {
+    function updateProgressBar(percent, message, isDone = false, isSuccess = true) {
       const progressBox = document.getElementById('installProgressBox');
       const progressBar = document.getElementById('installProgressBarFill');
       const statusMsg = document.getElementById('installStatusMessage');
       const percentEl = document.getElementById('installPercent');
       const actionBtn = document.getElementById('shortcutActionBtn');
-      const t = I18N[currentLang];
 
       if (progressBox) progressBox.style.display = 'block';
-      if (actionBtn) {
-        actionBtn.disabled = true;
-        actionBtn.style.opacity = '0.6';
+      if (progressBar) progressBar.style.width = percent + '%';
+      if (percentEl) percentEl.innerText = percent + '%';
+      if (statusMsg) {
+        statusMsg.innerText = message;
+        if (isDone) {
+          statusMsg.style.color = isSuccess ? '#10b981' : '#0284c7';
+        } else {
+          statusMsg.style.color = '#0284c7';
+        }
       }
 
-      let currentPercent = 10;
-      if (progressBar) progressBar.style.width = currentPercent + '%';
-      if (percentEl) percentEl.innerText = currentPercent + '%';
-      if (statusMsg) statusMsg.innerText = t.installingText;
-
-      clearInterval(installProgressInterval);
-      installProgressInterval = setInterval(() => {
-        if (currentPercent < 85) {
-          currentPercent += Math.floor(Math.random() * 12) + 8;
-          if (currentPercent > 85) currentPercent = 85;
-          if (progressBar) progressBar.style.width = currentPercent + '%';
-          if (percentEl) percentEl.innerText = currentPercent + '%';
-        }
-      }, 250);
-
-      return function finishProgress(success = true) {
-        clearInterval(installProgressInterval);
-        if (progressBar) progressBar.style.width = '100%';
-        if (percentEl) percentEl.innerText = '100%';
-        if (statusMsg) {
-          statusMsg.innerText = success ? t.installSuccessText : t.installGuideText;
-          statusMsg.style.color = success ? '#10b981' : '#0284c7';
-        }
-        if (actionBtn) {
-          actionBtn.disabled = false;
-          actionBtn.style.opacity = '1';
-        }
-        if (typeof onComplete === 'function') {
-          setTimeout(onComplete, 1200);
-        }
-      };
+      if (actionBtn) {
+        actionBtn.disabled = !isDone;
+        actionBtn.style.opacity = isDone ? '1' : '0.6';
+      }
     }
 
+    function startInitialProgress() {
+      const t = I18N[currentLang];
+      clearInterval(installProgressInterval);
+      let currentPercent = 15;
+      updateProgressBar(currentPercent, t.installingText);
+
+      installProgressInterval = setInterval(() => {
+        if (installState === 'prompted' && currentPercent < 70) {
+          currentPercent += Math.floor(Math.random() * 8) + 4;
+          if (currentPercent > 70) currentPercent = 70;
+          updateProgressBar(currentPercent, t.installingText);
+        } else if (installState === 'installing' && currentPercent < 95) {
+          currentPercent += Math.floor(Math.random() * 4) + 2;
+          if (currentPercent > 95) currentPercent = 95;
+          updateProgressBar(currentPercent, t.installAddingText);
+        }
+      }, 300);
+    }
+
+    // OS signals that the Milk Card app has actually finished installing
     window.addEventListener('appinstalled', () => {
-      const finish = showInstallProgress(() => {
+      console.log('Milk Card app installed on device!');
+      installState = 'installed';
+      clearInterval(installProgressInterval);
+      const t = I18N[currentLang];
+      updateProgressBar(100, t.installSuccessText, true, true);
+
+      setTimeout(() => {
         const banner = document.getElementById('shortcutBanner');
         if (banner) banner.style.display = 'none';
-      });
-      finish(true);
+        const progressBox = document.getElementById('installProgressBox');
+        if (progressBox) progressBox.style.display = 'none';
+      }, 2000);
+
       deferredPrompt = null;
     });
 
@@ -1190,18 +1199,34 @@
 
     function handleInstallShortcut() {
       const t = I18N[currentLang];
+
       if (deferredPrompt) {
-        const finish = showInstallProgress(() => {
-          const banner = document.getElementById('shortcutBanner');
-          if (banner) banner.style.display = 'none';
-        });
+        installState = 'prompted';
+        startInitialProgress();
 
         deferredPrompt.prompt();
         deferredPrompt.userChoice.then((choiceResult) => {
           if (choiceResult.outcome === 'accepted') {
-            finish(true);
+            console.log('User accepted install prompt, waiting for OS appinstalled event...');
+            installState = 'installing';
+            updateProgressBar(75, t.installAddingText);
+
+            // Safety timeout: In case the browser doesn't fire appinstalled immediately
+            setTimeout(() => {
+              if (installState !== 'installed') {
+                installState = 'installed';
+                clearInterval(installProgressInterval);
+                updateProgressBar(100, t.installSuccessText, true, true);
+                setTimeout(() => {
+                  const banner = document.getElementById('shortcutBanner');
+                  if (banner) banner.style.display = 'none';
+                }, 2000);
+              }
+            }, 3500);
           } else {
-            // User cancelled the prompt
+            // User tapped Cancel
+            console.log('User cancelled installation');
+            installState = 'idle';
             clearInterval(installProgressInterval);
             const progressBox = document.getElementById('installProgressBox');
             if (progressBox) progressBox.style.display = 'none';
@@ -1212,21 +1237,23 @@
             }
           }
           deferredPrompt = null;
-        }).catch(() => {
+        }).catch((err) => {
+          console.warn('Install prompt error:', err);
+          installState = 'idle';
           clearInterval(installProgressInterval);
           const progressBox = document.getElementById('installProgressBox');
           if (progressBox) progressBox.style.display = 'none';
         });
       } else {
-        // Native prompt not available (e.g. inside in-app browser or Safari)
-        const finish = showInstallProgress(() => {
+        // In-app browser or Safari: show modal guide
+        updateProgressBar(100, t.installGuideText, true, false);
+        setTimeout(() => {
           const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
           switchGuideTab(isIos ? 'ios' : 'android');
           document.getElementById('shortcutModal').style.display = 'flex';
           const progressBox = document.getElementById('installProgressBox');
           if (progressBox) progressBox.style.display = 'none';
-        });
-        finish(false);
+        }, 800);
       }
     }
 
