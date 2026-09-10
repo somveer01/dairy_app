@@ -39,6 +39,9 @@ if (fs.existsSync('assets/icon.png')) {
 if (fs.existsSync('assets/training.html')) {
   fs.copyFileSync('assets/training.html', 'dist/training.html');
 }
+if (fs.existsSync('assets/card.html')) {
+  fs.copyFileSync('assets/card.html', 'dist/card.html');
+}
 fs.writeFileSync('dist/.nojekyll', '');
 
 // 3. PWA Service Worker (dist/sw.js)

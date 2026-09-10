@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { CardSyncService } from '../../services/cardSyncService';
 import { WhatsAppService, CustomerDateAuditItem } from '../../services/whatsappService';
 import { Customer, CustomerDueSummary, Payment, MilkEntry, MilkType, SessionType } from '../../types';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
@@ -451,6 +452,7 @@ export const DueReportsScreen = () => {
 
     await StorageService.savePayment(newPayment);
     await refreshPayments();
+    CardSyncService.syncCustomerCard(paymentCustomer.id, supplier, customers, milkEntries, [...payments, newPayment]);
     setPaymentModalVisible(false);
     showAlert(
       lang === 'hi' ? '✓ भुगतान सहेजा गया' : '✓ Payment Saved',
@@ -467,6 +469,7 @@ export const DueReportsScreen = () => {
       async () => {
         await StorageService.deletePayment(payId);
         await refreshPayments();
+        CardSyncService.syncAllCards(supplier, customers, milkEntries, payments.filter(p => p.id !== payId));
       },
       lang === 'hi' ? 'हटाएं' : 'Delete',
       lang === 'hi' ? 'रद्द करें' : 'Cancel',
@@ -549,6 +552,9 @@ export const DueReportsScreen = () => {
 
     await StorageService.saveMilkEntry(newEntry);
     await refreshMilkEntries();
+    if (activeDetailSummary) {
+      CardSyncService.syncCustomerCard(activeDetailSummary.customer.id, supplier, customers, [...milkEntries, newEntry], payments);
+    }
     setQuickEntryModalVisible(false);
     showAlert('Entry Recorded', `Delivery of ${qty}L for ${quickEntryDate} (${quickEntrySession}) saved.`);
   };
@@ -560,6 +566,9 @@ export const DueReportsScreen = () => {
       async () => {
         await StorageService.deleteMilkEntry(entryId);
         await refreshMilkEntries();
+        if (activeDetailSummary) {
+          CardSyncService.syncCustomerCard(activeDetailSummary.customer.id, supplier, customers, milkEntries.filter(e => e.id !== entryId), payments);
+        }
       },
       '🗑️ हटाएं (Delete)',
       'रद्द करें (Cancel)',
@@ -876,7 +885,7 @@ export const DueReportsScreen = () => {
                 <Text style={styles.cardTapPromptText}>Tap for full report ›</Text>
               </View>
 
-              {/* Action Buttons: Record Payment & WhatsApp Summary */}
+              {/* Action Buttons: Record Payment, Live Card & WhatsApp Summary */}
               <View style={styles.cardActions}>
                 <TouchableOpacity
                   style={styles.payBtn}
@@ -888,6 +897,19 @@ export const DueReportsScreen = () => {
                   hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                 >
                   <Text style={styles.payBtnText}>💵 {t.recordPayment}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.liveCardBtn}
+                  onPress={async (e) => {
+                    e.stopPropagation();
+                    await CardSyncService.syncCustomerCard(item.customer.id, supplier, customers, milkEntries, payments);
+                    await CardSyncService.shareCardViaWhatsApp(item.customer, supplier, lang);
+                  }}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={styles.liveCardBtnText}>🔗 {lang === 'hi' ? 'लाइव कार्ड' : 'Live Card'}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -2049,6 +2071,16 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   payBtnText: { fontSize: 12, fontWeight: '600', color: '#334155' },
+  liveCardBtn: {
+    flex: 1,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center'
+  },
+  liveCardBtnText: { fontSize: 12, fontWeight: 'bold', color: '#0284c7' },
   whatsappBtn: {
     flex: 1,
     backgroundColor: '#25D366',

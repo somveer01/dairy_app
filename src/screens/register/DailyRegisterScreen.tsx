@@ -13,12 +13,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { CardSyncService } from '../../services/cardSyncService';
 import { MilkEntry, MilkType, SessionType, Customer } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { formatToDisplayDate } from '../../utils/dateUtils';
 
 export const DailyRegisterScreen = () => {
-  const { t, customers, milkEntries, refreshMilkEntries, supplier } = useApp();
+  const { t, customers, milkEntries, refreshMilkEntries, payments, supplier } = useApp();
   
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
@@ -92,6 +93,7 @@ export const DailyRegisterScreen = () => {
       async () => {
         await StorageService.deleteMilkEntry(entry.id);
         await refreshMilkEntries();
+        CardSyncService.syncCustomerCard(entry.customerId, supplier, customers, milkEntries.filter(e => e.id !== entry.id), payments);
       },
       '🗑️ हटाएं (Delete)',
       'रद्द करें (Cancel)',
@@ -123,6 +125,7 @@ export const DailyRegisterScreen = () => {
 
     await StorageService.saveMilkEntry(newEntry);
     await refreshMilkEntries();
+    CardSyncService.syncCustomerCard(customer.id, supplier, customers, [...milkEntries, newEntry], payments);
   };
 
   const handleBulkFillAll = () => {
@@ -156,6 +159,7 @@ export const DailyRegisterScreen = () => {
         }));
         await StorageService.saveMilkEntriesBatch(newEntries);
         await refreshMilkEntries();
+        CardSyncService.syncAllCards(supplier, customers, [...milkEntries, ...newEntries], payments);
       },
       `✓ सभी दर्ज करें (${unrecordedCustomers.length})`,
       'रद्द करें (Cancel)',
@@ -205,6 +209,7 @@ export const DailyRegisterScreen = () => {
 
     await StorageService.saveMilkEntry(entry);
     await refreshMilkEntries();
+    CardSyncService.syncCustomerCard(selectedCustomer.id, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), entry], payments);
     setModalVisible(false);
   };
 
@@ -215,6 +220,7 @@ export const DailyRegisterScreen = () => {
     };
     await StorageService.saveMilkEntry(updated);
     await refreshMilkEntries();
+    CardSyncService.syncCustomerCard(entry.customerId, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), updated], payments);
   };
 
   return (

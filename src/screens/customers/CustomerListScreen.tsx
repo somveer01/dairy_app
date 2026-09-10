@@ -10,13 +10,15 @@ import {
   Alert,
   Keyboard,
   ActivityIndicator,
-  Platform
+  Platform,
+  Linking
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import { Contact } from 'expo-contacts';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { CardSyncService } from '../../services/cardSyncService';
 import { Customer, MilkType } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 
@@ -68,7 +70,7 @@ const cleanPhoneInput = (raw?: string | null): string => {
 };
 
 export const CustomerListScreen = () => {
-  const { t, lang, customers, refreshCustomers, refreshMilkEntries, refreshPayments, supplier } = useApp();
+  const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier } = useApp();
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -179,6 +181,7 @@ export const CustomerListScreen = () => {
 
     await StorageService.saveCustomer(customerData);
     await refreshCustomers();
+    CardSyncService.syncCustomerCard(customerData.id, supplier, [...customers, customerData], milkEntries, payments);
     setModalVisible(false);
   };
 
@@ -841,20 +844,46 @@ export const CustomerListScreen = () => {
 
               <View style={styles.actionsRow}>
                 <TouchableOpacity
+                  style={styles.shareCardBtn}
+                  onPress={async () => {
+                    await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                    await CardSyncService.shareCardViaWhatsApp(item, supplier, lang);
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={styles.shareCardBtnText}>🔗 {lang === 'hi' ? 'कार्ड शेयर' : 'Share Card'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.viewCardBtn}
+                  onPress={async () => {
+                    await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                    const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id);
+                    Linking.openURL(url);
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <Text style={styles.viewCardBtnText}>👁️ {lang === 'hi' ? 'देखें' : 'View'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={styles.editBtn}
                   onPress={() => openEditModal(item)}
                   activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                 >
                   <Text style={styles.editBtnText}>✏️ {t.editPrompt || 'Edit'}</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.deleteBtn}
                   onPress={() => handleDelete(item.id, item.name)}
                   activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                 >
-                  <Text style={styles.deleteBtnText}>🗑️ {t.deletePrompt || 'Delete'}</Text>
+                  <Text style={styles.deleteBtnText}>🗑️</Text>
                 </TouchableOpacity>
               </View>
 
@@ -1269,14 +1298,32 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10 },
   editBtn: {
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: '#f1f5f9'
   },
   editBtnText: { fontSize: 12, color: '#334155', fontWeight: '600' },
+  shareCardBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#bbf7d0'
+  },
+  shareCardBtnText: { fontSize: 12, color: '#15803d', fontWeight: 'bold' },
+  viewCardBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd'
+  },
+  viewCardBtnText: { fontSize: 12, color: '#0369a1', fontWeight: 'bold' },
   deleteBtn: {
     paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 8,
     backgroundColor: '#fee2e2'
   },
