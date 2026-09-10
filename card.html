@@ -694,76 +694,6 @@
       justify-content: space-between;
       align-items: center;
     }
-
-    /* Guide Modal & Tabs */
-    .guide-tabs {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 14px;
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 8px;
-    }
-
-    .guide-tab {
-      flex: 1;
-      padding: 8px;
-      border: none;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      background: #f1f5f9;
-      color: #475569;
-      cursor: pointer;
-    }
-
-    .guide-tab.active {
-      background: #0284c7;
-      color: #ffffff;
-    }
-
-    .guide-step {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      margin-bottom: 10px;
-      background: #f8fafc;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid #e2e8f0;
-    }
-
-    .step-num {
-      width: 22px;
-      height: 22px;
-      background: #0284c7;
-      color: #ffffff;
-      border-radius: 11px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      font-weight: 800;
-      flex-shrink: 0;
-    }
-
-    .step-text {
-      font-size: 12px;
-      line-height: 1.5;
-      color: #1e293b;
-    }
-
-    .shortcut-confirm-btn {
-      width: 100%;
-      background: #059669;
-      color: #ffffff;
-      border: none;
-      border-radius: 10px;
-      padding: 12px;
-      font-size: 13px;
-      font-weight: 800;
-      cursor: pointer;
-      margin-top: 10px;
-    }
   </style>
 </head>
 <body>
@@ -934,62 +864,6 @@
     </div>
   </div>
 
-  <!-- Step-by-Step Install Guide Modal -->
-  <div class="modal-overlay" id="shortcutModal" onclick="closeShortcutModal(event)">
-    <div class="modal-box" style="max-width: 400px;" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <div class="modal-title" id="shortcutModalTitle">📲 होम स्क्रीन पर शॉर्टकट बनाएं</div>
-        <button class="modal-close" onclick="closeShortcutModal()">✕</button>
-      </div>
-      
-      <div class="guide-tabs">
-        <button class="guide-tab active" id="tabAndroid" onclick="switchGuideTab('android')">🤖 Android / Chrome</button>
-        <button class="guide-tab" id="tabIos" onclick="switchGuideTab('ios')">🍎 iPhone / Safari</button>
-      </div>
-
-      <div id="guideAndroid" class="guide-content">
-        <div class="guide-step">
-          <div class="step-num">1</div>
-          <div class="step-text" id="stepA1">अगर आप <b>WhatsApp</b> में हैं, तो ऊपर दाएँ कोने में <b>⋮ (3 डॉट्स)</b> दबाकर <b>'Open in Chrome'</b> चुनें।</div>
-        </div>
-        <div class="guide-step">
-          <div class="step-num">2</div>
-          <div class="step-text" id="stepA2">Chrome ब्राउज़र में ऊपर दाएँ कोने में <b>⋮ (3 डॉट्स)</b> मेनू दबाएं।</div>
-        </div>
-        <div class="guide-step">
-          <div class="step-num">3</div>
-          <div class="step-text" id="stepA3">सूची में से <b>'📲 Add to Home screen'</b> (या <b>'Install app'</b>) पर टैप करें।</div>
-        </div>
-        <div class="guide-step">
-          <div class="step-num">4</div>
-          <div class="step-text" id="stepA4"><b>'Add'</b> दबाएं। अब आपके फोन के मुख्य स्क्रीन पर <b>दूध कार्ड</b> का ऐप आइकॉन आ जाएगा!</div>
-        </div>
-      </div>
-
-      <div id="guideIos" class="guide-content" style="display: none;">
-        <div class="guide-step">
-          <div class="step-num">1</div>
-          <div class="step-text" id="stepI1">इस लिंक को Apple <b>Safari</b> ब्राउज़र में खोलें।</div>
-        </div>
-        <div class="guide-step">
-          <div class="step-num">2</div>
-          <div class="step-text" id="stepI2">नीचे बीच में शेयर आइकॉन <b>⎋ (Share)</b> पर टैप करें।</div>
-        </div>
-        <div class="guide-step">
-          <div class="step-num">3</div>
-          <div class="step-text" id="stepI3">नीचे स्क्रॉल करके <b>'➕ Add to Home Screen'</b> चुनें।</div>
-        </div>
-        <div class="guide-step">
-          <div class="step-num">4</div>
-          <div class="step-text" id="stepI4">ऊपर दाएँ कोने में <b>'Add'</b> दबाएं। अब आपके iPhone स्क्रीन पर शॉर्टकट बन जाएगा!</div>
-        </div>
-      </div>
-
-      <button class="shortcut-confirm-btn" onclick="closeShortcutModal()">
-        <span id="guideGotItText">✓ समझ गया (Got it)</span>
-      </button>
-    </div>
-  </div>
 
   <!-- Client Script for Live Firebase REST Data & Bilingual Render -->
   <script>
@@ -1030,12 +904,10 @@
         shortcutTitle: 'फोन पर "Milk Card" ऐप जोड़ें',
         shortcutSubtitle: '1-टैप में सीधे कार्ड देखने के लिए',
         shortcutBtn: '+ Milk Card जोड़ें',
-        shortcutModalTitle: '📲 फोन पर "Milk Card" ऐप जोड़ें',
-        guideGotIt: '✓ समझ गया (Got it)',
         installingText: 'दूध कार्ड ऐप तैयार हो रहा है...',
         installAddingText: 'फोन पर ऐप आइकॉन जोड़ा जा रहा है...',
         installSuccessText: '✓ Milk Card ऐप सफलतापूर्वक इंस्टॉल हो गया!',
-        installGuideText: 'ब्राउज़र मेनू से इंस्टॉल करें (नीचे देखें)',
+        installGuideText: 'ब्राउज़र मेनू (⋮) से "Add to Home screen" चुनें',
         weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
         months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
       },
@@ -1072,12 +944,10 @@
         shortcutTitle: 'Add "Milk Card" App to Home Screen',
         shortcutSubtitle: '1-Tap instant access like mobile app',
         shortcutBtn: '+ Add Milk Card',
-        shortcutModalTitle: '📲 Add "Milk Card" to Home Screen',
-        guideGotIt: '✓ Got it',
         installingText: 'Preparing Milk Card App...',
         installAddingText: 'Adding app icon to your phone...',
         installSuccessText: '✓ Milk Card app successfully installed!',
-        installGuideText: 'Install via Browser Menu (see guide below)',
+        installGuideText: 'Select "Add to Home screen" from browser menu (⋮)',
         weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
       }
@@ -1245,27 +1115,18 @@
           if (progressBox) progressBox.style.display = 'none';
         });
       } else {
-        // In-app browser or Safari: show modal guide
+        // Direct browser menu hint on the banner itself - NO POPUP MODAL
         updateProgressBar(100, t.installGuideText, true, false);
         setTimeout(() => {
-          const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-          switchGuideTab(isIos ? 'ios' : 'android');
-          document.getElementById('shortcutModal').style.display = 'flex';
           const progressBox = document.getElementById('installProgressBox');
           if (progressBox) progressBox.style.display = 'none';
-        }, 800);
+          const actionBtn = document.getElementById('shortcutActionBtn');
+          if (actionBtn) {
+            actionBtn.disabled = false;
+            actionBtn.style.opacity = '1';
+          }
+        }, 3500);
       }
-    }
-
-    function switchGuideTab(tab) {
-      document.getElementById('tabAndroid').className = 'guide-tab ' + (tab === 'android' ? 'active' : '');
-      document.getElementById('tabIos').className = 'guide-tab ' + (tab === 'ios' ? 'active' : '');
-      document.getElementById('guideAndroid').style.display = tab === 'android' ? 'block' : 'none';
-      document.getElementById('guideIos').style.display = tab === 'ios' ? 'block' : 'none';
-    }
-
-    function closeShortcutModal() {
-      document.getElementById('shortcutModal').style.display = 'none';
     }
 
     function goBackToApp() {
@@ -1339,17 +1200,13 @@
       document.getElementById('liveStatusText').innerText = t.liveStatus;
       document.getElementById('lastSyncText').innerText = t.justUpdated;
 
-      // Update Shortcut Banner & Modal Text
+      // Update Shortcut Banner Text
       const shortcutTitleEl = document.getElementById('shortcutTitle');
       if (shortcutTitleEl) shortcutTitleEl.innerText = t.shortcutTitle;
       const shortcutSubEl = document.getElementById('shortcutSubtitle');
       if (shortcutSubEl) shortcutSubEl.innerText = t.shortcutSubtitle;
       const shortcutBtnEl = document.getElementById('shortcutBtnText');
       if (shortcutBtnEl) shortcutBtnEl.innerText = t.shortcutBtn;
-      const shortcutModalTitleEl = document.getElementById('shortcutModalTitle');
-      if (shortcutModalTitleEl) shortcutModalTitleEl.innerText = t.shortcutModalTitle;
-      const guideGotItEl = document.getElementById('guideGotItText');
-      if (guideGotItEl) guideGotItEl.innerText = t.guideGotIt;
 
       // Brand Info
       document.getElementById('businessName').innerText = cardData.supplierBusinessName || 'डेयरी फ़ार्म';
