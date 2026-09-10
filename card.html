@@ -812,17 +812,25 @@
           <span id="labelDeliveredDays">दूध लिए गए दिन:</span>
           <span class="summary-val" id="valDeliveredDays">0 दिन</span>
         </div>
+        <div class="summary-row" id="rowPrevDue">
+          <span id="labelPrevDue">पिछला बकाया:</span>
+          <span class="summary-val" style="color: #ea580c;" id="valPrevDue">₹0.00</span>
+        </div>
         <div class="summary-row">
-          <span id="labelTotalBill">कुल बिल राशि:</span>
+          <span id="labelTotalBill">इस महीने का बिल:</span>
           <span class="summary-val" id="valTotalBill">₹0.00</span>
         </div>
         <div class="summary-row">
           <span id="labelTotalPaid">जमा किया गया भुगतान:</span>
           <span class="summary-val" style="color: #059669;" id="valTotalPaid">₹0.00</span>
         </div>
+        <div class="summary-row" id="rowMonthDue" style="padding-top: 8px; border-top: 1px dashed #e2e8f0; margin-top: 2px;">
+          <span id="labelMonthDue" style="font-weight: 700; color: #0f172a;">इस महीने का कुल बकाया:</span>
+          <span class="summary-val" style="color: #dc2626; font-weight: 800; font-size: 14px;" id="valMonthDue">₹0.00</span>
+        </div>
       </div>
 
-      <div class="due-hero-banner">
+      <div class="due-hero-banner" id="dueHeroBanner">
         <div>
           <div class="due-hero-title" id="labelNetDue">🔴 कुल बकाया राशि (Net Due)</div>
           <div style="font-size: 10px; color: #991b1b;" id="subNetDue">कृपया समय पर भुगतान करें</div>
@@ -887,8 +895,10 @@
         totalDelivered: 'कुल डिलीवर दूध:',
         deliveredDays: 'दूध लिए गए दिन:',
         daysUnit: 'दिन',
-        totalBill: 'कुल बिल राशि:',
+        prevDue: 'पिछला बकाया:',
+        totalBill: 'इस महीने का बिल:',
         totalPaid: 'जमा किया गया भुगतान:',
+        monthDue: 'इस महीने का कुल बकाया:',
         netDue: '🔴 कुल बकाया राशि (Net Due)',
         netDueSub: 'कृपया समय पर भुगतान करें',
         paymentsTitle: '💳 हालिया भुगतान रसीदें',
@@ -927,8 +937,10 @@
         totalDelivered: 'Total Milk Delivered:',
         deliveredDays: 'Delivered Days:',
         daysUnit: 'Days',
-        totalBill: 'Total Billed Amount:',
+        prevDue: 'Previous Due:',
+        totalBill: 'This Month Bill:',
         totalPaid: 'Payments Received (Paid):',
+        monthDue: 'This Month Total Due:',
         netDue: '🔴 Net Pending Due Balance',
         netDueSub: 'Please clear at your earliest',
         paymentsTitle: '💳 Recent Payment Receipts',
@@ -1333,15 +1345,28 @@
       const entriesMap = cardData.entries || {};
       const payments = cardData.payments || [];
 
-      // Calculate totals for selected month
+      // Calculate totals for selected month & previous months
       let totalMonthLitres = 0;
       let deliveredDaysCount = 0;
       let totalMonthBilled = 0;
 
       const prefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
+      const startOfMonthStr = `${prefix}-01`;
+
+      let prevDeliveries = 0;
+      let allTimeDeliveries = 0;
+
       Object.keys(entriesMap).forEach(d => {
+        const dayEntries = entriesMap[d] || [];
+        dayEntries.forEach(e => {
+          const amt = Number(e.amount) || 0;
+          allTimeDeliveries += amt;
+          if (d < startOfMonthStr) {
+            prevDeliveries += amt;
+          }
+        });
+
         if (d.startsWith(prefix)) {
-          const dayEntries = entriesMap[d] || [];
           let dayLitres = 0;
           dayEntries.forEach(e => {
             dayLitres += Number(e.quantityLitres) || 0;
@@ -1354,26 +1379,35 @@
         }
       });
 
-      // Calculate payments in this month & all-time
+      // Calculate payments: before selected month, in selected month, and all-time
+      let prevPaid = 0;
       let totalMonthPaid = 0;
-      let allTimeDeliveries = 0;
       let allTimePaid = 0;
 
-      // All time sum
-      Object.keys(entriesMap).forEach(d => {
-        (entriesMap[d] || []).forEach(e => {
-          allTimeDeliveries += Number(e.amount) || 0;
-        });
-      });
       payments.forEach(p => {
         const amt = Number(p.amountPaid) || 0;
         allTimePaid += amt;
-        if (p.date && p.date.startsWith(prefix)) {
-          totalMonthPaid += amt;
+        if (p.date) {
+          if (p.date < startOfMonthStr) {
+            prevPaid += amt;
+          } else if (p.date.startsWith(prefix)) {
+            totalMonthPaid += amt;
+          }
         }
       });
 
+      // Previous month carryover due (unpaid balance up to the start of this month)
+      const prevDue = Math.max(0, prevDeliveries - prevPaid);
+
+      // This month's net pending due: previous due carried forward + this month bill - this month paid
+      const monthDue = Math.max(0, (prevDeliveries - prevPaid) + totalMonthBilled - totalMonthPaid);
+
+      // Lifetime all-time net due
       const netDue = Math.max(0, allTimeDeliveries - allTimePaid);
+
+      // Determine if currently viewing the real current calendar month
+      const now = new Date();
+      const isCurrentMonth = (now.getFullYear() === selectedYear && now.getMonth() === selectedMonth);
 
       // Inject into Summary
       document.getElementById('summaryCardTitle').innerText = t.summaryTitle;
@@ -1385,15 +1419,30 @@
       document.getElementById('labelDeliveredDays').innerText = t.deliveredDays;
       document.getElementById('valDeliveredDays').innerText = `${deliveredDaysCount} ${t.daysUnit}`;
 
+      document.getElementById('labelPrevDue').innerText = t.prevDue;
+      document.getElementById('valPrevDue').innerText = `₹${prevDue.toFixed(2)}`;
+
       document.getElementById('labelTotalBill').innerText = t.totalBill;
       document.getElementById('valTotalBill').innerText = `₹${totalMonthBilled.toFixed(2)}`;
 
       document.getElementById('labelTotalPaid').innerText = t.totalPaid;
       document.getElementById('valTotalPaid').innerText = `₹${totalMonthPaid.toFixed(2)}`;
 
-      document.getElementById('labelNetDue').innerText = t.netDue;
-      document.getElementById('subNetDue').innerText = t.netDueSub;
-      document.getElementById('valNetDue').innerText = `₹${netDue.toFixed(2)}`;
+      document.getElementById('labelMonthDue').innerText = t.monthDue;
+      document.getElementById('valMonthDue').innerText = `₹${monthDue.toFixed(2)}`;
+
+      // Show Net Pending Due Hero Banner ONLY on current month
+      const heroBanner = document.getElementById('dueHeroBanner');
+      if (heroBanner) {
+        if (isCurrentMonth) {
+          heroBanner.style.display = 'flex';
+          document.getElementById('labelNetDue').innerText = t.netDue;
+          document.getElementById('subNetDue').innerText = t.netDueSub;
+          document.getElementById('valNetDue').innerText = `₹${netDue.toFixed(2)}`;
+        } else {
+          heroBanner.style.display = 'none';
+        }
+      }
 
       // Render Payments List
       document.getElementById('paymentsTitle').innerText = t.paymentsTitle;
