@@ -77,6 +77,25 @@
       margin-top: 2px;
     }
 
+    .back-app-btn {
+      background: rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      color: #ffffff;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: background 0.2s;
+    }
+
+    .back-app-btn:active {
+      background: rgba(255, 255, 255, 0.45);
+    }
+
     .lang-toggle-btn {
       background: rgba(255, 255, 255, 0.25);
       border: 1px solid rgba(255, 255, 255, 0.4);
@@ -590,9 +609,14 @@
             <div class="brand-owner" id="supplierName">सप्लायर</div>
           </div>
         </div>
-        <button class="lang-toggle-btn" id="langToggleBtn" onclick="toggleLanguage()">
-          🌐 <span id="langLabel">English</span>
-        </button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="back-app-btn" id="backToAppBtn" onclick="goBackToApp()">
+            ◀ <span id="backAppText">ऐप पर जाएं</span>
+          </button>
+          <button class="lang-toggle-btn" id="langToggleBtn" onclick="toggleLanguage()">
+            🌐 <span id="langLabel">English</span>
+          </button>
+        </div>
       </div>
 
       <div class="live-badge-strip">
@@ -743,6 +767,7 @@
         sessionEvening: 'शाम',
         sessionCustom: 'अन्य समय',
         today: 'आज',
+        backApp: 'ऐप पर जाएं',
         weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
         months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
       },
@@ -775,6 +800,7 @@
         sessionEvening: 'Evening',
         sessionCustom: 'Custom',
         today: 'Today',
+        backApp: 'Back to App',
         weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
       }
@@ -789,6 +815,14 @@
     const urlParams = new URLSearchParams(window.location.search);
     const supplierId = urlParams.get('s') || '';
     const customerId = urlParams.get('c') || '';
+
+    function goBackToApp() {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = './index.html';
+      }
+    }
 
     function toggleLanguage() {
       currentLang = currentLang === 'hi' ? 'en' : 'hi';
@@ -839,6 +873,7 @@
       const t = I18N[currentLang];
 
       // Update Header Text & Language Toggle
+      document.getElementById('backAppText').innerText = t.backApp;
       document.getElementById('langLabel').innerText = t.langToggleText;
       document.getElementById('liveStatusText').innerText = t.liveStatus;
       document.getElementById('lastSyncText').innerText = t.justUpdated;
