@@ -252,35 +252,56 @@ export const DueReportsScreen = () => {
   };
 
 
-  // All calculated due summaries for the selected period
+  // All calculated due summaries for the selected period (Optimized O(N + M) single-pass)
   const allDueSummaries: CustomerDueSummary[] = useMemo(() => {
     const { startDate, endDate, totalDays } = dateRange;
+
+    // Single-pass indexing for entries in range: O(M)
+    const entriesByCust = new Map<string, MilkEntry[]>();
+    for (let i = 0; i < milkEntries.length; i++) {
+      const e = milkEntries[i];
+      if (e.date >= startDate && e.date <= endDate) {
+        let list = entriesByCust.get(e.customerId);
+        if (!list) {
+          list = [];
+          entriesByCust.set(e.customerId, list);
+        }
+        list.push(e);
+      }
+    }
+
+    // Single-pass indexing for payments: O(P)
+    const paymentsAllTimeByCust = new Map<string, number>();
+    const paymentsInPeriodByCust = new Map<string, number>();
+    for (let i = 0; i < payments.length; i++) {
+      const p = payments[i];
+      paymentsAllTimeByCust.set(p.customerId, (paymentsAllTimeByCust.get(p.customerId) || 0) + p.amountPaid);
+      if (p.date >= startDate && p.date <= endDate) {
+        paymentsInPeriodByCust.set(p.customerId, (paymentsInPeriodByCust.get(p.customerId) || 0) + p.amountPaid);
+      }
+    }
+
     return customers.map(cust => {
-      const custEntries = milkEntries.filter(
-        e => e.customerId === cust.id && e.date >= startDate && e.date <= endDate
-      );
-      // All-time payments (not date-filtered) so netDue reflects actual outstanding
-      const custPaymentsAllTime = payments.filter(p => p.customerId === cust.id);
-      // Period-filtered payments for display only
-      const custPaymentsInPeriod = payments.filter(
-        p => p.customerId === cust.id && p.date >= startDate && p.date <= endDate
-      );
+      const custEntries = entriesByCust.get(cust.id) || [];
+      const totalPaidAllTime = paymentsAllTimeByCust.get(cust.id) || 0;
+      const totalPaid = paymentsInPeriodByCust.get(cust.id) || 0;
 
       let totalLitresCow = 0;
       let totalLitresBuffalo = 0;
       let totalBilled = 0;
+      let unpaidCount = 0;
+      const deliveredDays = new Set<string>();
 
-      custEntries.forEach(entry => {
+      for (let i = 0; i < custEntries.length; i++) {
+        const entry = custEntries[i];
         if (entry.milkType === 'cow') totalLitresCow += entry.quantityLitres;
         if (entry.milkType === 'buffalo') totalLitresBuffalo += entry.quantityLitres;
         totalBilled += entry.amount;
-      });
+        if (!entry.isPaid) unpaidCount++;
+        deliveredDays.add(entry.date);
+      }
 
-      const totalPaid = custPaymentsInPeriod.reduce((sum, p) => sum + p.amountPaid, 0);
-      const totalPaidAllTime = custPaymentsAllTime.reduce((sum, p) => sum + p.amountPaid, 0);
       const netDue = Math.max(0, totalBilled - totalPaidAllTime);
-      const unpaidCount = custEntries.filter(e => !e.isPaid).length;
-      const deliveredDaysCount = new Set(custEntries.map(e => e.date)).size;
 
       return {
         customer: cust,
@@ -291,7 +312,7 @@ export const DueReportsScreen = () => {
         totalPaid,
         netDue,
         unpaidEntriesCount: unpaidCount,
-        deliveredDaysCount,
+        deliveredDaysCount: deliveredDays.size,
         totalRangeDays: totalDays
       };
     });
