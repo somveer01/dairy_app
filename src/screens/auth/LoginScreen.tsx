@@ -141,8 +141,16 @@ export const LoginScreen = () => {
 
       if (err?.code === 'auth/operation-not-allowed') {
         errorMsg = lang === 'hi'
-          ? 'Firebase Console में Phone प्रमाणीकरण अभी चालू नहीं है। कृपया Firebase Console > Authentication > Sign-in method में जाकर Phone को Enable करें।'
+          ? 'Firebase Console में Phone प्रमाणीकरण Enable नहीं है। कृपया Firebase Console > Authentication > Sign-in method में जाकर Phone को Enable करें।'
           : 'Phone authentication is not enabled in Firebase Console. Please go to Firebase Console > Authentication > Sign-in method and enable Phone.';
+      } else if (err?.code === 'auth/unauthorized-domain') {
+        errorMsg = lang === 'hi'
+          ? 'यह डोमेन Firebase में अधिकृत नहीं है। कृपया Firebase Console > Authentication > Settings > Authorized domains में somveer01.github.io जोड़ें।'
+          : 'This domain is not authorized. Please add somveer01.github.io to Firebase Console > Authentication > Settings > Authorized domains.';
+      } else if (err?.code === 'auth/billing-not-enabled' || err?.message?.includes('billing')) {
+        errorMsg = lang === 'hi'
+          ? 'Google Firebase नीति: रियल SMS के लिए Blaze प्लान आवश्यक है। मुफ़्त उपयोग के लिए Firebase Console में "Phone numbers for testing" में अपना नंबर जोड़ें या Google Sign-In का उपयोग करें।'
+          : 'Firebase Policy: Blaze plan required for carrier SMS. Add your number under "Phone numbers for testing" in Firebase Console or use Google Sign-In.';
       } else if (err?.code === 'auth/too-many-requests') {
         errorMsg = lang === 'hi'
           ? 'बहुत सारे प्रयास किए गए। कृपया कुछ समय बाद पुनः प्रयास करें।'
@@ -155,9 +163,9 @@ export const LoginScreen = () => {
 
       showAlert(
         lang === 'hi' ? 'SMS सेवा सूचना' : 'SMS Notice',
-        `${errorMsg}\n\n${lang === 'hi' ? '(डेवलपर टेस्टिंग कोड: 123456)' : '(Developer Test OTP: 123456)'}`
+        `${errorMsg}\n\n${lang === 'hi' ? 'परीक्षण के लिए कोड "123456" दर्ज कर सकते हैं।' : 'You can enter test code "123456" to proceed.'}`
       );
-      // Allow proceeding with testing so development is never blocked
+      // Allow proceeding with test OTP code
       setOtpSent(true);
       setResendCooldown(60);
     } finally {
@@ -183,16 +191,28 @@ export const LoginScreen = () => {
     try {
       if (confirmationResult && trimmedOtp !== '123456') {
         // Real SMS OTP verification with Firebase Auth
-        await confirmationResult.confirm(trimmedOtp);
+        try {
+          await confirmationResult.confirm(trimmedOtp);
+        } catch (confirmErr: any) {
+          console.warn('Firebase confirm failed:', confirmErr);
+          // If confirmation fails on Firebase server, check if test bypass code
+          throw confirmErr;
+        }
       }
       await processSupplierAuth(cleanPhone, undefined, undefined);
     } catch (err: any) {
       console.warn('OTP Confirmation Error:', err);
+      // If code was 123456, allow bypass for testing
+      if (trimmedOtp === '123456') {
+        await processSupplierAuth(cleanPhone, undefined, undefined);
+        setIsVerifyingOtp(false);
+        return;
+      }
       showAlert(
         lang === 'hi' ? 'ओटीपी सत्यापन विफल' : 'OTP Verification Failed',
         lang === 'hi'
-          ? 'दर्ज किया गया ओटीपी गलत है या समाप्त हो चुका है। कृपया पुनः प्रयास करें।'
-          : 'The entered OTP code is incorrect or expired. Please try again.'
+          ? 'दर्ज किया गया ओटीपी गलत है या समाप्त हो चुका है। कृपया 123456 या सही कोड दर्ज करें।'
+          : 'The entered OTP code is incorrect or expired. Please enter valid OTP or 123456.'
       );
     } finally {
       setIsVerifyingOtp(false);
@@ -208,11 +228,34 @@ export const LoginScreen = () => {
       if (Platform.OS === 'web') {
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
-        const result = await signInWithPopup(auth, provider);
-        const gUser = result.user;
+        
+        let gUser: any = null;
+        try {
+          const result = await signInWithPopup(auth, provider);
+          gUser = result.user;
+        } catch (popupErr: any) {
+          console.warn('Popup failed:', popupErr);
+          if (popupErr?.code === 'auth/unauthorized-domain') {
+            throw new Error(
+              lang === 'hi'
+                ? 'Firebase Console में somveer01.github.io डोमेन Authorized Domains में नहीं जुड़ा है। कृपया Firebase Console > Authentication > Settings > Authorized domains में जोड़ें।'
+                : 'somveer01.github.io is not authorized in Firebase Console. Please add it under Authentication > Settings > Authorized domains.'
+            );
+          } else if (popupErr?.code === 'auth/operation-not-allowed') {
+            throw new Error(
+              lang === 'hi'
+                ? 'Firebase Console में Google Sign-In Enable नहीं है। कृपया Firebase Console > Authentication > Sign-in method में Google को Enable करें।'
+                : 'Google Sign-In is disabled in Firebase Console. Please enable Google provider in Sign-in method.'
+            );
+          } else if (popupErr?.code === 'auth/popup-closed-by-user') {
+            setIsCheckingCloud(false);
+            return;
+          }
+          throw popupErr;
+        }
 
-        const email = gUser.email || '';
-        const name = gUser.displayName || email.split('@')[0] || 'Dairy Supplier';
+        const email = gUser?.email || '';
+        const name = gUser?.displayName || email.split('@')[0] || 'Dairy Supplier';
 
         setGoogleUser({ email, name });
         setIsCheckingCloud(false);
@@ -230,10 +273,10 @@ export const LoginScreen = () => {
       setIsCheckingCloud(false);
       console.warn('Google Sign-In notice:', err);
       showAlert(
-        lang === 'hi' ? 'गूगल साइन इन' : 'Google Sign-In',
-        lang === 'hi'
-          ? 'गूगल साइन इन पॉपअप पूरा नहीं हुआ। कृपया फोन नंबर (OTP) का उपयोग करें या दोबारा प्रयास करें।'
-          : 'Google sign-in was closed or could not be completed. You can also sign in with Phone (OTP).'
+        lang === 'hi' ? 'गूगल साइन इन सूचना' : 'Google Sign-In Notice',
+        err?.message || (lang === 'hi'
+          ? 'गूगल साइन इन पूरा नहीं हो सका। कृपया Firebase सेटिंग्स जांचें।'
+          : 'Could not complete Google Sign-In. Please check Firebase settings.')
       );
     }
   };
