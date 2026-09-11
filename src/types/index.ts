@@ -7,6 +7,7 @@ export interface Supplier {
   name: string;
   phone: string;
   email?: string;
+  password?: string;
   businessName: string;
   createdAt: number;
   updatedAt?: number;
