@@ -9,6 +9,7 @@ export interface Supplier {
   email?: string;
   businessName: string;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Customer {
@@ -22,6 +23,8 @@ export interface Customer {
   ratePerLitre: number;
   notes?: string;
   createdAt: number;
+  updatedAt?: number;
+  isDeleted?: boolean;
 }
 
 export interface MilkEntry {
@@ -38,6 +41,8 @@ export interface MilkEntry {
   isPaid: boolean;
   notes?: string;
   createdAt: number;
+  updatedAt?: number;
+  isDeleted?: boolean;
 }
 
 export interface Payment {
@@ -49,6 +54,8 @@ export interface Payment {
   amountPaid: number;
   notes?: string;
   createdAt: number;
+  updatedAt?: number;
+  isDeleted?: boolean;
 }
 
 export interface CustomerDueSummary {

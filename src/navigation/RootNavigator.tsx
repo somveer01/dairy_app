@@ -19,10 +19,14 @@ export const RootNavigator = () => {
     );
   }
 
+  const isFullyAuthenticated = Boolean(
+    supplier && supplier.id && supplier.phone && supplier.phone.length >= 10
+  );
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!supplier ? (
+        {!isFullyAuthenticated ? (
           <Stack.Screen name="Login" component={LoginScreen} />
         ) : (
           <Stack.Screen name="MainApp" component={AppNavigator} />

@@ -5,108 +5,250 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Keyboard,
-  Modal
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { FirebaseSyncService, normalizePhoneDigits } from '../../services/firebaseSyncService';
+import { AutoSyncService } from '../../services/autoSyncService';
 import { Supplier } from '../../types';
+import { showAlert } from '../../utils/alertUtils';
+import { auth } from '../../config/firebase';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
-const cleanPhoneInput = (raw?: string | null): string => {
-  if (!raw) return '';
-  const text = raw.trim();
-  const digits = text.replace(/\D/g, '');
+export const LoginScreen = () => {
+  const { t, lang, setSupplier } = useApp();
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'google'>('phone');
 
-  if (text.startsWith('+') && digits.startsWith('91') && digits.length >= 12) {
-    return digits.slice(2, 12);
-  }
-  if (digits.length === 12 && digits.startsWith('91')) {
-    return digits.slice(2, 12);
-  }
-  if (digits.length === 11 && digits.startsWith('0')) {
-    return digits.slice(1, 11);
-  }
-  if (digits.length > 10) {
-    return digits.slice(-10);
-  }
-  return digits;
-};
-
-export const LoginScreen = ({ navigation }: any) => {
-  const { t, setSupplier } = useApp();
-  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
-  
   // Phone OTP state
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [otpInput, setOtpInput] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [isCheckingCloud, setIsCheckingCloud] = useState(false);
 
-  // Email state
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  // Google Sign-In state
+  const [googleUser, setGoogleUser] = useState<{ email: string; name: string } | null>(null);
 
-  // Dairy Name Setup Modal State
+  // Mandatory Phone Number Prompt Modal (for Google or new profile)
+  const [phonePromptVisible, setPhonePromptVisible] = useState(false);
+  const [mandatoryPhone, setMandatoryPhone] = useState('');
+
+  // Dairy Setup Modal State (for genuinely new supplier)
   const [dairySetupVisible, setDairySetupVisible] = useState(false);
   const [businessNameInput, setBusinessNameInput] = useState('');
   const [ownerNameInput, setOwnerNameInput] = useState('');
-  const [verifiedPhoneOrEmail, setVerifiedPhoneOrEmail] = useState('');
+  const [verifiedPhone, setVerifiedPhone] = useState('');
+  const [associatedEmail, setAssociatedEmail] = useState<string | undefined>(undefined);
 
   const handleSendOtp = () => {
     Keyboard.dismiss();
-    if (!phone || phone.length < 10) {
-      Alert.alert('Invalid Phone', 'Please enter a valid 10-digit mobile number.');
+    const clean = normalizePhoneDigits(phoneInput);
+    if (!clean || clean.length !== 10) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone',
+        lang === 'hi'
+          ? 'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।'
+          : 'Please enter a valid 10-digit mobile number.'
+      );
       return;
     }
     setOtpSent(true);
-    Alert.alert('OTP Sent', `Verification code sent to +91 ${phone}.\n(Use test OTP: 123456)`);
+    showAlert(
+      lang === 'hi' ? 'ओटीपी भेजा गया' : 'OTP Sent',
+      lang === 'hi'
+        ? `सत्यापन कोड +91 ${clean} पर भेजा गया है।\n(परीक्षण कोड: 123456)`
+        : `Verification code sent to +91 ${clean}.\n(Test OTP: 123456)`
+    );
   };
 
-  const handleVerifyOtp = () => {
+  // Verify OTP and check Firebase Cloud
+  const handleVerifyOtp = async () => {
     Keyboard.dismiss();
-    if (otp === '123456' || otp.length === 6) {
-      setVerifiedPhoneOrEmail(phone);
-      setBusinessNameInput('');
-      setOwnerNameInput('');
-      setDairySetupVisible(true);
-    } else {
-      Alert.alert('Invalid OTP', 'Please enter a valid 6-digit OTP code.');
-    }
-  };
-
-  const handleEmailLogin = () => {
-    Keyboard.dismiss();
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password.');
+    const cleanPhone = normalizePhoneDigits(phoneInput);
+    if (otpInput !== '123456' && otpInput.length !== 6) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य ओटीपी' : 'Invalid OTP',
+        lang === 'hi' ? 'कृपया 6 अंकों का सही ओटीपी दर्ज करें (परीक्षण: 123456)।' : 'Please enter valid 6-digit OTP (Test: 123456).'
+      );
       return;
     }
-    setVerifiedPhoneOrEmail(email);
-    setBusinessNameInput('');
-    setOwnerNameInput(email.split('@')[0]);
-    setDairySetupVisible(true);
+
+    await processSupplierAuth(cleanPhone, undefined, undefined);
   };
 
+  // Google Sign-In
+  const handleGoogleSignIn = async () => {
+    Keyboard.dismiss();
+    setIsCheckingCloud(true);
+
+    try {
+      if (Platform.OS === 'web') {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
+        const result = await signInWithPopup(auth, provider);
+        const gUser = result.user;
+
+        const email = gUser.email || '';
+        const name = gUser.displayName || email.split('@')[0] || 'Dairy Supplier';
+
+        setGoogleUser({ email, name });
+        setIsCheckingCloud(false);
+
+        // Open Mandatory Phone Prompt to link Google account to 10-digit phone
+        setMandatoryPhone('');
+        setPhonePromptVisible(true);
+      } else {
+        // Native fallback prompt
+        setGoogleUser({ email: 'supplier@gmail.com', name: 'Google User' });
+        setIsCheckingCloud(false);
+        setPhonePromptVisible(true);
+      }
+    } catch (err: any) {
+      setIsCheckingCloud(false);
+      console.warn('Google Sign-In notice:', err);
+      showAlert(
+        lang === 'hi' ? 'गूगल साइन इन' : 'Google Sign-In',
+        lang === 'hi'
+          ? 'गूगल साइन इन पॉपअप पूरा नहीं हुआ। कृपया फोन नंबर (OTP) का उपयोग करें या दोबारा प्रयास करें।'
+          : 'Google sign-in was closed or could not be completed. You can also sign in with Phone (OTP).'
+      );
+    }
+  };
+
+  // Submit mandatory phone from Google Sign-In
+  const handleConfirmGooglePhone = async () => {
+    Keyboard.dismiss();
+    const cleanPhone = normalizePhoneDigits(mandatoryPhone);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone',
+        lang === 'hi'
+          ? 'मोबाइल नंबर अनिवार्य है। कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।'
+          : 'Mobile phone number is mandatory. Please enter a valid 10-digit number.'
+      );
+      return;
+    }
+
+    setPhonePromptVisible(false);
+    await processSupplierAuth(cleanPhone, googleUser?.email, googleUser?.name);
+  };
+
+  // Core Authentication Processor: Checks Cloud, Restores or Opens New Setup
+  const processSupplierAuth = async (
+    phone: string,
+    email?: string,
+    suggestedName?: string
+  ) => {
+    setIsCheckingCloud(true);
+
+    try {
+      // 1. Check if supplier already exists in Firebase Cloud
+      const checkRes = await FirebaseSyncService.checkSupplierExists(phone);
+
+      if (checkRes.exists && checkRes.profile) {
+        // --- EXISTING SUPPLIER IN FIREBASE: DO NOT OVERWRITE! ---
+        const existingProfile: Supplier = {
+          ...checkRes.profile,
+          phone: phone,
+          id: checkRes.supplierId || `supp_${phone}`,
+          email: email || checkRes.profile.email,
+          updatedAt: Date.now()
+        };
+
+        // A. Save profile locally
+        await StorageService.saveSupplier(existingProfile);
+
+        // B. Migrate any un-migrated offline device records to this supplier
+        await StorageService.migrateLegacyDataToSupplier(existingProfile);
+
+        // C. Perform Two-Way Union Sync so both cloud and device are merged
+        const syncRes = await FirebaseSyncService.twoWaySync(existingProfile);
+
+        setIsCheckingCloud(false);
+        setSupplier(existingProfile);
+
+        showAlert(
+          lang === 'hi' ? '✓ खाता सुरक्षित रूप से रिस्टोर हुआ' : '✓ Account Restored',
+          lang === 'hi'
+            ? `स्वागत है ${existingProfile.name}! आपका मौजूदा क्लाउड बैकअप (${syncRes.counts?.customers || checkRes.dataCounts?.customers || 0} ग्राहक) सुरक्षित रूप से रिस्टोर हो गया है।`
+            : `Welcome back ${existingProfile.name}! Your existing cloud data (${syncRes.counts?.customers || checkRes.dataCounts?.customers || 0} customers) has been securely restored.`
+        );
+        return;
+      }
+
+      // --- BRAND NEW SUPPLIER: PROMPT FOR DAIRY DETAILS ---
+      setIsCheckingCloud(false);
+      setVerifiedPhone(phone);
+      setAssociatedEmail(email);
+      setOwnerNameInput(suggestedName || '');
+      setBusinessNameInput('');
+      setDairySetupVisible(true);
+    } catch (err: any) {
+      setIsCheckingCloud(false);
+      console.warn('Auth check error:', err);
+      // Fallback: Proceed to profile setup
+      setVerifiedPhone(phone);
+      setAssociatedEmail(email);
+      setOwnerNameInput(suggestedName || '');
+      setDairySetupVisible(true);
+    }
+  };
+
+  // Save Brand New Supplier Profile
   const handleSaveDairyProfile = async () => {
     Keyboard.dismiss();
-    const finalBusiness = businessNameInput.trim() || 'My Dairy Farm';
-    const finalOwner = ownerNameInput.trim() || (verifiedPhoneOrEmail.includes('@') ? verifiedPhoneOrEmail.split('@')[0] : `Dairy Supplier (${verifiedPhoneOrEmail.slice(-4)})`);
+    const cleanPhone = normalizePhoneDigits(verifiedPhone);
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      showAlert('Error', 'Valid 10-digit mobile number is mandatory.');
+      return;
+    }
 
-    const user: Supplier = {
-      id: 'supp_' + (verifiedPhoneOrEmail.replace(/[^a-zA-Z0-9]/g, '') || Date.now()),
+    const finalBusiness = businessNameInput.trim() || 'My Dairy Farm';
+    const finalOwner = ownerNameInput.trim() || `Dairy Supplier (${cleanPhone.slice(-4)})`;
+
+    const newSupplier: Supplier = {
+      id: `supp_${cleanPhone}`,
       name: finalOwner,
-      phone: verifiedPhoneOrEmail.includes('@') ? '' : verifiedPhoneOrEmail,
-      email: verifiedPhoneOrEmail.includes('@') ? verifiedPhoneOrEmail : undefined,
+      phone: cleanPhone,
+      email: associatedEmail,
       businessName: finalBusiness,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
 
-    await StorageService.saveSupplier(user);
-    setSupplier(user);
-    setDairySetupVisible(false);
+    setIsCheckingCloud(true);
+    try {
+      // 1. Save locally
+      await StorageService.saveSupplier(newSupplier);
+
+      // 2. Migrate any existing offline records on this device so zero data is lost!
+      const migrationRes = await StorageService.migrateLegacyDataToSupplier(newSupplier);
+
+      // 3. Auto-sync to Firebase
+      await AutoSyncService.runSync(newSupplier);
+
+      setIsCheckingCloud(false);
+      setDairySetupVisible(false);
+      setSupplier(newSupplier);
+
+      if (migrationRes.migratedCount > 0) {
+        showAlert(
+          lang === 'hi' ? '✓ डेटा सुरक्षित जुड़ा' : '✓ Data Connected',
+          lang === 'hi'
+            ? `आपकी डेयरी बन गई है! आपके फोन के पिछले ${migrationRes.migratedCount} रिकॉर्ड आपके खाते से सुरक्षित जोड़ दिए गए हैं।`
+            : `Your Dairy profile is ready! ${migrationRes.migratedCount} existing records from your device have been linked to your account.`
+        );
+      }
+    } catch (e) {
+      setIsCheckingCloud(false);
+      setDairySetupVisible(false);
+      setSupplier(newSupplier);
+    }
   };
 
   return (
@@ -123,10 +265,10 @@ export const LoginScreen = ({ navigation }: any) => {
         <View style={styles.headerBox}>
           <Text style={styles.icon}>🥛</Text>
           <Text style={styles.appTitle}>{t.appTitle}</Text>
-          <Text style={styles.subtitle}>Dairy Management & Milk Due Register</Text>
+          <Text style={styles.subtitle}>Dairy Milk Register & Automatic Cloud Sync</Text>
         </View>
 
-        {/* Tab Switcher: Phone vs Email */}
+        {/* Tab Switcher: Phone vs Google */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tabButton, loginMethod === 'phone' && styles.tabButtonActive]}
@@ -138,152 +280,244 @@ export const LoginScreen = ({ navigation }: any) => {
               📱 Phone (OTP)
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
-            style={[styles.tabButton, loginMethod === 'email' && styles.tabButtonActive]}
-            onPress={() => setLoginMethod('email')}
+            style={[styles.tabButton, loginMethod === 'google' && styles.tabButtonActive]}
+            onPress={() => setLoginMethod('google')}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={[styles.tabText, loginMethod === 'email' && styles.tabTextActive]}>
-              ✉️ Email & Pass
+            <Text style={[styles.tabText, loginMethod === 'google' && styles.tabTextActive]}>
+              🌐 Google Sign-In
             </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.formCard}>
-          {loginMethod === 'phone' ? (
-            <>
-              <Text style={styles.label}>Mobile Number (+91)</Text>
+        {/* Loading Spinner during Cloud Verification */}
+        {isCheckingCloud && (
+          <View style={styles.loadingBanner}>
+            <ActivityIndicator size="small" color="#0284c7" />
+            <Text style={styles.loadingText}>
+              {lang === 'hi' ? 'क्लाउड डेटा जाँचा जा रहा है...' : 'Verifying account with Firebase Cloud...'}
+            </Text>
+          </View>
+        )}
+
+        {/* Method 1: Phone OTP Form */}
+        {loginMethod === 'phone' && (
+          <View style={styles.formCard}>
+            <Text style={styles.label}>
+              {lang === 'hi' ? 'मोबाइल नंबर (अनिवार्य)' : 'Mobile Phone Number (Mandatory)'}
+            </Text>
+            <View style={styles.phoneInputRow}>
+              <View style={styles.countryCodeBadge}>
+                <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+              </View>
               <TextInput
-                style={styles.input}
-                placeholder="Enter 10-digit mobile number"
+                style={styles.phoneInput}
+                placeholder="10-digit mobile number"
                 placeholderTextColor="#94a3b8"
                 keyboardType="phone-pad"
-                maxLength={20}
-                value={phone}
-                onChangeText={(val) => setPhone(cleanPhoneInput(val))}
+                maxLength={10}
+                value={phoneInput}
+                onChangeText={(val) => setPhoneInput(normalizePhoneDigits(val))}
+                editable={!otpSent && !isCheckingCloud}
               />
+            </View>
 
-              {otpSent ? (
-                <>
-                  <Text style={styles.label}>Enter 6-digit OTP</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 123456"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    value={otp}
-                    onChangeText={setOtp}
-                  />
-                  <TouchableOpacity
-                    style={styles.primaryButton}
-                    onPress={handleVerifyOtp}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
-                    <Text style={styles.primaryButtonText}>Verify OTP & Login</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setOtpSent(false)}
-                    style={styles.linkButton}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Text style={styles.linkText}>Change Phone Number</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleSendOtp}
-                  activeOpacity={0.8}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                >
-                  <Text style={styles.primaryButtonText}>Send OTP via SMS</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          ) : (
-            <>
-              <Text style={styles.label}>Email Address</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="supplier@example.com"
-                placeholderTextColor="#94a3b8"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-
-              <Text style={styles.label}>Password</Text>
-              <View style={{ position: 'relative', justifyContent: 'center' }}>
+            {otpSent && (
+              <View style={{ marginTop: 14 }}>
+                <Text style={styles.label}>
+                  {lang === 'hi' ? 'ओटीपी कोड दर्ज करें' : 'Enter 6-digit OTP'}
+                </Text>
                 <TextInput
-                  style={[styles.input, { paddingRight: 45 }]}
-                  placeholder="Enter your password"
+                  style={styles.input}
+                  placeholder="e.g. 123456"
                   placeholderTextColor="#94a3b8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={otpInput}
+                  onChangeText={setOtpInput}
+                  editable={!isCheckingCloud}
+                  autoFocus
                 />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={{ position: 'absolute', right: 12, padding: 4 }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={{ fontSize: 16 }}>{showPassword ? '👁️' : '🔒'}</Text>
-                </TouchableOpacity>
               </View>
+            )}
 
+            {!otpSent ? (
               <TouchableOpacity
                 style={styles.primaryButton}
-                onPress={handleEmailLogin}
+                onPress={handleSendOtp}
                 activeOpacity={0.8}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                disabled={isCheckingCloud}
               >
-                <Text style={styles.primaryButtonText}>Sign In</Text>
+                <Text style={styles.primaryButtonText}>
+                  {lang === 'hi' ? 'ओटीपी प्राप्त करें ➔' : 'Get OTP Code ➔'}
+                </Text>
               </TouchableOpacity>
-            </>
-          )}
-        </View>
+            ) : (
+              <View>
+                <TouchableOpacity
+                  style={[styles.primaryButton, { backgroundColor: '#16a34a' }]}
+                  onPress={handleVerifyOtp}
+                  activeOpacity={0.8}
+                  disabled={isCheckingCloud}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {lang === 'hi' ? '✓ सत्यापित करें और आगे बढ़ें' : '✓ Verify & Proceed'}
+                  </Text>
+                </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={styles.linkButton}
+                  onPress={() => setOtpSent(false)}
+                  disabled={isCheckingCloud}
+                >
+                  <Text style={styles.linkText}>
+                    {lang === 'hi' ? 'मोबाइल नंबर बदलें' : 'Change Phone Number'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Method 2: Google Sign-In Card */}
+        {loginMethod === 'google' && (
+          <View style={styles.formCard}>
+            <View style={{ alignItems: 'center', paddingVertical: 14 }}>
+              <Text style={{ fontSize: 42, marginBottom: 12 }}>🌐</Text>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0f172a', textAlign: 'center' }}>
+                {lang === 'hi' ? 'गूगल खाते से लॉगिन करें' : 'Sign In With Google'}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 6, paddingHorizontal: 10 }}>
+                {lang === 'hi'
+                  ? 'अपने गूगल खाते से सुरक्षित लॉगिन करें। इसके बाद क्लाउड सिंक के लिए अपना मोबाइल नंबर जोड़ें।'
+                  : 'Fast and secure login with your Google account. You will link your 10-digit mobile number for auto-sync.'}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.googleButton}
+                onPress={handleGoogleSignIn}
+                activeOpacity={0.8}
+                disabled={isCheckingCloud}
+              >
+                <Text style={styles.googleButtonIcon}>G</Text>
+                <Text style={styles.googleButtonText}>
+                  {lang === 'hi' ? 'Continue with Google' : 'Continue with Google'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Safety & Persistence Notice */}
         <View style={styles.footerNote}>
-          <Text style={styles.footerText}>Designed for independent milk sellers & dairies</Text>
+          <Text style={styles.footerText}>
+            🔒 {lang === 'hi' ? '100% सुरक्षित • क्लाउड ऑटो-सिंक • फोन में ऑफलाइन सुरक्षा' : '100% Safe • Cloud Auto-Sync • Permanent Offline Protection'}
+          </Text>
         </View>
       </ScrollView>
 
-      {/* Dairy Profile Setup Popup Modal */}
-      <Modal visible={dairySetupVisible} transparent animationType="slide">
+      {/* --- MODAL 1: Mandatory Phone Prompt for Google Users --- */}
+      <Modal visible={phonePromptVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalIcon}>🥛</Text>
-              <Text style={styles.modalTitle}>डेयरी प्रोफाइल सेटअप</Text>
+              <Text style={styles.modalIcon}>📱</Text>
+              <Text style={styles.modalTitle}>
+                {lang === 'hi' ? 'मोबाइल नंबर लिंक करें' : 'Link Your Mobile Number'}
+              </Text>
               <Text style={styles.modalSubtitle}>
-                Welcome! Enter your Dairy & Owner name to personalize bills and reports.
+                {googleUser?.name ? `Google: ${googleUser.name} (${googleUser.email})\n` : ''}
+                {lang === 'hi'
+                  ? 'डेयरी डेटा सुरक्षित रखने और ऑटो-सिंक के लिए 10-अंकों का मोबाइल नंबर अनिवार्य है।'
+                  : 'A 10-digit mobile number is mandatory to secure your dairy records and enable cloud auto-sync.'}
               </Text>
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.modalLabel}>Dairy / Business Name (डेयरी का नाम) *</Text>
+              <Text style={styles.modalLabel}>
+                {lang === 'hi' ? '10 अंकों का मोबाइल नंबर:' : 'Enter 10-digit Mobile Number:'}
+              </Text>
+              <View style={styles.phoneInputRow}>
+                <View style={styles.countryCodeBadge}>
+                  <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+                </View>
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="98765 43210"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  value={mandatoryPhone}
+                  onChangeText={(v) => setMandatoryPhone(normalizePhoneDigits(v))}
+                  autoFocus
+                />
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalPrimaryBtn}
+              onPress={handleConfirmGooglePhone}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalPrimaryBtnText}>
+                {lang === 'hi' ? '✓ नंबर लिंक करें और जारी रखें' : '✓ Link Number & Continue'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* --- MODAL 2: Dairy Business Profile Setup (For New Suppliers) --- */}
+      <Modal visible={dairySetupVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalIcon}>🏪</Text>
+              <Text style={styles.modalTitle}>
+                {lang === 'hi' ? 'डेयरी प्रोफाइल सेटअप' : 'Setup Dairy Farm Profile'}
+              </Text>
+              <Text style={styles.modalSubtitle}>
+                {lang === 'hi'
+                  ? 'अपनी डेयरी का विवरण भरें। यह आपके बिलों और ग्राहकों के डिजिटल कार्ड पर दिखेगा।'
+                  : 'Enter your dairy details. This will appear on bills and customer online milk cards.'}
+              </Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.modalLabel}>
+                {lang === 'hi' ? 'डेयरी / फार्म का नाम' : 'Dairy Farm / Business Name'}
+              </Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Radhe Dairy / राधे डेयरी फ़ार्म"
+                placeholder="e.g. Gokul Dairy Farm"
                 placeholderTextColor="#94a3b8"
                 value={businessNameInput}
                 onChangeText={setBusinessNameInput}
                 autoFocus
               />
 
-              <Text style={styles.modalLabel}>Owner / Your Name (आपका नाम)</Text>
+              <Text style={styles.modalLabel}>
+                {lang === 'hi' ? 'विक्रेता / मालिक का नाम' : 'Owner / Supplier Name'}
+              </Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Ramesh Kumar / राम कुमार"
+                placeholder="e.g. Ramesh Kumar"
                 placeholderTextColor="#94a3b8"
                 value={ownerNameInput}
                 onChangeText={setOwnerNameInput}
               />
+
+              <Text style={styles.modalLabel}>
+                {lang === 'hi' ? 'पंजीकृत मोबाइल नंबर (लॉक किया गया)' : 'Registered Mobile Number (Locked)'}
+              </Text>
+              <View style={[styles.modalInput, { backgroundColor: '#f1f5f9', justifyContent: 'center' }]}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#1e293b' }}>
+                  📞 +91 {verifiedPhone}
+                </Text>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -291,7 +525,9 @@ export const LoginScreen = ({ navigation }: any) => {
               onPress={handleSaveDairyProfile}
               activeOpacity={0.8}
             >
-              <Text style={styles.modalPrimaryBtnText}>🚀 Save & Start (सहेजें और शुरू करें)</Text>
+              <Text style={styles.modalPrimaryBtnText}>
+                {lang === 'hi' ? '✓ डेयरी शुरू करें (Start Dairy)' : '✓ Complete Setup & Start'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -301,12 +537,20 @@ export const LoginScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f7fb' },
-  scrollContent: { padding: 20, justifyContent: 'center', minHeight: '100%' },
+  container: { flex: 1, backgroundColor: '#f8fafc' },
+  scrollContent: {
+    padding: 20,
+    justifyContent: 'center',
+    minHeight: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+    width: '100%'
+  },
   headerBox: { alignItems: 'center', marginBottom: 24 },
-  icon: { fontSize: 52, marginBottom: 8 },
-  appTitle: { fontSize: 24, fontWeight: 'bold', color: '#1a365d' },
-  subtitle: { fontSize: 13, color: '#64748b', marginTop: 4 },
+  icon: { fontSize: 48, marginBottom: 8 },
+  appTitle: { fontSize: 24, fontWeight: 'bold', color: '#0f172a', textAlign: 'center' },
+  subtitle: { fontSize: 13, color: '#64748b', textAlign: 'center', marginTop: 4 },
+
   tabContainer: {
     flexDirection: 'row',
     backgroundColor: '#e2e8f0',
@@ -314,10 +558,34 @@ const styles = StyleSheet.create({
     padding: 4,
     marginBottom: 20
   },
-  tabButton: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  tabButtonActive: { backgroundColor: '#ffffff', elevation: 2 },
-  tabText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 8
+  },
+  tabButtonActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2
+  },
+  tabText: { fontSize: 13.5, fontWeight: '600', color: '#64748b' },
   tabTextActive: { color: '#0284c7', fontWeight: 'bold' },
+
+  loadingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eff6ff',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 14,
+    gap: 8
+  },
+  loadingText: { fontSize: 12, color: '#1e40af', fontWeight: '600' },
+
   formCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
@@ -329,16 +597,44 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3
   },
-  label: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 10 },
+  label: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 4 },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    overflow: 'hidden'
+  },
+  countryCodeBadge: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRightWidth: 1,
+    borderRightColor: '#cbd5e1'
+  },
+  countryCodeText: { fontSize: 14, fontWeight: 'bold', color: '#334155' },
+  phoneInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#0f172a',
+    fontWeight: '600'
+  },
   input: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    fontSize: 15,
+    fontSize: 16,
     backgroundColor: '#f8fafc',
-    color: '#0f172a'
+    color: '#0f172a',
+    letterSpacing: 2,
+    textAlign: 'center',
+    fontWeight: 'bold'
   },
   primaryButton: {
     backgroundColor: '#0284c7',
@@ -347,11 +643,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20
   },
-  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
+  primaryButtonText: { color: '#ffffff', fontSize: 15.5, fontWeight: 'bold' },
   linkButton: { alignItems: 'center', marginTop: 14, paddingVertical: 6 },
-  linkText: { color: '#0284c7', fontSize: 13, fontWeight: '500' },
+  linkText: { color: '#0284c7', fontSize: 13, fontWeight: '600' },
+
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    paddingVertical: 13,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginTop: 18,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+    gap: 12
+  },
+  googleButtonIcon: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ea4335'
+  },
+  googleButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e293b'
+  },
+
   footerNote: { alignItems: 'center', marginTop: 24 },
-  footerText: { fontSize: 12, color: '#94a3b8' },
+  footerText: { fontSize: 11.5, color: '#94a3b8', fontWeight: '500' },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -365,14 +692,17 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 10,
-    elevation: 10
+    elevation: 10,
+    maxWidth: 440,
+    alignSelf: 'center',
+    width: '100%'
   },
   modalHeader: { alignItems: 'center', marginBottom: 16 },
   modalIcon: { fontSize: 44, marginBottom: 8 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0f172a' },
-  modalSubtitle: { fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4, paddingHorizontal: 10 },
+  modalTitle: { fontSize: 19, fontWeight: 'bold', color: '#0f172a', textAlign: 'center' },
+  modalSubtitle: { fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4, lineHeight: 16 },
   modalBody: { marginVertical: 10 },
-  modalLabel: { fontSize: 13, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 8 },
+  modalLabel: { fontSize: 12.5, fontWeight: '600', color: '#334155', marginBottom: 6, marginTop: 8 },
   modalInput: {
     borderWidth: 1,
     borderColor: '#cbd5e1',

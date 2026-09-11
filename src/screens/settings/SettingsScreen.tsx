@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
-import { FirebaseSyncService } from '../../services/firebaseSyncService';
+import { FirebaseSyncService, normalizePhoneDigits } from '../../services/firebaseSyncService';
+import { AutoSyncService, SyncStatus } from '../../services/autoSyncService';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { InstallAppModal } from '../../components/InstallAppModal';
 
@@ -39,6 +40,81 @@ export const SettingsScreen = () => {
   const [installModalVisible, setInstallModalVisible] = useState(false);
   const [selectedJsonTab, setSelectedJsonTab] = useState<'overview' | 'customers' | 'entries' | 'payments'>('overview');
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('synced');
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+
+  const [editProfileVisible, setEditProfileVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editBusinessName, setEditBusinessName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = AutoSyncService.subscribe((status, timestamp) => {
+      setSyncStatus(status);
+      setLastSyncedAt(timestamp);
+    });
+    return unsubscribe;
+  }, []);
+
+  const openEditProfile = () => {
+    setEditName(supplier?.name || '');
+    setEditBusinessName(supplier?.businessName || '');
+    setEditPhone(supplier?.phone || '');
+    setEditProfileVisible(true);
+  };
+
+  const handleSaveProfile = async () => {
+    const cleanPhone = normalizePhoneDigits(editPhone);
+    if (cleanPhone.length !== 10) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
+        lang === 'hi' ? 'कृपया सही 10 अंकों का मोबाइल नंबर दर्ज करें।' : 'Please enter a valid 10-digit mobile number.'
+      );
+      return;
+    }
+    if (!editName.trim() || !editBusinessName.trim()) {
+      showAlert(
+        lang === 'hi' ? 'अधूरी जानकारी' : 'Incomplete Details',
+        lang === 'hi' ? 'कृपया सप्लायर और डेयरी का नाम दर्ज करें।' : 'Please enter supplier and business name.'
+      );
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const updatedSupplier: import('../../types').Supplier = {
+        id: supplier?.id || `supp_${cleanPhone}`,
+        email: supplier?.email || '',
+        name: editName.trim(),
+        businessName: editBusinessName.trim(),
+        phone: cleanPhone,
+        createdAt: supplier?.createdAt || Date.now(),
+        updatedAt: Date.now()
+      };
+      await StorageService.saveSupplier(updatedSupplier);
+      setSupplier(updatedSupplier);
+      AutoSyncService.queueSync(updatedSupplier, 0);
+      setEditProfileVisible(false);
+      showAlert(
+        lang === 'hi' ? 'प्रोफ़ाइल अपडेट' : 'Profile Updated',
+        lang === 'hi' ? 'आपकी प्रोफ़ाइल सफलतापूर्वक अपडेट हो गई है।' : 'Your supplier profile has been updated.'
+      );
+    } catch (err: any) {
+      showAlert('Error', err?.message || 'Failed to update profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleManualSync = () => {
+    AutoSyncService.queueSync(supplier, 0);
+    showAlert(
+      lang === 'hi' ? 'ऑटो-सिंक प्रारंभ' : 'Sync Initiated',
+      lang === 'hi' ? 'बैकग्राउंड में क्लाउड सिंक शुरू कर दिया गया है।' : 'Cloud background sync started.'
+    );
+  };
 
   const handleTestCloudConnection = async () => {
     setIsSyncingCloud(true);
@@ -214,6 +290,13 @@ export const SettingsScreen = () => {
             <Text style={styles.businessName}>{supplier?.businessName || 'Fresh Milk Dairy'}</Text>
             <Text style={styles.phoneText}>📞 {supplier?.phone || 'N/A'}</Text>
           </View>
+          <TouchableOpacity
+            style={styles.editProfileBtn}
+            onPress={openEditProfile}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.editProfileBtnText}>✏️ {lang === 'hi' ? 'बदलें' : 'Edit'}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Language Selection */}
@@ -296,35 +379,73 @@ export const SettingsScreen = () => {
           </View>
         </View>
 
-        {/* Firebase Cloud Database Card */}
-        <Text style={styles.sectionHeader}>☁️ Firebase Cloud Database (Real-Time Sync)</Text>
+        {/* Firebase Cloud Auto-Sync Card */}
+        <Text style={styles.sectionHeader}>
+          {lang === 'hi' ? '☁️ क्लाउड ऑटो-सिंक एवं बैकअप' : '☁️ Cloud Auto-Sync & Backup'}
+        </Text>
         <View style={styles.cloudCard}>
           <View style={styles.storageHeaderRow}>
             <View>
-              <Text style={styles.storageTitle}>Firebase Firestore</Text>
-              <Text style={styles.cloudProjectText}>Project: diaryapp-28278</Text>
+              <Text style={styles.storageTitle}>
+                {lang === 'hi' ? 'क्लाउड ऑटो-सिंक' : 'Firebase Cloud Sync'}
+              </Text>
+              <Text style={styles.cloudProjectText}>
+                {supplier?.phone ? `ID: supp_${supplier.phone}` : 'Project: diaryapp-28278'}
+              </Text>
             </View>
-            <View style={styles.cloudBadge}>
-              <Text style={styles.cloudBadgeText}>● Connected</Text>
+            <View style={[
+              styles.cloudBadge,
+              syncStatus === 'synced' && styles.badgeSynced,
+              syncStatus === 'syncing' && styles.badgeSyncing,
+              syncStatus === 'offline' && styles.badgeOffline,
+              syncStatus === 'error' && styles.badgeError,
+            ]}>
+              <Text style={[
+                styles.cloudBadgeText,
+                syncStatus === 'synced' && styles.badgeSyncedText,
+                syncStatus === 'syncing' && styles.badgeSyncingText,
+                syncStatus === 'offline' && styles.badgeOfflineText,
+                syncStatus === 'error' && styles.badgeErrorText,
+              ]}>
+                {syncStatus === 'syncing'
+                  ? (lang === 'hi' ? '● सिंक हो रहा है...' : '● Syncing...')
+                  : syncStatus === 'offline'
+                  ? (lang === 'hi' ? '● ऑफ़लाइन (सुरक्षित)' : '● Offline (Saved)')
+                  : syncStatus === 'error'
+                  ? (lang === 'hi' ? '● सिंक त्रुटि' : '● Sync Error')
+                  : (lang === 'hi' ? '● सिंक पूर्ण' : '● Live Synced')}
+              </Text>
             </View>
           </View>
           <Text style={styles.storageSubtext}>
-            Sync all customer dues, deliveries, and payment records permanently to Google Cloud Firestore.
+            {lang === 'hi'
+              ? 'आपके सभी ग्राहक, दूध की एंट्री और भुगतान बैकग्राउंड में सुरक्षित सिंक होते हैं। जब आप ऑफ़लाइन होते हैं, तब भी डेटा डिवाइस में 100% सुरक्षित रहता है।'
+              : 'All customers, milk entries, and dues sync automatically to the cloud in real-time. Full offline support guaranteed.'}
           </Text>
+
+          {lastSyncedAt && (
+            <Text style={styles.lastSyncText}>
+              🕒 {lang === 'hi' ? 'अंतिम सिंक:' : 'Last Synced:'} {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </Text>
+          )}
 
           {isSyncingCloud ? (
             <View style={styles.syncingBox}>
               <ActivityIndicator size="small" color="#ea580c" />
-              <Text style={styles.syncingText}>Communicating with Firebase Cloud...</Text>
+              <Text style={styles.syncingText}>
+                {lang === 'hi' ? 'क्लाउड से डेटा प्रोसेस हो रहा है...' : 'Processing with Cloud...'}
+              </Text>
             </View>
           ) : (
             <View style={styles.cloudActionsRow}>
               <TouchableOpacity
                 style={styles.cloudUploadBtn}
-                onPress={handleCloudUpload}
+                onPress={handleManualSync}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cloudUploadBtnText}>☁️ Upload to Cloud</Text>
+                <Text style={styles.cloudUploadBtnText}>
+                  🔄 {lang === 'hi' ? 'अभी सिंक करें' : 'Sync Now'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -332,7 +453,9 @@ export const SettingsScreen = () => {
                 onPress={handleCloudDownload}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cloudDownloadBtnText}>⬇️ Restore</Text>
+                <Text style={styles.cloudDownloadBtnText}>
+                  ⬇️ {lang === 'hi' ? 'रिस्टोर' : 'Restore'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -541,6 +664,70 @@ export const SettingsScreen = () => {
         visible={installModalVisible}
         onClose={() => setInstallModalVisible(false)}
       />
+
+      {/* Edit Supplier Profile Modal */}
+      <Modal visible={editProfileVisible} animationType="fade" transparent>
+        <View style={styles.editModalOverlay}>
+          <View style={styles.editModalContent}>
+            <Text style={styles.editModalTitle}>
+              {lang === 'hi' ? 'डेयरी प्रोफ़ाइल संपादित करें' : 'Edit Dairy Profile'}
+            </Text>
+
+            <Text style={styles.inputLabel}>{lang === 'hi' ? 'सप्लायर का नाम' : 'Supplier Name'} *</Text>
+            <TextInput
+              style={styles.inputField}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder={lang === 'hi' ? 'उदा. सोमेवीर' : 'e.g. Ramesh'}
+              placeholderTextColor="#94a3b8"
+            />
+
+            <Text style={styles.inputLabel}>{lang === 'hi' ? 'डेयरी / बिज़नेस का नाम' : 'Dairy / Farm Name'} *</Text>
+            <TextInput
+              style={styles.inputField}
+              value={editBusinessName}
+              onChangeText={setEditBusinessName}
+              placeholder={lang === 'hi' ? 'उदा. कृष्णा डेयरी' : 'e.g. Krishna Dairy'}
+              placeholderTextColor="#94a3b8"
+            />
+
+            <Text style={styles.inputLabel}>{lang === 'hi' ? 'मोबाइल नंबर (10 अंक)' : 'Phone Number (10 Digits)'} *</Text>
+            <TextInput
+              style={styles.inputField}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              keyboardType="phone-pad"
+              maxLength={10}
+              placeholder="9876543210"
+              placeholderTextColor="#94a3b8"
+            />
+
+            <View style={styles.editModalActions}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setEditProfileVisible(false)}
+                disabled={isSavingProfile}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelBtnText}>{lang === 'hi' ? 'रद्द करें' : 'Cancel'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.saveBtn, isSavingProfile && { opacity: 0.6 }]}
+                onPress={handleSaveProfile}
+                disabled={isSavingProfile}
+                activeOpacity={0.8}
+              >
+                {isSavingProfile ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.saveBtnText}>{lang === 'hi' ? 'सहेजें' : 'Save'}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -835,5 +1022,103 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center'
   },
-  cloudPingBtnText: { color: '#475569', fontWeight: 'bold', fontSize: 12 }
+  cloudPingBtnText: { color: '#475569', fontWeight: 'bold', fontSize: 12 },
+  editProfileBtn: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignSelf: 'center'
+  },
+  editProfileBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284c7'
+  },
+  lastSyncText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    marginBottom: 10
+  },
+  badgeSynced: { backgroundColor: '#dcfce7' },
+  badgeSyncedText: { color: '#16a34a' },
+  badgeSyncing: { backgroundColor: '#fef3c7' },
+  badgeSyncingText: { color: '#d97706' },
+  badgeOffline: { backgroundColor: '#f1f5f9' },
+  badgeOfflineText: { color: '#64748b' },
+  badgeError: { backgroundColor: '#fee2e2' },
+  badgeErrorText: { color: '#dc2626' },
+  editModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  editModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginBottom: 14
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 4,
+    marginTop: 8
+  },
+  inputField: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#0f172a'
+  },
+  editModalActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center'
+  },
+  cancelBtnText: {
+    color: '#475569',
+    fontWeight: '600',
+    fontSize: 14
+  },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: '#0284c7',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center'
+  },
+  saveBtnText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 14
+  }
 });

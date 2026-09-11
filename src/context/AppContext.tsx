@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations, Language } from '../localization/i18n';
 import { StorageService } from '../services/storageService';
+import { AutoSyncService } from '../services/autoSyncService';
 import { Customer, MilkEntry, Payment, Supplier } from '../types';
 
 interface AppContextType {
@@ -32,22 +33,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return 'en';
   });
-  const [supplier, setSupplier] = useState<Supplier | null>(() => {
+
+  const [supplier, setSupplierState] = useState<Supplier | null>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored = window.localStorage.getItem('@dairy_supplier');
-        if (stored) return JSON.parse(stored);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.id && parsed.phone && parsed.phone.length >= 10) {
+            StorageService.setActiveSupplierId(parsed.id);
+            return parsed;
+          }
+        }
       } catch {
         // ignore
       }
     }
     return null;
   });
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [milkEntries, setMilkEntries] = useState<MilkEntry[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
 
   useEffect(() => {
     loadInitialData();
@@ -59,19 +67,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLangState(savedLang);
 
       const savedSupplier = await StorageService.getSupplier();
-      setSupplier(savedSupplier);
+      if (savedSupplier && savedSupplier.phone && savedSupplier.phone.length >= 10) {
+        StorageService.setActiveSupplierId(savedSupplier.id);
+        setSupplierState(savedSupplier);
 
-      const custs = await StorageService.getCustomers();
-      setCustomers(custs);
+        // Load data scoped to this authenticated supplier
+        const [custs, entries, pays] = await Promise.all([
+          StorageService.getCustomers(savedSupplier.id),
+          StorageService.getMilkEntries(savedSupplier.id),
+          StorageService.getPayments(savedSupplier.id)
+        ]);
 
-      const entries = await StorageService.getMilkEntries();
-      setMilkEntries(entries);
+        setCustomers(custs);
+        setMilkEntries(entries);
+        setPayments(pays);
 
-      const pays = await StorageService.getPayments();
-      setPayments(pays);
+        // Trigger background sync on launch
+        AutoSyncService.queueSync(savedSupplier, 1200);
+      } else {
+        // Incomplete profile or no phone - clear session and require login
+        await StorageService.clearActiveSession();
+        setSupplierState(null);
+        setCustomers([]);
+        setMilkEntries([]);
+        setPayments([]);
+      }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const setSupplier = async (newSupplier: Supplier | null) => {
+    if (!newSupplier) {
+      await StorageService.clearActiveSession();
+      setSupplierState(null);
+      setCustomers([]);
+      setMilkEntries([]);
+      setPayments([]);
+      return;
+    }
+
+    StorageService.setActiveSupplierId(newSupplier.id);
+    await StorageService.saveSupplier(newSupplier);
+    setSupplierState(newSupplier);
+
+    // Refresh records scoped to the new supplier
+    const [custs, entries, pays] = await Promise.all([
+      StorageService.getCustomers(newSupplier.id),
+      StorageService.getMilkEntries(newSupplier.id),
+      StorageService.getPayments(newSupplier.id)
+    ]);
+
+    setCustomers(custs);
+    setMilkEntries(entries);
+    setPayments(pays);
+
+    AutoSyncService.queueSync(newSupplier, 500);
   };
 
   const setLanguage = async (newLang: Language) => {
@@ -80,17 +131,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const refreshCustomers = async () => {
-    const custs = await StorageService.getCustomers();
+    const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
+    const custs = await StorageService.getCustomers(sId);
     setCustomers(custs);
   };
 
   const refreshMilkEntries = async () => {
-    const entries = await StorageService.getMilkEntries();
+    const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
+    const entries = await StorageService.getMilkEntries(sId);
     setMilkEntries(entries);
   };
 
   const refreshPayments = async () => {
-    const pays = await StorageService.getPayments();
+    const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
+    const pays = await StorageService.getPayments(sId);
     setPayments(pays);
   };
 
@@ -98,7 +152,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         lang,
-        t: translations[lang],
+        t: translations[lang] || translations.en,
         setLanguage,
         supplier,
         setSupplier,

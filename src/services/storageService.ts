@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Customer, MilkEntry, Payment, Supplier } from '../types';
+import { AutoSyncService } from './autoSyncService';
 
 const STORAGE_KEYS = {
   SUPPLIER: '@dairy_supplier',
@@ -9,185 +10,489 @@ const STORAGE_KEYS = {
   LANGUAGE: '@dairy_lang'
 };
 
+let currentSupplierId: string | null = null;
+
+const getScopedKey = (base: string, supplierId?: string): string => {
+  const sId = supplierId || currentSupplierId;
+  return sId ? `${base}_${sId}` : base;
+};
+
 export const StorageService = {
-  // Supplier
+  setActiveSupplierId(id: string | null) {
+    currentSupplierId = id;
+  },
+
+  getActiveSupplierId(): string | null {
+    return currentSupplierId;
+  },
+
+  // Supplier Profile
   async getSupplier(): Promise<Supplier | null> {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.SUPPLIER);
-    if (!data) {
-      const defaultSupplier: Supplier = {
-        id: 'supp_1',
-        name: 'My Dairy',
-        phone: '',
-        businessName: 'Fresh Milk Dairy',
-        createdAt: Date.now()
-      };
-      await AsyncStorage.setItem(STORAGE_KEYS.SUPPLIER, JSON.stringify(defaultSupplier));
-      return defaultSupplier;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const local = window.localStorage.getItem(STORAGE_KEYS.SUPPLIER);
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed && parsed.id) {
+            currentSupplierId = parsed.id;
+            return parsed;
+          }
+        }
+      }
+    } catch {
+      // ignore
     }
-    return JSON.parse(data);
+
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.SUPPLIER);
+    if (!data) return null;
+
+    try {
+      const parsed: Supplier = JSON.parse(data);
+      if (parsed && parsed.id) {
+        currentSupplierId = parsed.id;
+        return parsed;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   },
 
   async saveSupplier(supplier: Supplier): Promise<void> {
-    await AsyncStorage.setItem(STORAGE_KEYS.SUPPLIER, JSON.stringify(supplier));
+    currentSupplierId = supplier.id;
+    AutoSyncService.setActiveSupplier(supplier);
+    const jsonStr = JSON.stringify(supplier);
+    await AsyncStorage.setItem(STORAGE_KEYS.SUPPLIER, jsonStr);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(STORAGE_KEYS.SUPPLIER, jsonStr);
+      } catch {
+        // ignore
+      }
+    }
   },
 
-  // Customers - Clean real data only (no dummy customers)
-  async getCustomers(): Promise<Customer[]> {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOMERS);
-    if (!data) return [];
-    try {
-      const parsed: Customer[] = JSON.parse(data);
-      // Auto-purge any residual default or mock customers
-      const clean = parsed.filter(c =>
-        c.id !== 'cust_1' &&
-        c.id !== 'cust_2' &&
-        !c.id.startsWith('mock_cust_') &&
-        c.name !== 'Ramesh Sharma' &&
-        c.name !== 'Suresh Patel'
-      );
-      if (clean.length !== parsed.length) {
-        await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(clean));
+  async clearActiveSession(): Promise<void> {
+    currentSupplierId = null;
+    AutoSyncService.setActiveSupplier(null);
+    await AsyncStorage.removeItem(STORAGE_KEYS.SUPPLIER);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEYS.SUPPLIER);
+      } catch {
+        // ignore
       }
-      return clean;
+    }
+  },
+
+  // Migration: Migrate any existing un-scoped legacy device records to the newly authenticated supplier
+  async migrateLegacyDataToSupplier(supplier: Supplier): Promise<{ migratedCount: number }> {
+    if (!supplier || !supplier.id) return { migratedCount: 0 };
+    const targetSupplierId = supplier.id;
+    currentSupplierId = targetSupplierId;
+    AutoSyncService.setActiveSupplier(supplier);
+
+    let totalMigrated = 0;
+
+    try {
+      // 1. Check legacy customers
+      const legacyCustData = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+      if (legacyCustData) {
+        const parsedCusts: Customer[] = JSON.parse(legacyCustData);
+        if (Array.isArray(parsedCusts) && parsedCusts.length > 0) {
+          const scopedKey = getScopedKey(STORAGE_KEYS.CUSTOMERS, targetSupplierId);
+          const existingScoped = await AsyncStorage.getItem(scopedKey);
+          let targetList: Customer[] = existingScoped ? JSON.parse(existingScoped) : [];
+
+          parsedCusts.forEach(c => {
+            if (!targetList.some(tc => tc.id === c.id)) {
+              targetList.push({
+                ...c,
+                supplierId: targetSupplierId,
+                updatedAt: c.updatedAt || Date.now()
+              });
+              totalMigrated++;
+            }
+          });
+
+          await AsyncStorage.setItem(scopedKey, JSON.stringify(targetList));
+        }
+      }
+
+      // 2. Check legacy milk entries
+      const legacyEntryData = await AsyncStorage.getItem(STORAGE_KEYS.MILK_ENTRIES);
+      if (legacyEntryData) {
+        const parsedEntries: MilkEntry[] = JSON.parse(legacyEntryData);
+        if (Array.isArray(parsedEntries) && parsedEntries.length > 0) {
+          const scopedKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, targetSupplierId);
+          const existingScoped = await AsyncStorage.getItem(scopedKey);
+          let targetList: MilkEntry[] = existingScoped ? JSON.parse(existingScoped) : [];
+
+          parsedEntries.forEach(e => {
+            if (!targetList.some(te => te.id === e.id)) {
+              targetList.push({
+                ...e,
+                supplierId: targetSupplierId,
+                updatedAt: e.updatedAt || Date.now()
+              });
+              totalMigrated++;
+            }
+          });
+
+          await AsyncStorage.setItem(scopedKey, JSON.stringify(targetList));
+        }
+      }
+
+      // 3. Check legacy payments
+      const legacyPayData = await AsyncStorage.getItem(STORAGE_KEYS.PAYMENTS);
+      if (legacyPayData) {
+        const parsedPays: Payment[] = JSON.parse(legacyPayData);
+        if (Array.isArray(parsedPays) && parsedPays.length > 0) {
+          const scopedKey = getScopedKey(STORAGE_KEYS.PAYMENTS, targetSupplierId);
+          const existingScoped = await AsyncStorage.getItem(scopedKey);
+          let targetList: Payment[] = existingScoped ? JSON.parse(existingScoped) : [];
+
+          parsedPays.forEach(p => {
+            if (!targetList.some(tp => tp.id === p.id)) {
+              targetList.push({
+                ...p,
+                supplierId: targetSupplierId,
+                updatedAt: p.updatedAt || Date.now()
+              });
+              totalMigrated++;
+            }
+          });
+
+          await AsyncStorage.setItem(scopedKey, JSON.stringify(targetList));
+        }
+      }
+    } catch (e) {
+      console.warn('Legacy data migration notice:', e);
+    }
+
+    return { migratedCount: totalMigrated };
+  },
+
+  // Set all data directly (used by cloud restore & two-way sync)
+  async setAllDataForSupplier(
+    supplierId: string,
+    customers: Customer[],
+    entries: MilkEntry[],
+    payments: Payment[]
+  ): Promise<void> {
+    currentSupplierId = supplierId;
+    const custKey = getScopedKey(STORAGE_KEYS.CUSTOMERS, supplierId);
+    const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, supplierId);
+    const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS, supplierId);
+
+    await Promise.all([
+      AsyncStorage.setItem(custKey, JSON.stringify(customers)),
+      AsyncStorage.setItem(entryKey, JSON.stringify(entries)),
+      AsyncStorage.setItem(payKey, JSON.stringify(payments))
+    ]);
+  },
+
+  // Raw data access for sync engine (includes tombstones where isDeleted is true)
+  async getRawCustomers(supplierId?: string): Promise<Customer[]> {
+    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS, supplierId);
+    const data = await AsyncStorage.getItem(key);
+    if (!data) {
+      // Check legacy key if scoped has not been created yet
+      if (supplierId) {
+        const legacy = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+        if (legacy) {
+          const parsed = JSON.parse(legacy);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            await AsyncStorage.setItem(key, legacy);
+            return parsed;
+          }
+        }
+      }
+      return [];
+    }
+    try {
+      return JSON.parse(data);
     } catch {
       return [];
     }
   },
 
-  async saveCustomer(customer: Customer): Promise<void> {
-    const customers = await this.getCustomers();
-    const existingIndex = customers.findIndex(c => c.id === customer.id);
-    if (existingIndex >= 0) {
-      customers[existingIndex] = customer;
-    } else {
-      customers.push(customer);
+  async getRawMilkEntries(supplierId?: string): Promise<MilkEntry[]> {
+    const key = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, supplierId);
+    const data = await AsyncStorage.getItem(key);
+    if (!data) {
+      if (supplierId) {
+        const legacy = await AsyncStorage.getItem(STORAGE_KEYS.MILK_ENTRIES);
+        if (legacy) {
+          const parsed = JSON.parse(legacy);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            await AsyncStorage.setItem(key, legacy);
+            return parsed;
+          }
+        }
+      }
+      return [];
     }
-    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  },
+
+  async getRawPayments(supplierId?: string): Promise<Payment[]> {
+    const key = getScopedKey(STORAGE_KEYS.PAYMENTS, supplierId);
+    const data = await AsyncStorage.getItem(key);
+    if (!data) {
+      if (supplierId) {
+        const legacy = await AsyncStorage.getItem(STORAGE_KEYS.PAYMENTS);
+        if (legacy) {
+          const parsed = JSON.parse(legacy);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            await AsyncStorage.setItem(key, legacy);
+            return parsed;
+          }
+        }
+      }
+      return [];
+    }
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  },
+
+  // Public Customers API (Filters out isDeleted === true)
+  async getCustomers(supplierId?: string): Promise<Customer[]> {
+    const raw = await this.getRawCustomers(supplierId);
+    return raw.filter(c => !c.isDeleted);
+  },
+
+  async saveCustomer(customer: Customer): Promise<void> {
+    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS, customer.supplierId);
+    const raw = await this.getRawCustomers(customer.supplierId);
+    const updatedCustomer: Customer = {
+      ...customer,
+      updatedAt: Date.now(),
+      isDeleted: false
+    };
+
+    const existingIndex = raw.findIndex(c => c.id === customer.id);
+    if (existingIndex >= 0) {
+      raw[existingIndex] = updatedCustomer;
+    } else {
+      raw.push(updatedCustomer);
+    }
+
+    await AsyncStorage.setItem(key, JSON.stringify(raw));
+    this.triggerAutoSync();
   },
 
   async saveCustomersBatch(newCustomers: Customer[]): Promise<void> {
-    const customers = await this.getCustomers();
+    if (newCustomers.length === 0) return;
+    const targetSupplierId = newCustomers[0].supplierId;
+    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS, targetSupplierId);
+    const raw = await this.getRawCustomers(targetSupplierId);
     const map = new Map<string, Customer>();
-    customers.forEach(c => map.set(c.id, c));
-    newCustomers.forEach(c => map.set(c.id, c));
+
+    raw.forEach(c => map.set(c.id, c));
+    newCustomers.forEach(c => {
+      map.set(c.id, {
+        ...c,
+        updatedAt: Date.now(),
+        isDeleted: false
+      });
+    });
+
     const merged = Array.from(map.values());
-    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(merged));
+    await AsyncStorage.setItem(key, JSON.stringify(merged));
+    this.triggerAutoSync();
   },
 
   async deleteCustomer(id: string): Promise<void> {
-    const customers = await this.getCustomers();
-    const filtered = customers.filter(c => c.id !== id);
-    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(filtered));
+    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS);
+    const raw = await this.getRawCustomers();
+    const existing = raw.find(c => c.id === id);
+    if (existing) {
+      existing.isDeleted = true;
+      existing.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
+      this.triggerAutoSync();
+    }
   },
 
   async updateCustomerName(id: string, newName: string): Promise<void> {
     const trimmed = newName.trim();
     if (!trimmed) return;
+
     // 1. Update in Customers
-    const customers = await this.getCustomers();
-    const custIdx = customers.findIndex(c => c.id === id);
-    if (custIdx >= 0) {
-      customers[custIdx].name = trimmed;
-      await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS);
+    const raw = await this.getRawCustomers();
+    const cust = raw.find(c => c.id === id);
+    if (cust) {
+      cust.name = trimmed;
+      cust.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
     }
-    // 2. Update customerName in Milk Entries
-    const entries = await this.getMilkEntries();
+
+    // 2. Update in Milk Entries
+    const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES);
+    const rawEntries = await this.getRawMilkEntries();
     let entriesChanged = false;
-    entries.forEach(e => {
+    rawEntries.forEach(e => {
       if (e.customerId === id && e.customerName !== trimmed) {
         e.customerName = trimmed;
+        e.updatedAt = Date.now();
         entriesChanged = true;
       }
     });
     if (entriesChanged) {
-      await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(entries));
+      await AsyncStorage.setItem(entryKey, JSON.stringify(rawEntries));
     }
-    // 3. Update customerName in Payments
-    const payments = await this.getPayments();
-    let paymentsChanged = false;
-    payments.forEach(p => {
+
+    // 3. Update in Payments
+    const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS);
+    const rawPays = await this.getRawPayments();
+    let paysChanged = false;
+    rawPays.forEach(p => {
       if (p.customerId === id && p.customerName !== trimmed) {
         p.customerName = trimmed;
-        paymentsChanged = true;
+        p.updatedAt = Date.now();
+        paysChanged = true;
       }
     });
-    if (paymentsChanged) {
-      await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments));
+    if (paysChanged) {
+      await AsyncStorage.setItem(payKey, JSON.stringify(rawPays));
     }
+
+    this.triggerAutoSync();
   },
 
-  // Milk Entries - Clean real entries only (no dummy deliveries)
-  async getMilkEntries(): Promise<MilkEntry[]> {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.MILK_ENTRIES);
-    if (!data) return [];
-    try {
-      const parsed: MilkEntry[] = JSON.parse(data);
-      const clean = parsed.filter(e =>
-        e.id !== 'entry_1' &&
-        e.id !== 'entry_2' &&
-        !e.id.startsWith('mock_entry_') &&
-        e.customerId !== 'cust_1' &&
-        e.customerId !== 'cust_2' &&
-        e.customerName !== 'Ramesh Sharma' &&
-        e.customerName !== 'Suresh Patel'
-      );
-      if (clean.length !== parsed.length) {
-        await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(clean));
-      }
-      return clean;
-    } catch {
-      return [];
-    }
+  // Public Milk Entries API (Filters out isDeleted === true)
+  async getMilkEntries(supplierId?: string): Promise<MilkEntry[]> {
+    const raw = await this.getRawMilkEntries(supplierId);
+    return raw.filter(e => !e.isDeleted);
   },
 
   async saveMilkEntry(entry: MilkEntry): Promise<void> {
-    const entries = await this.getMilkEntries();
-    const idx = entries.findIndex(e => e.id === entry.id);
+    const key = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, entry.supplierId);
+    const raw = await this.getRawMilkEntries(entry.supplierId);
+    const updatedEntry: MilkEntry = {
+      ...entry,
+      updatedAt: Date.now(),
+      isDeleted: false
+    };
+
+    const idx = raw.findIndex(e => e.id === entry.id);
     if (idx >= 0) {
-      entries[idx] = entry;
+      raw[idx] = updatedEntry;
     } else {
-      entries.push(entry);
+      raw.push(updatedEntry);
     }
-    await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(entries));
+
+    await AsyncStorage.setItem(key, JSON.stringify(raw));
+    this.triggerAutoSync();
   },
 
   async saveMilkEntriesBatch(newEntries: MilkEntry[]): Promise<void> {
-    const entries = await this.getMilkEntries();
+    if (newEntries.length === 0) return;
+    const targetSupplierId = newEntries[0].supplierId;
+    const key = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, targetSupplierId);
+    const raw = await this.getRawMilkEntries(targetSupplierId);
     const map = new Map<string, MilkEntry>();
-    entries.forEach(e => map.set(e.id, e));
-    newEntries.forEach(e => map.set(e.id, e));
+
+    raw.forEach(e => map.set(e.id, e));
+    newEntries.forEach(e => {
+      map.set(e.id, {
+        ...e,
+        updatedAt: Date.now(),
+        isDeleted: false
+      });
+    });
+
     const merged = Array.from(map.values());
-    await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(merged));
+    await AsyncStorage.setItem(key, JSON.stringify(merged));
+    this.triggerAutoSync();
   },
 
   async deleteMilkEntry(id: string): Promise<void> {
-    const entries = await this.getMilkEntries();
-    const filtered = entries.filter(e => e.id !== id);
-    await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(filtered));
+    const key = getScopedKey(STORAGE_KEYS.MILK_ENTRIES);
+    const raw = await this.getRawMilkEntries();
+    const existing = raw.find(e => e.id === id);
+    if (existing) {
+      existing.isDeleted = true;
+      existing.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
+      this.triggerAutoSync();
+    }
   },
 
-  // Payments
-  async getPayments(): Promise<Payment[]> {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.PAYMENTS);
-    return data ? JSON.parse(data) : [];
+  // Public Payments API (Filters out isDeleted === true)
+  async getPayments(supplierId?: string): Promise<Payment[]> {
+    const raw = await this.getRawPayments(supplierId);
+    return raw.filter(p => !p.isDeleted);
   },
 
   async savePayment(payment: Payment): Promise<void> {
-    const payments = await this.getPayments();
-    payments.push(payment);
-    await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments));
+    const key = getScopedKey(STORAGE_KEYS.PAYMENTS, payment.supplierId);
+    const raw = await this.getRawPayments(payment.supplierId);
+    const updatedPayment: Payment = {
+      ...payment,
+      updatedAt: Date.now(),
+      isDeleted: false
+    };
+
+    const idx = raw.findIndex(p => p.id === payment.id);
+    if (idx >= 0) {
+      raw[idx] = updatedPayment;
+    } else {
+      raw.push(updatedPayment);
+    }
+
+    await AsyncStorage.setItem(key, JSON.stringify(raw));
+    this.triggerAutoSync();
   },
 
   async savePaymentsBatch(newPayments: Payment[]): Promise<void> {
-    const payments = await this.getPayments();
-    const merged = [...payments, ...newPayments];
-    await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(merged));
+    if (newPayments.length === 0) return;
+    const targetSupplierId = newPayments[0].supplierId;
+    const key = getScopedKey(STORAGE_KEYS.PAYMENTS, targetSupplierId);
+    const raw = await this.getRawPayments(targetSupplierId);
+    const map = new Map<string, Payment>();
+
+    raw.forEach(p => map.set(p.id, p));
+    newPayments.forEach(p => {
+      map.set(p.id, {
+        ...p,
+        updatedAt: Date.now(),
+        isDeleted: false
+      });
+    });
+
+    const merged = Array.from(map.values());
+    await AsyncStorage.setItem(key, JSON.stringify(merged));
+    this.triggerAutoSync();
   },
 
   async deletePayment(id: string): Promise<void> {
-    const payments = await this.getPayments();
-    const filtered = payments.filter(p => p.id !== id);
-    await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(filtered));
+    const key = getScopedKey(STORAGE_KEYS.PAYMENTS);
+    const raw = await this.getRawPayments();
+    const existing = raw.find(p => p.id === id);
+    if (existing) {
+      existing.isDeleted = true;
+      existing.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
+      this.triggerAutoSync();
+    }
+  },
+
+  // Trigger background auto-sync if supplier is active
+  async triggerAutoSync(): Promise<void> {
+    const supplier = await this.getSupplier();
+    if (supplier && supplier.id && supplier.phone && supplier.phone.length >= 10) {
+      AutoSyncService.queueSync(supplier, 1500);
+    }
   },
 
   // Language
@@ -215,36 +520,22 @@ export const StorageService = {
     await AsyncStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
   },
 
-
-  // Reset or seed fresh data
+  // Reset or clear data for current supplier
   async clearAllData(): Promise<void> {
-    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify([]));
-    await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify([]));
-    await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify([]));
-    await AsyncStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
-    await AsyncStorage.removeItem(STORAGE_KEYS.MILK_ENTRIES);
-    await AsyncStorage.removeItem(STORAGE_KEYS.PAYMENTS);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        window.localStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
-        window.localStorage.removeItem(STORAGE_KEYS.MILK_ENTRIES);
-        window.localStorage.removeItem(STORAGE_KEYS.PAYMENTS);
-      } catch {
-        // ignore
-      }
-    }
+    const custKey = getScopedKey(STORAGE_KEYS.CUSTOMERS);
+    const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES);
+    const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS);
+
+    await Promise.all([
+      AsyncStorage.removeItem(custKey),
+      AsyncStorage.removeItem(entryKey),
+      AsyncStorage.removeItem(payKey)
+    ]);
   },
 
   async clearAllCustomers(): Promise<void> {
-    await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify([]));
-    await AsyncStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        window.localStorage.removeItem(STORAGE_KEYS.CUSTOMERS);
-      } catch {
-        // ignore
-      }
-    }
+    const custKey = getScopedKey(STORAGE_KEYS.CUSTOMERS);
+    await AsyncStorage.removeItem(custKey);
   },
 
   // Storage inspection & backup export
@@ -271,9 +562,9 @@ export const StorageService = {
 
     return {
       storageInfo: {
-        storageEngine: 'AsyncStorage / SQLite Database',
-        internalPath: 'Android sandboxed app storage (/data/data/<package>/databases/RKStorage)',
-        persistence: 'Permanent offline-first storage on device. Retained on app close, reboot, and offline.'
+        storageEngine: 'AsyncStorage / SQLite Database (Multi-Supplier Isolated)',
+        internalPath: `Scoped under: ${supplier?.id || 'unscoped'}`,
+        persistence: 'Permanent offline-first storage on device with background Firebase cloud sync.'
       },
       supplier,
       customers,
@@ -284,4 +575,3 @@ export const StorageService = {
     };
   }
 };
-
