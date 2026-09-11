@@ -292,7 +292,18 @@ export const LoginScreen = () => {
         setIsCheckingCloud(false);
 
         // Open Mandatory Phone Prompt to link Google account to 10-digit phone
-        setMandatoryPhone('');
+        // Pre-fill remembered phone if supplier previously had one on this device
+        let initialPhone = '';
+        try {
+          const remembered = await StorageService.getSupplier();
+          if (remembered && remembered.phone) {
+            initialPhone = normalizePhoneDigits(remembered.phone);
+          }
+        } catch {}
+        if (!initialPhone && phoneInput) {
+          initialPhone = normalizePhoneDigits(phoneInput);
+        }
+        setMandatoryPhone(initialPhone);
         setPhonePromptVisible(true);
       } else {
         // Native fallback prompt
@@ -688,6 +699,9 @@ export const LoginScreen = () => {
                   placeholder="98765 43210"
                   placeholderTextColor="#94a3b8"
                   keyboardType="phone-pad"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
                   maxLength={10}
                   value={mandatoryPhone}
                   onChangeText={(v) => setMandatoryPhone(normalizePhoneDigits(v))}
