@@ -64,6 +64,31 @@ export const LoginScreen = () => {
     return () => clearInterval(timer);
   }, [resendCooldown]);
 
+  // Cleanup reCAPTCHA badge on screen unmount / successful login
+  React.useEffect(() => {
+    return () => {
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        try {
+          if ((window as any).recaptchaVerifier) {
+            (window as any).recaptchaVerifier.clear();
+            (window as any).recaptchaVerifier = null;
+          }
+          const container = document.getElementById('recaptcha-container');
+          if (container) {
+            container.remove();
+          }
+          // Hide any lingering Google reCAPTCHA badge elements on other screens
+          const badges = document.querySelectorAll('.grecaptcha-badge');
+          badges.forEach((b: any) => {
+            if (b && b.style) b.style.display = 'none';
+          });
+        } catch (e) {
+          console.warn('Recaptcha cleanup error:', e);
+        }
+      }
+    };
+  }, []);
+
   // Setup invisible reCAPTCHA for web
   const getOrCreateRecaptchaVerifier = () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -73,6 +98,12 @@ export const LoginScreen = () => {
         container.id = 'recaptcha-container';
         document.body.appendChild(container);
       }
+
+      // Ensure recaptcha badge is visible while on LoginScreen
+      const badges = document.querySelectorAll('.grecaptcha-badge');
+      badges.forEach((b: any) => {
+        if (b && b.style) b.style.display = 'block';
+      });
 
       if ((window as any).recaptchaVerifier) {
         try {
@@ -312,6 +343,19 @@ export const LoginScreen = () => {
       const checkRes = await FirebaseSyncService.checkSupplierExists(phone);
 
       if (checkRes.exists && checkRes.profile) {
+        // --- SECURITY CHECK: PREVENT ACCOUNT HIJACKING ---
+        // If the existing supplier record is already linked to a different Google email, block unauthorized access!
+        if (email && checkRes.profile.email && checkRes.profile.email.toLowerCase() !== email.toLowerCase()) {
+          setIsCheckingCloud(false);
+          showAlert(
+            lang === 'hi' ? '⚠️ अनधिकृत पहुँच (सुरक्षा अलर्ट)' : '⚠️ Unauthorized Access (Security Alert)',
+            lang === 'hi'
+              ? `यह मोबाइल नंबर (+91 ${phone}) पहले से ही दूसरे ईमेल खाते (${checkRes.profile.email}) से जुड़ा हुआ है। आप किसी अन्य सप्लायर का डेटा एक्सेस नहीं कर सकते। कृपया सही ईमेल से लॉगिन करें।`
+              : `This mobile number (+91 ${phone}) is already registered with another account (${checkRes.profile.email}). You cannot access another supplier's data. Please sign in with the correct account.`
+          );
+          return;
+        }
+
         // --- EXISTING SUPPLIER IN FIREBASE: DO NOT OVERWRITE! ---
         const existingProfile: Supplier = {
           ...checkRes.profile,
