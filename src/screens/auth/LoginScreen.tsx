@@ -220,30 +220,38 @@ export const LoginScreen = () => {
 
     setIsVerifyingOtp(true);
     try {
-      if (confirmationResult && trimmedOtp !== '123456') {
+      if (confirmationResult) {
         // Real SMS OTP verification with Firebase Auth
-        try {
-          await confirmationResult.confirm(trimmedOtp);
-        } catch (confirmErr: any) {
-          console.warn('Firebase confirm failed:', confirmErr);
-          // If confirmation fails on Firebase server, check if test bypass code
-          throw confirmErr;
+        await confirmationResult.confirm(trimmedOtp);
+      } else {
+        // If no confirmationResult was created (e.g. carrier SMS failed to send),
+        // we must check if this supplier exists in Cloud with an assigned Google Email.
+        // If an existing supplier is protected by Google Email, an unverified phone cannot log into it!
+        const checkRes = await FirebaseSyncService.checkSupplierExists(cleanPhone);
+        if (checkRes.exists && checkRes.profile?.email) {
+          setIsVerifyingOtp(false);
+          showAlert(
+            lang === 'hi' ? '⚠️ सुरक्षा अलर्ट (Google सुरक्षा सक्रिय)' : '⚠️ Security Alert (Google Protected)',
+            lang === 'hi'
+              ? `यह सप्लायर खाता Google ईमेल (${checkRes.profile.email}) द्वारा सुरक्षित है। कृपया "Sign In With Google" विकल्प चुनकर अधिकृत खाते से लॉगिन करें।`
+              : `This supplier account is protected by Google Email (${checkRes.profile.email}). Please use "Sign In With Google" with the authorized email.`
+          );
+          return;
+        }
+
+        // If not SMS verified and trimmedOtp is not developer code 123456, reject
+        if (trimmedOtp !== '123456') {
+          throw new Error('Invalid OTP');
         }
       }
       await processSupplierAuth(cleanPhone, undefined, undefined);
     } catch (err: any) {
       console.warn('OTP Confirmation Error:', err);
-      // If code was 123456, allow bypass for testing
-      if (trimmedOtp === '123456') {
-        await processSupplierAuth(cleanPhone, undefined, undefined);
-        setIsVerifyingOtp(false);
-        return;
-      }
       showAlert(
         lang === 'hi' ? 'ओटीपी सत्यापन विफल' : 'OTP Verification Failed',
         lang === 'hi'
-          ? 'दर्ज किया गया ओटीपी गलत है या समाप्त हो चुका है। कृपया 123456 या सही कोड दर्ज करें।'
-          : 'The entered OTP code is incorrect or expired. Please enter valid OTP or 123456.'
+          ? 'दर्ज किया गया ओटीपी गलत है या समाप्त हो चुका है। कृपया सही ओटीपी दर्ज करें।'
+          : 'The entered OTP code is incorrect or expired. Please enter the valid OTP code.'
       );
     } finally {
       setIsVerifyingOtp(false);
@@ -354,15 +362,30 @@ export const LoginScreen = () => {
       const checkRes = await FirebaseSyncService.checkSupplierExists(phone);
 
       if (checkRes.exists && checkRes.profile) {
-        // --- SECURITY CHECK: PREVENT ACCOUNT HIJACKING ---
-        // If the existing supplier record is already linked to a different Google email, block unauthorized access!
-        if (email && checkRes.profile.email && checkRes.profile.email.toLowerCase() !== email.toLowerCase()) {
+        const existingEmail = checkRes.profile.email ? checkRes.profile.email.trim().toLowerCase() : '';
+        const incomingEmail = email ? email.trim().toLowerCase() : '';
+
+        // --- SECURITY CHECK 1: PREVENT ACCOUNT HIJACKING ---
+        // If the existing supplier record is already linked to a specific email, and incoming email doesn't match:
+        if (existingEmail && incomingEmail && existingEmail !== incomingEmail) {
           setIsCheckingCloud(false);
           showAlert(
             lang === 'hi' ? '⚠️ अनधिकृत पहुँच (सुरक्षा अलर्ट)' : '⚠️ Unauthorized Access (Security Alert)',
             lang === 'hi'
-              ? `यह मोबाइल नंबर (+91 ${phone}) पहले से ही दूसरे ईमेल खाते (${checkRes.profile.email}) से जुड़ा हुआ है। आप किसी अन्य सप्लायर का डेटा एक्सेस नहीं कर सकते। कृपया सही ईमेल से लॉगिन करें।`
-              : `This mobile number (+91 ${phone}) is already registered with another account (${checkRes.profile.email}). You cannot access another supplier's data. Please sign in with the correct account.`
+              ? `यह मोबाइल नंबर (+91 ${phone}) पहले से ही दूसरे खाते (${existingEmail}) से सुरक्षित है। आप किसी अन्य सप्लायर का डेटा नहीं देख सकते। कृपया सही खाते से लॉगिन करें।`
+              : `This mobile number (+91 ${phone}) is already registered to another account (${existingEmail}). You cannot access another supplier's data. Please sign in with the correct account.`
+          );
+          return;
+        }
+
+        // --- SECURITY CHECK 2: If phone login without Google, but account has an email lock ---
+        if (existingEmail && !incomingEmail && !confirmationResult) {
+          setIsCheckingCloud(false);
+          showAlert(
+            lang === 'hi' ? '⚠️ Google सुरक्षा सक्रिय' : '⚠️ Google Account Protected',
+            lang === 'hi'
+              ? `यह सप्लायर खाता Google ईमेल (${existingEmail}) द्वारा सुरक्षित है। कृपया "Sign In With Google" द्वारा लॉगिन करें।`
+              : `This supplier account is protected by Google Email (${existingEmail}). Please sign in using "Sign In With Google".`
           );
           return;
         }
