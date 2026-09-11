@@ -19,7 +19,7 @@ import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { formatToDisplayDate } from '../../utils/dateUtils';
 
 export const DailyRegisterScreen = () => {
-  const { t, customers, milkEntries, refreshMilkEntries, payments, supplier } = useApp();
+  const { t, customers, milkEntries, refreshMilkEntries, payments, supplier, requireAuth } = useApp();
   
   const [selectedDate, setSelectedDate] = useState(() => {
     return new Date().toISOString().split('T')[0];
@@ -60,7 +60,7 @@ export const DailyRegisterScreen = () => {
       if (!e.isDeleted && e.date === selectedDate && e.session === activeSession) {
         map.set(e.customerId, e);
         if (e.milkType === 'cow') cowQty += e.quantityLitres;
-        if (e.milkType === 'buffalo') buffaloQty += e.quantityLitres;
+        else buffaloQty += e.quantityLitres;
         totalAmt += e.amount;
         count++;
       }
@@ -69,168 +69,180 @@ export const DailyRegisterScreen = () => {
     return {
       sessionEntriesMap: map,
       stats: {
-        count,
         cowQty,
         buffaloQty,
+        totalQty: cowQty + buffaloQty,
         totalLitres: cowQty + buffaloQty,
-        totalAmt
+        totalAmt,
+        count
       }
     };
   }, [milkEntries, selectedDate, activeSession]);
 
   const filteredCustomers = useMemo(() => {
-    const activeCusts = customers.filter(c => !c.isDeleted);
-    if (!searchFilter.trim()) return activeCusts;
-    const query = searchFilter.toLowerCase();
-    return activeCusts.filter(
-      c => c.name.toLowerCase().includes(query) || c.phone.includes(query)
-    );
+    let list = customers.filter(c => !c.isDeleted);
+    if (searchFilter.trim()) {
+      const q = searchFilter.trim().toLowerCase();
+      list = list.filter(
+        c => c.name.toLowerCase().includes(q) || c.phone.includes(q)
+      );
+    }
+    return list;
   }, [customers, searchFilter]);
 
   const handleDeleteEntry = (entry: MilkEntry, customerName: string) => {
-    const milkLabel = entry.milkType === 'cow' ? '🐄 गाय (Cow Milk)' : '🐃 भैंस (Buffalo Milk)';
-    const sessionLabel = entry.session === 'Morning' ? '🌅 सुबह (Morning)' : entry.session === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
-
-    confirmAction(
-      'दूध एंट्री हटाएं (Delete Milk Entry)',
-      `क्या आप वाकई यह एंट्री हटाना चाहते हैं?\n• ग्राहक (Customer): ${customerName}\n• मात्रा (Quantity): ${entry.quantityLitres} L (${milkLabel})\n• शिफ्ट (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(entry.date)}\n• कुल रकम (Amount): ₹${entry.amount.toFixed(0)}`,
-      async () => {
-        await StorageService.deleteMilkEntry(entry.id, supplier?.id);
-        await refreshMilkEntries();
-        CardSyncService.syncCustomerCard(
-          entry.customerId,
-          supplier,
-          customers.filter(c => !c.isDeleted),
-          milkEntries.filter(e => e.id !== entry.id && !e.isDeleted),
-          payments.filter(p => !p.isDeleted)
-        );
-      },
-      '🗑️ हटाएं (Delete)',
-      'रद्द करें (Cancel)',
-      true
-    );
+    requireAuth(() => {
+      confirmAction(
+        'एंट्री हटाएं (Delete Delivery)',
+        `क्या आप ${customerName} की ${activeSession} की डिलीवरी एंट्री हटाना चाहते हैं?`,
+        async () => {
+          await StorageService.deleteMilkEntry(entry.id, supplier?.id);
+          await refreshMilkEntries();
+          CardSyncService.syncCustomerCard(
+            entry.customerId,
+            supplier,
+            customers.filter(c => !c.isDeleted),
+            milkEntries.filter(e => e.id !== entry.id && !e.isDeleted),
+            payments.filter(p => !p.isDeleted)
+          );
+        },
+        '🗑️ हटाएं (Delete)',
+        'रद्द करें (Cancel)',
+        true
+      );
+    });
   };
 
   const handleQuickAddDefault = async (customer: Customer) => {
-    const existing = sessionEntriesMap.get(customer.id);
-    if (existing) {
-      handleDeleteEntry(existing, customer.name);
-      return;
-    }
+    requireAuth(async () => {
+      const existing = sessionEntriesMap.get(customer.id);
+      if (existing) {
+        handleDeleteEntry(existing, customer.name);
+        return;
+      }
 
-    const newEntry: MilkEntry = {
-      id: `entry_${selectedDate}_${activeSession}_${customer.id}_${Date.now()}`,
-      supplierId: supplier?.id || 'supp_default',
-      customerId: customer.id,
-      customerName: customer.name,
-      date: selectedDate,
-      session: activeSession,
-      milkType: customer.milkType,
-      quantityLitres: customer.defaultLitres,
-      ratePerLitre: customer.ratePerLitre,
-      amount: customer.defaultLitres * customer.ratePerLitre,
-      isPaid: false,
-      createdAt: Date.now()
-    };
+      const newEntry: MilkEntry = {
+        id: `entry_${selectedDate}_${activeSession}_${customer.id}_${Date.now()}`,
+        supplierId: supplier?.id || 'supp_default',
+        customerId: customer.id,
+        customerName: customer.name,
+        date: selectedDate,
+        session: activeSession,
+        milkType: customer.milkType,
+        quantityLitres: customer.defaultLitres,
+        ratePerLitre: customer.ratePerLitre,
+        amount: customer.defaultLitres * customer.ratePerLitre,
+        isPaid: false,
+        createdAt: Date.now()
+      };
 
-    await StorageService.saveMilkEntry(newEntry);
-    await refreshMilkEntries();
-    CardSyncService.syncCustomerCard(customer.id, supplier, customers, [...milkEntries, newEntry], payments);
+      await StorageService.saveMilkEntry(newEntry);
+      await refreshMilkEntries();
+      CardSyncService.syncCustomerCard(customer.id, supplier, customers, [...milkEntries, newEntry], payments);
+    });
   };
 
   const handleBulkFillAll = () => {
     Keyboard.dismiss();
-    const unrecordedCustomers = customers.filter(c => !sessionEntriesMap.has(c.id));
-    if (unrecordedCustomers.length === 0) {
-      showAlert('सबका दूध दर्ज है (All Recorded)', `सभी ${customers.length} ग्राहकों का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`);
-      return;
-    }
+    requireAuth(() => {
+      const unrecordedCustomers = customers.filter(c => !sessionEntriesMap.has(c.id));
+      if (unrecordedCustomers.length === 0) {
+        showAlert('सबका दूध दर्ज है (All Recorded)', `सभी ${customers.length} ग्राहकों का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`);
+        return;
+      }
 
-    const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
+      const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
 
-    confirmAction(
-      'सभी का दूध मार्क करें (Mark All Deliveries)',
-      `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`,
-      async () => {
+      confirmAction(
+        'सभी का दूध मार्क करें (Mark All Deliveries)',
+        `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`,
+        async () => {
 
-        const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
-          id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}`,
-          supplierId: supplier?.id || 'supp_default',
-          customerId: c.id,
-          customerName: c.name,
-          date: selectedDate,
-          session: activeSession,
-          milkType: c.milkType,
-          quantityLitres: c.defaultLitres,
-          ratePerLitre: c.ratePerLitre,
-          amount: c.defaultLitres * c.ratePerLitre,
-          isPaid: false,
-          createdAt: Date.now()
-        }));
-        await StorageService.saveMilkEntriesBatch(newEntries);
-        await refreshMilkEntries();
-        CardSyncService.syncAllCards(supplier, customers, [...milkEntries, ...newEntries], payments);
-      },
-      `✓ सभी दर्ज करें (${unrecordedCustomers.length})`,
-      'रद्द करें (Cancel)',
-      false
-    );
+          const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
+            id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}`,
+            supplierId: supplier?.id || 'supp_default',
+            customerId: c.id,
+            customerName: c.name,
+            date: selectedDate,
+            session: activeSession,
+            milkType: c.milkType,
+            quantityLitres: c.defaultLitres,
+            ratePerLitre: c.ratePerLitre,
+            amount: c.defaultLitres * c.ratePerLitre,
+            isPaid: false,
+            createdAt: Date.now()
+          }));
+          await StorageService.saveMilkEntriesBatch(newEntries);
+          await refreshMilkEntries();
+          CardSyncService.syncAllCards(supplier, customers, [...milkEntries, ...newEntries], payments);
+        },
+        `✓ सभी दर्ज करें (${unrecordedCustomers.length})`,
+        'रद्द करें (Cancel)',
+        false
+      );
+    });
   };
 
   const openCustomEntryModal = (cust: Customer) => {
     Keyboard.dismiss();
-    const existing = sessionEntriesMap.get(cust.id);
-    setSelectedCustomer(cust);
-    setSession(activeSession);
-    setMilkType(existing ? existing.milkType : cust.milkType);
-    setLitres(existing ? existing.quantityLitres.toString() : cust.defaultLitres.toString());
-    setRate(existing ? existing.ratePerLitre.toString() : cust.ratePerLitre.toString());
-    setNotes(existing?.notes || '');
-    setModalVisible(true);
+    requireAuth(() => {
+      const existing = sessionEntriesMap.get(cust.id);
+      setSelectedCustomer(cust);
+      setSession(activeSession);
+      setMilkType(existing ? existing.milkType : cust.milkType);
+      setLitres(existing ? existing.quantityLitres.toString() : cust.defaultLitres.toString());
+      setRate(existing ? existing.ratePerLitre.toString() : cust.ratePerLitre.toString());
+      setNotes(existing?.notes || '');
+      setModalVisible(true);
+    });
   };
 
   const handleSaveModalEntry = async () => {
     Keyboard.dismiss();
-    if (!selectedCustomer) return;
-    const qty = parseFloat(litres) || 0;
-    const rateVal = parseFloat(rate) || 0;
+    requireAuth(async () => {
+      if (!selectedCustomer) return;
+      const qty = parseFloat(litres) || 0;
+      const rateVal = parseFloat(rate) || 0;
 
-    if (qty <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid milk quantity.');
-      return;
-    }
+      if (qty <= 0) {
+        Alert.alert('Validation Error', 'Please enter a valid milk quantity.');
+        return;
+      }
 
-    const existing = sessionEntriesMap.get(selectedCustomer.id);
-    const entry: MilkEntry = {
-      id: existing ? existing.id : `entry_${selectedDate}_${session}_${selectedCustomer.id}_${Date.now()}`,
-      supplierId: supplier?.id || 'supp_default',
-      customerId: selectedCustomer.id,
-      customerName: selectedCustomer.name,
-      date: selectedDate,
-      session: session,
-      milkType: milkType,
-      quantityLitres: qty,
-      ratePerLitre: rateVal,
-      amount: qty * rateVal,
-      isPaid: existing ? existing.isPaid : false,
-      notes: notes.trim(),
-      createdAt: existing ? existing.createdAt : Date.now()
-    };
+      const existing = sessionEntriesMap.get(selectedCustomer.id);
+      const entry: MilkEntry = {
+        id: existing ? existing.id : `entry_${selectedDate}_${session}_${selectedCustomer.id}_${Date.now()}`,
+        supplierId: supplier?.id || 'supp_default',
+        customerId: selectedCustomer.id,
+        customerName: selectedCustomer.name,
+        date: selectedDate,
+        session: session,
+        milkType: milkType,
+        quantityLitres: qty,
+        ratePerLitre: rateVal,
+        amount: qty * rateVal,
+        isPaid: existing ? existing.isPaid : false,
+        notes: notes.trim(),
+        createdAt: existing ? existing.createdAt : Date.now()
+      };
 
-    await StorageService.saveMilkEntry(entry);
-    await refreshMilkEntries();
-    CardSyncService.syncCustomerCard(selectedCustomer.id, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), entry], payments);
-    setModalVisible(false);
+      await StorageService.saveMilkEntry(entry);
+      await refreshMilkEntries();
+      CardSyncService.syncCustomerCard(selectedCustomer.id, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), entry], payments);
+      setModalVisible(false);
+    });
   };
 
   const togglePaidStatus = async (entry: MilkEntry) => {
-    const updated: MilkEntry = {
-      ...entry,
-      isPaid: !entry.isPaid
-    };
-    await StorageService.saveMilkEntry(updated);
-    await refreshMilkEntries();
-    CardSyncService.syncCustomerCard(entry.customerId, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), updated], payments);
+    requireAuth(async () => {
+      const updated: MilkEntry = {
+        ...entry,
+        isPaid: !entry.isPaid
+      };
+      await StorageService.saveMilkEntry(updated);
+      await refreshMilkEntries();
+      CardSyncService.syncCustomerCard(entry.customerId, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), updated], payments);
+    });
   };
 
   return (

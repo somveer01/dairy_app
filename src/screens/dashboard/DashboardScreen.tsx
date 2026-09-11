@@ -37,7 +37,7 @@ interface CustPaymentSummary {
 }
 
 export const DashboardScreen = ({ navigation }: any) => {
-  const { t, lang, supplier, setSupplier, customers, milkEntries, payments, refreshPayments } = useApp();
+  const { t, lang, supplier, setSupplier, customers, milkEntries, payments, refreshPayments, requireAuth } = useApp();
 
   const isHindi = lang === 'hi';
   const todayStr = useMemo(() => toLocalIso(new Date()), []);
@@ -98,17 +98,74 @@ export const DashboardScreen = ({ navigation }: any) => {
           latestDate: p.date
         });
       } else {
-        const item = map.get(key)!;
-        item.count += 1;
-        item.totalPaid += p.amountPaid;
-        if (p.date > item.latestDate) {
-          item.latestDate = p.date;
+        const existing = map.get(key)!;
+        existing.count += 1;
+        existing.totalPaid += p.amountPaid;
+        if (p.date > existing.latestDate) {
+          existing.latestDate = p.date;
         }
       }
     });
 
-    return Array.from(map.values()).sort((a, b) => b.totalPaid - a.totalPaid);
+    return Array.from(map.values()).sort((a, b) => b.latestDate.localeCompare(a.latestDate));
   }, [payments, customers, isHindi]);
+
+  // Selected Customer for Detailed Payment Receipts Modal
+  const [selectedCustPayment, setSelectedCustPayment] = useState<CustPaymentSummary | null>(null);
+
+  // Filtered payment receipts for the selected customer
+  const selectedCustPaymentList = useMemo(() => {
+    if (!selectedCustPayment) return [];
+    return payments
+      .filter(p => !p.isDeleted && (p.customerId === selectedCustPayment.customerId || p.customerName === selectedCustPayment.customerName))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [payments, selectedCustPayment]);
+
+  // Quick Action: Delete individual payment from dashboard history modal
+  const handleDeletePaymentFromDashboard = (paymentId: string) => {
+    requireAuth(() => {
+      confirmAction(
+        isHindi ? 'भुगतान रसीद हटाएं?' : 'Delete Payment Receipt?',
+        isHindi
+          ? 'क्या आप वाकई इस भुगतान रसीद को हटाना चाहते हैं? हटाने पर हिसाब में यह राशि दोबारा बकाया में जुड़ जाएगी।'
+          : 'Are you sure you want to delete this payment receipt? Outstanding balance will be updated accordingly.',
+        async () => {
+          await StorageService.deletePayment(paymentId, supplier?.id);
+          await refreshPayments();
+          showAlert(isHindi ? '✓ रसीद हटाई गई' : '✓ Receipt Deleted', isHindi ? 'भुगतान रसीद हटा दी गई है।' : 'Payment receipt removed.');
+        },
+        isHindi ? 'हटाएं' : 'Delete',
+        isHindi ? 'रद्द करें' : 'Cancel',
+        true
+      );
+    });
+  };
+
+  // State for editing dairy name modal
+  const [editDairyModalVisible, setEditDairyModalVisible] = useState(false);
+  const [dairyNameInput, setDairyNameInput] = useState('');
+  const [ownerNameInput, setOwnerNameInput] = useState('');
+
+  // Payment History Modal State
+  const [payHistoryVisible, setPayHistoryVisible] = useState(false);
+
+  // Automatically prompt if authenticated supplier profile has placeholder/default name
+  useEffect(() => {
+    if (
+      supplier &&
+      supplier.phone &&
+      supplier.phone.length >= 10 &&
+      (supplier.businessName === 'Om Fresh Dairy Farm' ||
+        supplier.name === 'Om Dairy Supplier' ||
+        supplier.businessName === 'Fresh Milk Dairy' ||
+        supplier.businessName === 'Krishna Fresh Dairy' ||
+        !supplier.businessName)
+    ) {
+      setDairyNameInput(supplier.businessName === 'Om Fresh Dairy Farm' ? '' : supplier.businessName);
+      setOwnerNameInput(supplier.name === 'Om Dairy Supplier' ? '' : supplier.name);
+      setEditDairyModalVisible(true);
+    }
+  }, [supplier]);
 
   // Filtered Customer Summaries by search term
   const [paymentCustSearch, setPaymentCustSearch] = useState('');
@@ -149,29 +206,6 @@ export const DashboardScreen = ({ navigation }: any) => {
     return customerPaymentSummaries.find(c => c.customerId === selectedPaymentCustId) || null;
   }, [customerPaymentSummaries, selectedPaymentCustId]);
 
-  // Dairy Name Setup / Edit Modal State
-  const [editDairyModalVisible, setEditDairyModalVisible] = useState(false);
-  const [dairyNameInput, setDairyNameInput] = useState('');
-  const [ownerNameInput, setOwnerNameInput] = useState('');
-
-  // Payment History Modal State
-  const [payHistoryVisible, setPayHistoryVisible] = useState(false);
-
-  // Automatically prompt if supplier profile has placeholder/default name
-  useEffect(() => {
-    if (
-      supplier &&
-      (supplier.businessName === 'Om Fresh Dairy Farm' ||
-        supplier.name === 'Om Dairy Supplier' ||
-        supplier.businessName === 'Fresh Milk Dairy' ||
-        supplier.businessName === 'Krishna Fresh Dairy' ||
-        !supplier.businessName)
-    ) {
-      setDairyNameInput(supplier.businessName === 'Om Fresh Dairy Farm' ? '' : supplier.businessName);
-      setOwnerNameInput(supplier.name === 'Om Dairy Supplier' ? '' : supplier.name);
-      setEditDairyModalVisible(true);
-    }
-  }, [supplier]);
 
   const handleSaveDairyProfile = async () => {
     Keyboard.dismiss();
@@ -347,9 +381,11 @@ export const DashboardScreen = ({ navigation }: any) => {
           <TouchableOpacity
             style={{ flex: 1 }}
             onPress={() => {
-              setDairyNameInput(supplier?.businessName === 'Om Fresh Dairy Farm' ? '' : (supplier?.businessName || ''));
-              setOwnerNameInput(supplier?.name === 'Om Dairy Supplier' ? '' : (supplier?.name || ''));
-              setEditDairyModalVisible(true);
+              requireAuth(() => {
+                setDairyNameInput(supplier?.businessName === 'Om Fresh Dairy Farm' ? '' : (supplier?.businessName || ''));
+                setOwnerNameInput(supplier?.name === 'Om Dairy Supplier' ? '' : (supplier?.name || ''));
+                setEditDairyModalVisible(true);
+              });
             }}
             activeOpacity={0.7}
           >

@@ -17,6 +17,10 @@ interface AppContextType {
   payments: Payment[];
   refreshPayments: () => Promise<void>;
   isLoading: boolean;
+  isAuthModalVisible: boolean;
+  openAuthModal: () => void;
+  closeAuthModal: () => void;
+  requireAuth: (onAuthorized: () => void) => boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -56,6 +60,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [milkEntries, setMilkEntries] = useState<MilkEntry[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthModalVisible, setIsAuthModalVisible] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -85,12 +90,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Trigger background sync on launch
         AutoSyncService.queueSync(savedSupplier, 1200);
       } else {
-        // Incomplete profile or no phone - clear session and require login
+        // Incomplete profile or no phone - clear session, but allow access to local/demo data
         await StorageService.clearActiveSession();
         setSupplierState(null);
-        setCustomers([]);
-        setMilkEntries([]);
-        setPayments([]);
+        // Load default/legacy customers, entries, and payments so guest mode is fully browsable
+        const [custs, entries, pays] = await Promise.all([
+          StorageService.getCustomers(),
+          StorageService.getMilkEntries(),
+          StorageService.getPayments()
+        ]);
+        setCustomers(custs.filter(c => !c.isDeleted));
+        setMilkEntries(entries.filter(e => !e.isDeleted));
+        setPayments(pays.filter(p => !p.isDeleted));
       }
     } finally {
       setIsLoading(false);
@@ -101,15 +112,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!newSupplier) {
       await StorageService.clearActiveSession();
       setSupplierState(null);
-      setCustomers([]);
-      setMilkEntries([]);
-      setPayments([]);
+      const [custs, entries, pays] = await Promise.all([
+        StorageService.getCustomers(),
+        StorageService.getMilkEntries(),
+        StorageService.getPayments()
+      ]);
+      setCustomers(custs.filter(c => !c.isDeleted));
+      setMilkEntries(entries.filter(e => !e.isDeleted));
+      setPayments(pays.filter(p => !p.isDeleted));
       return;
     }
 
     StorageService.setActiveSupplierId(newSupplier.id);
     await StorageService.saveSupplier(newSupplier);
     setSupplierState(newSupplier);
+    setIsAuthModalVisible(false);
 
     // Refresh records scoped to the new supplier
     const [custs, entries, pays] = await Promise.all([
@@ -148,6 +165,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPayments(pays.filter(p => !p.isDeleted));
   };
 
+  const openAuthModal = () => {
+    setIsAuthModalVisible(true);
+  };
+
+  const closeAuthModal = () => {
+    setIsAuthModalVisible(false);
+  };
+
+  const requireAuth = (onAuthorized: () => void): boolean => {
+    const isAuthenticated = Boolean(
+      supplier && supplier.id && supplier.phone && supplier.phone.length >= 10
+    );
+    if (isAuthenticated) {
+      onAuthorized();
+      return true;
+    }
+    // Prompt login modal
+    setIsAuthModalVisible(true);
+    return false;
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -162,7 +200,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshMilkEntries,
         payments,
         refreshPayments,
-        isLoading
+        isLoading,
+        isAuthModalVisible,
+        openAuthModal,
+        closeAuthModal,
+        requireAuth
       }}
     >
       {children}

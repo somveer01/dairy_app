@@ -73,7 +73,7 @@ const cleanPhoneInput = (raw?: string | null): string => {
 };
 
 export const CustomerListScreen = () => {
-  const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier } = useApp();
+  const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier, requireAuth } = useApp();
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -106,9 +106,11 @@ export const CustomerListScreen = () => {
 
   const openWhatsAppModal = () => {
     Keyboard.dismiss();
-    setWhatsappGroupName('');
-    setParsedWhatsAppCustomers([]);
-    setWhatsappModalVisible(true);
+    requireAuth(() => {
+      setWhatsappGroupName('');
+      setParsedWhatsAppCustomers([]);
+      setWhatsappModalVisible(true);
+    });
   };
 
   // Check for incoming shared WhatsApp chat files from Android Share Sheet (Web Share Target)
@@ -297,164 +299,173 @@ export const CustomerListScreen = () => {
 
   const openAddModal = () => {
     Keyboard.dismiss();
-    setEditingCustomer(null);
-    setName('');
-    setPhone('');
-    setAddress('');
-    setMilkType('cow');
-    setDefaultLitres('2.0');
-    setRatePerLitre('55');
-    setNotes('');
-    setModalVisible(true);
+    requireAuth(() => {
+      setEditingCustomer(null);
+      setName('');
+      setPhone('');
+      setAddress('');
+      setMilkType('cow');
+      setDefaultLitres('2.0');
+      setRatePerLitre('55');
+      setNotes('');
+      setModalVisible(true);
+    });
   };
 
   const openEditModal = (cust: Customer) => {
     Keyboard.dismiss();
-    setEditingCustomer(cust);
-    setName(cust.name);
-    setPhone(cust.phone);
-    setAddress(cust.address || '');
-    setMilkType(cust.milkType);
-    setDefaultLitres(cust.defaultLitres.toString());
-    setRatePerLitre(cust.ratePerLitre.toString());
-    setNotes(cust.notes || '');
-    setModalVisible(true);
+    requireAuth(() => {
+      setEditingCustomer(cust);
+      setName(cust.name);
+      setPhone(cust.phone);
+      setAddress(cust.address || '');
+      setMilkType(cust.milkType);
+      setDefaultLitres(cust.defaultLitres.toString());
+      setRatePerLitre(cust.ratePerLitre.toString());
+      setNotes(cust.notes || '');
+      setModalVisible(true);
+    });
   };
 
   const handleSave = async () => {
     Keyboard.dismiss();
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      showAlert(
-        lang === 'hi' ? 'नाम आवश्यक है' : 'Validation Error',
-        lang === 'hi' ? 'कृपया ग्राहक का नाम दर्ज करें।' : 'Please enter customer name.'
-      );
-      return;
-    }
+    requireAuth(async () => {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        showAlert(
+          lang === 'hi' ? 'नाम आवश्यक है' : 'Validation Error',
+          lang === 'hi' ? 'कृपया ग्राहक का नाम दर्ज करें।' : 'Please enter customer name.'
+        );
+        return;
+      }
 
-    const normPhone = normalizePhoneDigits(phone);
-    if (!normPhone || normPhone.length < 10) {
-      showAlert(
-        lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
-        lang === 'hi' ? 'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।' : 'Please enter a valid 10-digit mobile number.'
-      );
-      return;
-    }
+      const normPhone = normalizePhoneDigits(phone);
+      if (!normPhone || normPhone.length < 10) {
+        showAlert(
+          lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
+          lang === 'hi' ? 'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।' : 'Please enter a valid 10-digit mobile number.'
+        );
+        return;
+      }
 
-    // Check if phone number already exists under another customer
-    const existingMatch = customers.find(c => {
-      if (editingCustomer && c.id === editingCustomer.id) return false;
-      const cNorm = normalizePhoneDigits(c.phone);
-      return cNorm && cNorm === normPhone;
+      // Check if phone number already exists under another customer
+      const existingMatch = customers.find(c => {
+        if (editingCustomer && c.id === editingCustomer.id) return false;
+        const cNorm = normalizePhoneDigits(c.phone);
+        return cNorm && cNorm === normPhone;
+      });
+
+      if (existingMatch) {
+        showAlert(
+          lang === 'hi' ? 'मोबाइल नंबर पहले से मौजूद है' : 'Phone Number Already Exists',
+          lang === 'hi'
+            ? `यह मोबाइल नंबर (${phone}) पहले से ग्राहक "${existingMatch.name}" के नाम पर दर्ज है। कृपया दूसरा नंबर दर्ज करें या मौजूदा ग्राहक का विवरण बदलें।`
+            : `This phone number (${phone}) is already registered under customer "${existingMatch.name}". Please enter a different number or edit the existing customer.`
+        );
+        return;
+      }
+
+      const litres = parseFloat(defaultLitres) || 1.0;
+      const rate = parseFloat(ratePerLitre) || 50;
+
+      const customerData: Customer = {
+        id: editingCustomer ? editingCustomer.id : 'cust_' + Date.now(),
+        supplierId: supplier?.id || 'supp_default',
+        name: trimmedName,
+        phone: normPhone,
+        address: address.trim(),
+        milkType: milkType,
+        defaultLitres: litres,
+        ratePerLitre: rate,
+        notes: notes.trim(),
+        createdAt: editingCustomer ? editingCustomer.createdAt : Date.now()
+      };
+
+      if (editingCustomer && editingCustomer.name.trim() !== trimmedName) {
+        // Customer name updated - update historical milk entries and payments as well
+        await StorageService.updateCustomerName(editingCustomer.id, trimmedName);
+        await refreshMilkEntries();
+        await refreshPayments();
+      }
+
+      await StorageService.saveCustomer(customerData);
+      await refreshCustomers();
+      CardSyncService.syncCustomerCard(customerData.id, supplier, [...customers, customerData], milkEntries, payments);
+      setModalVisible(false);
     });
-
-    if (existingMatch) {
-      showAlert(
-        lang === 'hi' ? 'मोबाइल नंबर पहले से मौजूद है' : 'Phone Number Already Exists',
-        lang === 'hi'
-          ? `यह मोबाइल नंबर (${phone}) पहले से ग्राहक "${existingMatch.name}" के नाम पर दर्ज है। कृपया दूसरा नंबर दर्ज करें या मौजूदा ग्राहक का विवरण बदलें।`
-          : `This phone number (${phone}) is already registered under customer "${existingMatch.name}". Please enter a different number or edit the existing customer.`
-      );
-      return;
-    }
-
-    const litres = parseFloat(defaultLitres) || 1.0;
-    const rate = parseFloat(ratePerLitre) || 50;
-
-    const customerData: Customer = {
-      id: editingCustomer ? editingCustomer.id : 'cust_' + Date.now(),
-      supplierId: supplier?.id || 'supp_default',
-      name: trimmedName,
-      phone: normPhone,
-      address: address.trim(),
-      milkType: milkType,
-      defaultLitres: litres,
-      ratePerLitre: rate,
-      notes: notes.trim(),
-      createdAt: editingCustomer ? editingCustomer.createdAt : Date.now()
-    };
-
-    if (editingCustomer && editingCustomer.name.trim() !== trimmedName) {
-      // Customer name updated - update historical milk entries and payments as well
-      await StorageService.updateCustomerName(editingCustomer.id, trimmedName);
-      await refreshMilkEntries();
-      await refreshPayments();
-    }
-
-    await StorageService.saveCustomer(customerData);
-    await refreshCustomers();
-    CardSyncService.syncCustomerCard(customerData.id, supplier, [...customers, customerData], milkEntries, payments);
-    setModalVisible(false);
   };
 
   const handleDelete = (id: string, custName: string) => {
-    confirmAction(
-      'ग्राहक हटाएं (Delete Customer)',
-      `क्या आप वाकई इस ग्राहक को अपनी लिस्ट से हटाना चाहते हैं?\n• ग्राहक का नाम (Customer): ${custName}\n• सूचना: हटाने पर इस ग्राहक का नाम लिस्ट से हट जाएगा।`,
-      async () => {
-        await StorageService.deleteCustomer(id, supplier?.id);
-        await CardSyncService.deleteCustomerCard(supplier?.id || 'supp_1', id);
-        await refreshCustomers();
-        await refreshMilkEntries();
-        await refreshPayments();
-      },
-      '🗑️ हटाएं (Delete)',
-      'रद्द करें (Cancel)',
-      true
-    );
+    requireAuth(() => {
+      confirmAction(
+        'ग्राहक हटाएं (Delete Customer)',
+        `क्या आप वाकई इस ग्राहक को अपनी लिस्ट से हटाना चाहते हैं?\n• ग्राहक का नाम (Customer): ${custName}\n• सूचना: हटाने पर इस ग्राहक का नाम लिस्ट से हट जाएगा।`,
+        async () => {
+          await StorageService.deleteCustomer(id, supplier?.id);
+          await CardSyncService.deleteCustomerCard(supplier?.id || 'supp_1', id);
+          await refreshCustomers();
+          await refreshMilkEntries();
+          await refreshPayments();
+        },
+        '🗑️ हटाएं (Delete)',
+        'रद्द करें (Cancel)',
+        true
+      );
+    });
   };
 
   // --- CONTACTS IMPORT FLOW ---
   const openContactsImportModal = async () => {
     Keyboard.dismiss();
-    setContactModalVisible(true);
-    setContactSearch('');
+    requireAuth(async () => {
+      setContactModalVisible(true);
+      setContactSearch('');
 
-    if (Platform.OS === 'web') {
-      // On Web/PWA, browser security does not allow silent background contact reading.
-      // Instead, we let the user trigger the Android/browser contact picker or upload a VCF file.
-      setIsLoadingContacts(false);
-      return;
-    }
-
-    setIsLoadingContacts(true);
-    try {
-      // 1. Request permission safely on native Android/iOS
-      const permissionRes = await Contacts.requestPermissionsAsync();
-      if (permissionRes.status !== 'granted') {
+      if (Platform.OS === 'web') {
+        // On Web/PWA, browser security does not allow silent background contact reading.
+        // Instead, we let the user trigger the Android/browser contact picker or upload a VCF file.
         setIsLoadingContacts(false);
-        showAlert(
-          'Permission Denied',
-          'Please allow contact permissions in your phone settings to import contacts directly.'
-        );
-        setContactModalVisible(false);
         return;
       }
 
-      const existingPhoneMap = new Map<string, Customer>();
-      customers.forEach(c => {
-        const norm = normalizePhoneDigits(c.phone);
-        if (norm) existingPhoneMap.set(norm, c);
-      });
-      const validList: PhoneContactItem[] = [];
-
-      // 2. Fetch contacts across all accounts (Device, SIM, Google, Outlook)
-      let contactRecords: any[] = [];
+      setIsLoadingContacts(true);
       try {
-        if (typeof Contact?.getAllDetails === 'function') {
-          contactRecords = await Contact.getAllDetails(
-            ['givenName', 'familyName', 'fullName', 'phones', 'emails'] as any,
-            { limit: 2000 }
+        // 1. Request permission safely on native Android/iOS
+        const permissionRes = await Contacts.requestPermissionsAsync();
+        if (permissionRes.status !== 'granted') {
+          setIsLoadingContacts(false);
+          showAlert(
+            'Permission Denied',
+            'Please allow contact permissions in your phone settings to import contacts directly.'
           );
+          setContactModalVisible(false);
+          return;
         }
-      } catch (classErr) {
-        console.warn('Class-based getAllDetails failed, trying legacy fallback:', classErr);
-      }
 
-      // Fallback: If getAllDetails returned empty or failed, try legacy import
-      if (!contactRecords || contactRecords.length === 0) {
+        const existingPhoneMap = new Map<string, Customer>();
+        customers.forEach(c => {
+          const norm = normalizePhoneDigits(c.phone);
+          if (norm) existingPhoneMap.set(norm, c);
+        });
+        const validList: PhoneContactItem[] = [];
+
+        // 2. Fetch contacts across all accounts (Device, SIM, Google, Outlook)
+        let contactRecords: any[] = [];
         try {
-          const LegacyContacts = require('expo-contacts/legacy');
+          const res = await Contacts.getContactsAsync({
+            fields: [
+              Contacts.Fields.PhoneNumbers,
+              Contacts.Fields.Name,
+              Contacts.Fields.FirstName,
+              Contacts.Fields.LastName,
+              Contacts.Fields.Emails
+            ],
+            sort: Contacts.SortTypes.FirstName
+          });
+          contactRecords = res.data || [];
+        } catch (fetchErr) {
+          console.warn('Modern getContactsAsync failed, trying fallback:', fetchErr);
+          const LegacyContacts = Contacts as any;
           if (LegacyContacts && typeof LegacyContacts.getContactsAsync === 'function') {
             const legacyRes = await LegacyContacts.getContactsAsync({
               fields: [
@@ -468,99 +479,93 @@ export const CustomerListScreen = () => {
             });
             contactRecords = legacyRes?.data || [];
           }
-        } catch (legacyErr) {
-          console.warn('Legacy getContactsAsync failed:', legacyErr);
         }
-      }
 
-      // 3. Process retrieved contacts across all accounts
-      if (contactRecords && contactRecords.length > 0) {
-        contactRecords.forEach((c: any, index: number) => {
-          let displayName = '';
-          if (c.name && typeof c.name === 'string' && c.name.trim()) {
-            displayName = c.name.trim();
-          } else if (c.fullName && typeof c.fullName === 'string' && c.fullName.trim()) {
-            displayName = c.fullName.trim();
-          } else if (c.givenName || c.familyName) {
-            displayName = `${c.givenName || ''} ${c.familyName || ''}`.trim();
-          } else if (c.firstName || c.lastName) {
-            displayName = `${c.firstName || ''} ${c.lastName || ''}`.trim();
-          }
+        // 3. Process retrieved contacts across all accounts
+        if (contactRecords && contactRecords.length > 0) {
+          contactRecords.forEach((c: any, index: number) => {
+            let displayName = '';
+            if (c.name && typeof c.name === 'string' && c.name.trim()) {
+              displayName = c.name.trim();
+            } else if (c.fullName && typeof c.fullName === 'string' && c.fullName.trim()) {
+              displayName = c.fullName.trim();
+            } else if (c.givenName || c.familyName) {
+              displayName = `${c.givenName || ''} ${c.familyName || ''}`.trim();
+            } else if (c.firstName || c.lastName) {
+              displayName = `${c.firstName || ''} ${c.lastName || ''}`.trim();
+            }
 
-          const phones = c.phones || c.phoneNumbers || [];
-          let extractedPhone = '';
-          if (Array.isArray(phones)) {
-            for (const p of phones) {
-              const rawStr = p?.number || p?.digits || '';
-              const cleanStr = rawStr.replace(/[^0-9]/g, '');
-              if (cleanStr.length >= 10) {
-                extractedPhone = cleanStr.slice(-10);
-                break;
-              } else if (cleanStr.length > 0 && !extractedPhone) {
-                extractedPhone = cleanStr;
+            const phones = c.phones || c.phoneNumbers || [];
+            let extractedPhone = '';
+            if (Array.isArray(phones)) {
+              for (const p of phones) {
+                const num = p.number || p.digits;
+                const clean = normalizePhoneDigits(num);
+                if (clean && clean.length >= 10) {
+                  extractedPhone = clean;
+                  break;
+                }
               }
             }
-          }
 
-          const emails = c.emails || [];
-          let extractedEmail = '';
-          if (Array.isArray(emails) && emails.length > 0) {
-            extractedEmail = emails[0]?.email || emails[0]?.address || (typeof emails[0] === 'string' ? emails[0] : '');
-          }
-
-          if (!displayName) {
-            if (extractedEmail) {
-              displayName = extractedEmail.split('@')[0];
-            } else if (extractedPhone) {
-              displayName = `Contact ${extractedPhone}`;
-            } else {
-              displayName = `Contact ${index + 1}`;
+            const emails = c.emails || [];
+            let extractedEmail = '';
+            if (Array.isArray(emails) && emails.length > 0) {
+              extractedEmail = emails[0]?.email || emails[0]?.address || '';
             }
-          }
 
-          if (extractedPhone || extractedEmail) {
-            const existingCust = extractedPhone ? existingPhoneMap.get(extractedPhone) : undefined;
-            if (!existingCust) {
-              validList.push({
-                id: c.id || `contact_${index}_${Math.random().toString(36).substring(7)}`,
-                name: displayName,
-                phone: extractedPhone,
-                email: extractedEmail,
-                hasPhone: extractedPhone.length >= 10,
-                isSelected: false,
-                isNameUpdate: false
-              });
-            } else if (existingCust.name.trim().toLowerCase() !== displayName.trim().toLowerCase()) {
-              // Phone number already exists, but name in phonebook is different from Dairy App!
-              validList.push({
-                id: c.id || `contact_${index}_${Math.random().toString(36).substring(7)}`,
-                name: displayName,
-                phone: extractedPhone,
-                email: extractedEmail,
-                hasPhone: extractedPhone.length >= 10,
-                isSelected: true,
-                isNameUpdate: true,
-                existingCustomerId: existingCust.id,
-                existingName: existingCust.name
-              });
+            if (!displayName) {
+              if (extractedPhone) {
+                displayName = `Contact ${extractedPhone.slice(-4)}`;
+              } else {
+                displayName = `Contact ${index + 1}`;
+              }
             }
-          }
-        });
 
-        validList.sort((a, b) => a.name.localeCompare(b.name));
-        setDeviceContacts(validList);
-      } else {
-        setDeviceContacts([]);
+            if (extractedPhone || extractedEmail) {
+              const existingCust = extractedPhone ? existingPhoneMap.get(extractedPhone) : undefined;
+              if (!existingCust) {
+                validList.push({
+                  id: c.id || `contact_${index}_${Math.random().toString(36).substring(7)}`,
+                  name: displayName,
+                  phone: extractedPhone,
+                  email: extractedEmail,
+                  hasPhone: extractedPhone.length >= 10,
+                  isSelected: false,
+                  isNameUpdate: false
+                });
+              } else if (existingCust.name.trim().toLowerCase() !== displayName.trim().toLowerCase()) {
+                // Phone number already exists, but name in phonebook is different from Dairy App!
+                validList.push({
+                  id: c.id || `contact_${index}_${Math.random().toString(36).substring(7)}`,
+                  name: displayName,
+                  phone: extractedPhone,
+                  email: extractedEmail,
+                  hasPhone: extractedPhone.length >= 10,
+                  isSelected: true,
+                  isNameUpdate: true,
+                  existingCustomerId: existingCust.id,
+                  existingName: existingCust.name
+                });
+              }
+            }
+          });
+
+          validList.sort((a, b) => a.name.localeCompare(b.name));
+          setDeviceContacts(validList);
+        } else {
+          setDeviceContacts([]);
+        }
+      } catch (error: any) {
+        console.warn('Contact read error:', error);
+        showAlert(
+          'Contacts Notice',
+          `Unable to read contacts directly: ${error?.message || 'Permission or device restriction'}.\n\nTip: You can use the "+ Add" button to quickly add customers.`
+        );
+      } finally {
+        setIsLoadingContacts(false);
       }
-    } catch (error: any) {
-      console.warn('Contact read error:', error);
-      showAlert(
-        'Contacts Notice',
-        `Unable to read contacts directly: ${error?.message || 'Permission or device restriction'}.\n\nTip: You can use the "+ Add" button to quickly add customers.`
-      );
-    } finally {
-      setIsLoadingContacts(false);
-    }
+    });
   };
 
   // Helper to process single picked contact (from Web or Native)

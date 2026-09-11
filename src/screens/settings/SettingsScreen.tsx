@@ -33,7 +33,9 @@ export const SettingsScreen = () => {
     milkEntries,
     refreshMilkEntries,
     payments,
-    refreshPayments
+    refreshPayments,
+    openAuthModal,
+    requireAuth
   } = useApp();
 
   const [inspectorVisible, setInspectorVisible] = useState(false);
@@ -59,10 +61,12 @@ export const SettingsScreen = () => {
   }, []);
 
   const openEditProfile = () => {
-    setEditName(supplier?.name || '');
-    setEditBusinessName(supplier?.businessName || '');
-    setEditPhone(supplier?.phone || '');
-    setEditProfileVisible(true);
+    requireAuth(() => {
+      setEditName(supplier?.name || '');
+      setEditBusinessName(supplier?.businessName || '');
+      setEditPhone(supplier?.phone || '');
+      setEditProfileVisible(true);
+    });
   };
 
   const handleSaveProfile = async () => {
@@ -109,11 +113,13 @@ export const SettingsScreen = () => {
   };
 
   const handleManualSync = () => {
-    AutoSyncService.queueSync(supplier, 0);
-    showAlert(
-      lang === 'hi' ? 'ऑटो-सिंक प्रारंभ' : 'Sync Initiated',
-      lang === 'hi' ? 'बैकग्राउंड में क्लाउड सिंक शुरू कर दिया गया है।' : 'Cloud background sync started.'
-    );
+    requireAuth(() => {
+      AutoSyncService.queueSync(supplier, 0);
+      showAlert(
+        lang === 'hi' ? 'ऑटो-सिंक प्रारंभ' : 'Sync Initiated',
+        lang === 'hi' ? 'बैकग्राउंड में क्लाउड सिंक शुरू कर दिया गया है।' : 'Cloud background sync started.'
+      );
+    });
   };
 
   const handleTestCloudConnection = async () => {
@@ -124,37 +130,41 @@ export const SettingsScreen = () => {
   };
 
   const handleCloudUpload = async () => {
-    if (!supplier) {
-      showAlert('Notice', 'No active supplier profile.');
-      return;
-    }
-    setIsSyncingCloud(true);
-    const res = await FirebaseSyncService.uploadAllToCloud(supplier);
-    setIsSyncingCloud(false);
-    showAlert(res.success ? 'Cloud Backup Complete' : 'Sync Error', res.message);
+    requireAuth(async () => {
+      if (!supplier) {
+        showAlert('Notice', 'No active supplier profile.');
+        return;
+      }
+      setIsSyncingCloud(true);
+      const res = await FirebaseSyncService.uploadAllToCloud(supplier);
+      setIsSyncingCloud(false);
+      showAlert(res.success ? 'Cloud Backup Complete' : 'Sync Error', res.message);
+    });
   };
 
   const handleCloudDownload = async () => {
-    confirmAction(
-      'क्लाउड से रिस्टोर करें (Restore from Cloud)',
-      'क्या आप Firebase Cloud से अपने सभी रिकॉर्ड डाउनलोड और रिस्टोर करना चाहते हैं?\n• सूचना: वर्तमान डेटा क्लाउड बैकअप से अपडेट हो जाएगा।',
-      async () => {
-        setIsSyncingCloud(true);
-        const res = await FirebaseSyncService.downloadFromCloud(supplier?.id);
-        const restoredSupplier = await StorageService.getSupplier();
-        if (restoredSupplier) {
-          setSupplier(restoredSupplier);
-        }
-        await refreshCustomers();
-        await refreshMilkEntries();
-        await refreshPayments();
-        setIsSyncingCloud(false);
-        showAlert(res.success ? 'रिस्टोर सफल (Restored)' : 'त्रुटि (Error)', res.message);
-      },
-      '⬇️ रिस्टोर करें (Restore)',
-      'रद्द करें (Cancel)',
-      false
-    );
+    requireAuth(() => {
+      confirmAction(
+        'क्लाउड से रिस्टोर करें (Restore from Cloud)',
+        'क्या आप Firebase Cloud से अपने सभी रिकॉर्ड डाउनलोड और रिस्टोर करना चाहते हैं?\n• सूचना: वर्तमान डेटा क्लाउड बैकअप से अपडेट हो जाएगा।',
+        async () => {
+          setIsSyncingCloud(true);
+          const res = await FirebaseSyncService.downloadFromCloud(supplier?.id);
+          const restoredSupplier = await StorageService.getSupplier();
+          if (restoredSupplier) {
+            setSupplier(restoredSupplier);
+          }
+          await refreshCustomers();
+          await refreshMilkEntries();
+          await refreshPayments();
+          setIsSyncingCloud(false);
+          showAlert(res.success ? 'रिस्टोर सफल (Restored)' : 'त्रुटि (Error)', res.message);
+        },
+        '⬇️ रिस्टोर करें (Restore)',
+        'रद्द करें (Cancel)',
+        false
+      );
+    });
   };
 
   const handleExportBackup = async () => {
@@ -172,35 +182,39 @@ export const SettingsScreen = () => {
   };
 
   const handleClearCustomers = () => {
-    confirmAction(
-      'सभी ग्राहक हटाएं (Remove All Customers)',
-      `क्या आप वाकई सभी ग्राहकों को हटाना चाहते हैं?\n• कुल ग्राहक: ${customers.length} लोग\n• चेतावनी: यह पूरी ग्राहक सूची को खाली कर देगा।`,
-      async () => {
-        await StorageService.clearAllCustomers();
-        await refreshCustomers();
-        showAlert('ग्राहक हटा दिए गए (Customers Removed)', 'सभी ग्राहक प्रोफाइल हटा दी गई हैं।');
-      },
-      '🗑️ सभी हटाएं (Remove All)',
-      'रद्द करें (Cancel)',
-      true
-    );
+    requireAuth(() => {
+      confirmAction(
+        'सभी ग्राहक हटाएं (Remove All Customers)',
+        `क्या आप वाकई सभी ग्राहकों को हटाना चाहते हैं?\n• कुल ग्राहक: ${customers.length} लोग\n• चेतावनी: यह पूरी ग्राहक सूची को खाली कर देगा।`,
+        async () => {
+          await StorageService.clearAllCustomers();
+          await refreshCustomers();
+          showAlert('ग्राहक हटा दिए गए (Customers Removed)', 'सभी ग्राहक प्रोफाइल हटा दी गई हैं।');
+        },
+        '🗑️ सभी हटाएं (Remove All)',
+        'रद्द करें (Cancel)',
+        true
+      );
+    });
   };
 
   const handleResetData = () => {
-    confirmAction(
-      'पूरा डेटा रीसेट करें (Reset All Data)',
-      'क्या आप सभी ग्राहक, दूध का रजिस्टर और पेमेंट रिकॉर्ड पूरी तरह मिटाना चाहते हैं?\n• चेतावनी: यह प्रक्रिया वापस नहीं की जा सकती। सारा डेटा मिट जाएगा।',
-      async () => {
-        await StorageService.clearAllData();
-        await refreshCustomers();
-        await refreshMilkEntries();
-        await refreshPayments();
-        showAlert('डेटा रीसेट पूर्ण (Reset Complete)', 'सभी रिकॉर्ड मिटा दिए गए हैं।');
-      },
-      '⚠️ पूरा डेटा मिटाएं (Reset All)',
-      'रद्द करें (Cancel)',
-      true
-    );
+    requireAuth(() => {
+      confirmAction(
+        'पूरा डेटा रीसेट करें (Reset All Data)',
+        'क्या आप सभी ग्राहक, दूध का रजिस्टर और पेमेंट रिकॉर्ड पूरी तरह मिटाना चाहते हैं?\n• चेतावनी: यह प्रक्रिया वापस नहीं की जा सकती। सारा डेटा मिट जाएगा।',
+        async () => {
+          await StorageService.clearAllData();
+          await refreshCustomers();
+          await refreshMilkEntries();
+          await refreshPayments();
+          showAlert('डेटा रीसेट पूर्ण (Reset Complete)', 'सभी रिकॉर्ड मिटा दिए गए हैं।');
+        },
+        '⚠️ पूरा डेटा मिटाएं (Reset All)',
+        'रद्द करें (Cancel)',
+        true
+      );
+    });
   };
 
   const handleInstallPWA = () => {
@@ -281,23 +295,44 @@ export const SettingsScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {/* Supplier Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>🥛</Text>
+        {supplier?.phone && supplier.phone.length >= 10 ? (
+          <View style={styles.profileCard}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>🥛</Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.supplierName}>{supplier.name || 'Dairy Supplier'}</Text>
+              <Text style={styles.businessName}>{supplier.businessName || 'Fresh Milk Dairy'}</Text>
+              <Text style={styles.phoneText}>📞 {supplier.phone}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.editProfileBtn}
+              onPress={openEditProfile}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.editProfileBtnText}>✏️ {lang === 'hi' ? 'बदलें' : 'Edit'}</Text>
+            </TouchableOpacity>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.supplierName}>{supplier?.name || 'Dairy Supplier'}</Text>
-            <Text style={styles.businessName}>{supplier?.businessName || 'Fresh Milk Dairy'}</Text>
-            <Text style={styles.phoneText}>📞 {supplier?.phone || 'N/A'}</Text>
+        ) : (
+          <View style={[styles.profileCard, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
+            <View style={[styles.avatar, { backgroundColor: '#e0f2fe' }]}>
+              <Text style={styles.avatarText}>👤</Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.supplierName}>{lang === 'hi' ? 'अतिथि मोड (Guest Mode)' : 'Guest Mode'}</Text>
+              <Text style={styles.businessName}>{lang === 'hi' ? 'रिकॉर्ड सहेजने व सिंक के लिए लॉगिन करें' : 'Login to add entries & cloud sync'}</Text>
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: '#0284c7', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 }}
+              onPress={openAuthModal}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 13 }}>
+                🔐 {lang === 'hi' ? 'लॉग इन' : 'Login'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.editProfileBtn}
-            onPress={openEditProfile}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.editProfileBtnText}>✏️ {lang === 'hi' ? 'बदलें' : 'Edit'}</Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
         {/* Language Selection */}
         <Text style={styles.sectionHeader}>{t.language}</Text>
@@ -543,15 +578,28 @@ export const SettingsScreen = () => {
           <Text style={styles.infoSubtitle}>React Native • Instant Touch & Responsive</Text>
         </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity
-          style={styles.logoutBtn}
-          onPress={handleLogout}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Text style={styles.logoutText}>{t.logout}</Text>
-        </TouchableOpacity>
+        {/* Logout / Login Action Button */}
+        {supplier?.phone && supplier.phone.length >= 10 ? (
+          <TouchableOpacity
+            style={styles.logoutBtn}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={styles.logoutText}>{t.logout}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.logoutBtn, { backgroundColor: '#0284c7' }]}
+            onPress={openAuthModal}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.logoutText, { color: '#ffffff' }]}>
+              🔐 {lang === 'hi' ? 'लॉग इन या साइन अप करें (Login / Sign Up)' : 'Login or Sign Up'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
       {/* Storage Inspector Modal */}

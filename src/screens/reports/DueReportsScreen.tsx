@@ -49,7 +49,7 @@ const toLocalIso = (d: Date): string => {
 };
 
 export const DueReportsScreen = () => {
-  const { t, lang, customers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier } = useApp();
+  const { t, lang, customers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier, requireAuth } = useApp();
   
   const now = new Date();
   const [reportMode, setReportMode] = useState<ReportMode>('month');
@@ -440,68 +440,74 @@ export const DueReportsScreen = () => {
 
   const openPayModal = (cust: Customer) => {
     Keyboard.dismiss();
-    setPaymentCustomer(cust);
-    setPayDate(getTodayDisplayDate());
-    setPayAmount('');
-    setPayNotes('Lump sum milk bill payment');
-    setPaymentModalVisible(true);
+    requireAuth(() => {
+      setPaymentCustomer(cust);
+      setPayDate(getTodayDisplayDate());
+      setPayAmount('');
+      setPayNotes('Lump sum milk bill payment');
+      setPaymentModalVisible(true);
+    });
   };
 
   const handleSavePayment = async () => {
     Keyboard.dismiss();
-    if (!paymentCustomer) return;
-    const amountVal = parseFloat(payAmount);
-    if (isNaN(amountVal) || amountVal <= 0) {
+    requireAuth(async () => {
+      if (!paymentCustomer) return;
+      const amountVal = parseFloat(payAmount);
+      if (isNaN(amountVal) || amountVal <= 0) {
+        showAlert(
+          lang === 'hi' ? 'अमान्य राशि' : 'Invalid Amount',
+          lang === 'hi' ? 'कृपया एक मान्य राशि दर्ज करें।' : 'Please enter a valid payment amount.'
+        );
+        return;
+      }
+
+      const paymentIsoDate = parseToIsoDate(payDate) || toLocalIso(new Date());
+
+      const newPayment: Payment = {
+        id: 'pay_' + Date.now(),
+        supplierId: supplier?.id || 'supp_default',
+        customerId: paymentCustomer.id,
+        customerName: paymentCustomer.name,
+        date: paymentIsoDate,
+        amountPaid: amountVal,
+        notes: payNotes.trim(),
+        createdAt: Date.now()
+      };
+
+      await StorageService.savePayment(newPayment);
+      await refreshPayments();
+      CardSyncService.syncCustomerCard(paymentCustomer.id, supplier, customers, milkEntries, [...payments, newPayment]);
+      setPaymentModalVisible(false);
       showAlert(
-        lang === 'hi' ? 'अमान्य राशि' : 'Invalid Amount',
-        lang === 'hi' ? 'कृपया एक मान्य राशि दर्ज करें।' : 'Please enter a valid payment amount.'
+        lang === 'hi' ? '✓ भुगतान सहेजा गया' : '✓ Payment Saved',
+        lang === 'hi'
+          ? `₹${amountVal} का भुगतान (${formatToDisplayDate(paymentIsoDate)}) ${paymentCustomer.name} के लिए दर्ज किया गया।`
+          : `Payment of ₹${amountVal} (${formatToDisplayDate(paymentIsoDate)}) recorded for ${paymentCustomer.name}.`
       );
-      return;
-    }
-
-    const paymentIsoDate = parseToIsoDate(payDate) || toLocalIso(new Date());
-
-    const newPayment: Payment = {
-      id: 'pay_' + Date.now(),
-      supplierId: supplier?.id || 'supp_default',
-      customerId: paymentCustomer.id,
-      customerName: paymentCustomer.name,
-      date: paymentIsoDate,
-      amountPaid: amountVal,
-      notes: payNotes.trim(),
-      createdAt: Date.now()
-    };
-
-    await StorageService.savePayment(newPayment);
-    await refreshPayments();
-    CardSyncService.syncCustomerCard(paymentCustomer.id, supplier, customers, milkEntries, [...payments, newPayment]);
-    setPaymentModalVisible(false);
-    showAlert(
-      lang === 'hi' ? '✓ भुगतान सहेजा गया' : '✓ Payment Saved',
-      lang === 'hi'
-        ? `₹${amountVal} का भुगतान (${formatToDisplayDate(paymentIsoDate)}) ${paymentCustomer.name} के लिए दर्ज किया गया।`
-        : `Payment of ₹${amountVal} (${formatToDisplayDate(paymentIsoDate)}) recorded for ${paymentCustomer.name}.`
-    );
+    });
   };
 
   const handleDeletePayment = (payId: string) => {
-    confirmAction(
-      lang === 'hi' ? 'भुगतान हटाएं?' : 'Delete Payment?',
-      lang === 'hi' ? 'क्या आप इस भुगतान को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं होगी।' : 'Are you sure you want to delete this payment? This cannot be undone.',
-      async () => {
-        await StorageService.deletePayment(payId, supplier?.id);
-        await refreshPayments();
-        CardSyncService.syncAllCards(
-          supplier,
-          customers.filter(c => !c.isDeleted),
-          milkEntries.filter(e => !e.isDeleted),
-          payments.filter(p => p.id !== payId && !p.isDeleted)
-        );
-      },
-      lang === 'hi' ? 'हटाएं' : 'Delete',
-      lang === 'hi' ? 'रद्द करें' : 'Cancel',
-      true
-    );
+    requireAuth(() => {
+      confirmAction(
+        lang === 'hi' ? 'भुगतान हटाएं?' : 'Delete Payment?',
+        lang === 'hi' ? 'क्या आप इस भुगतान को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं होगी।' : 'Are you sure you want to delete this payment? This cannot be undone.',
+        async () => {
+          await StorageService.deletePayment(payId, supplier?.id);
+          await refreshPayments();
+          CardSyncService.syncAllCards(
+            supplier,
+            customers.filter(c => !c.isDeleted),
+            milkEntries.filter(e => !e.isDeleted),
+            payments.filter(p => p.id !== payId && !p.isDeleted)
+          );
+        },
+        lang === 'hi' ? 'हटाएं' : 'Delete',
+        lang === 'hi' ? 'रद्द करें' : 'Cancel',
+        true
+      );
+    });
   };
 
   const handleShareWhatsAppSummary = async (summary: CustomerDueSummary) => {
@@ -539,79 +545,85 @@ export const DueReportsScreen = () => {
 
   // Open Quick Entry modal for a specific missing date
   const openQuickEntryForDate = (dateStr: string) => {
-    if (!activeDetailSummary) return;
-    setQuickEntryDate(dateStr);
-    setQuickEntrySession('Morning');
-    setQuickEntryMilkType(activeDetailSummary.customer.milkType);
-    setQuickEntryLitres(activeDetailSummary.customer.defaultLitres.toString());
-    setQuickEntryRate(activeDetailSummary.customer.ratePerLitre.toString());
-    setQuickEntryModalVisible(true);
+    requireAuth(() => {
+      if (!activeDetailSummary) return;
+      setQuickEntryDate(dateStr);
+      setQuickEntrySession('Morning');
+      setQuickEntryMilkType(activeDetailSummary.customer.milkType);
+      setQuickEntryLitres(activeDetailSummary.customer.defaultLitres.toString());
+      setQuickEntryRate(activeDetailSummary.customer.ratePerLitre.toString());
+      setQuickEntryModalVisible(true);
+    });
   };
 
   const handleSaveQuickEntry = async () => {
     Keyboard.dismiss();
-    if (!activeDetailSummary || !quickEntryDate) return;
-    const qty = parseFloat(quickEntryLitres);
-    const r = parseFloat(quickEntryRate);
-    if (isNaN(qty) || qty <= 0) {
-      showAlert('Invalid Quantity', 'Please enter a valid quantity in litres.');
-      return;
-    }
-    if (isNaN(r) || r <= 0) {
-      showAlert('Invalid Rate', 'Please enter a valid rate per litre.');
-      return;
-    }
+    requireAuth(async () => {
+      if (!activeDetailSummary || !quickEntryDate) return;
+      const qty = parseFloat(quickEntryLitres);
+      const r = parseFloat(quickEntryRate);
+      if (isNaN(qty) || qty <= 0) {
+        showAlert('Invalid Quantity', 'Please enter a valid quantity in litres.');
+        return;
+      }
+      if (isNaN(r) || r <= 0) {
+        showAlert('Invalid Rate', 'Please enter a valid rate per litre.');
+        return;
+      }
 
-    const newEntry: MilkEntry = {
-      id: `entry_${quickEntryDate}_${quickEntrySession}_${activeDetailSummary.customer.id}_${Date.now()}`,
-      supplierId: supplier?.id || 'supp_default',
-      customerId: activeDetailSummary.customer.id,
-      customerName: activeDetailSummary.customer.name,
-      date: quickEntryDate,
-      session: quickEntrySession,
-      milkType: quickEntryMilkType,
-      quantityLitres: qty,
-      ratePerLitre: r,
-      amount: qty * r,
-      isPaid: false,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
+      const newEntry: MilkEntry = {
+        id: `entry_${quickEntryDate}_${quickEntrySession}_${activeDetailSummary.customer.id}_${Date.now()}`,
+        supplierId: supplier?.id || 'supp_default',
+        customerId: activeDetailSummary.customer.id,
+        customerName: activeDetailSummary.customer.name,
+        date: quickEntryDate,
+        session: quickEntrySession,
+        milkType: quickEntryMilkType,
+        quantityLitres: qty,
+        ratePerLitre: r,
+        amount: qty * r,
+        isPaid: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
 
-    await StorageService.saveMilkEntry(newEntry);
-    await refreshMilkEntries();
-    CardSyncService.syncCustomerCard(
-      activeDetailSummary.customer.id,
-      supplier,
-      customers.filter(c => !c.isDeleted),
-      [...milkEntries.filter(e => !e.isDeleted), newEntry],
-      payments.filter(p => !p.isDeleted)
-    );
-    setQuickEntryModalVisible(false);
-    showAlert('Entry Recorded', `Delivery of ${qty}L for ${quickEntryDate} (${quickEntrySession}) saved.`);
+      await StorageService.saveMilkEntry(newEntry);
+      await refreshMilkEntries();
+      CardSyncService.syncCustomerCard(
+        activeDetailSummary.customer.id,
+        supplier,
+        customers.filter(c => !c.isDeleted),
+        [...milkEntries.filter(e => !e.isDeleted), newEntry],
+        payments.filter(p => !p.isDeleted)
+      );
+      setQuickEntryModalVisible(false);
+      showAlert('Entry Recorded', `Delivery of ${qty}L for ${quickEntryDate} (${quickEntrySession}) saved.`);
+    });
   };
 
   const handleDeleteEntry = (entryId: string, dateStr: string) => {
-    confirmAction(
-      'डिलीवरी एंट्री हटाएं (Delete Delivery)',
-      `क्या आप यह डिलीवरी एंट्री हटाना चाहते हैं?\n• तारीख (Date): ${dateStr}\n• सूचना: यह एंट्री हिसाब और रिपोर्ट से हट जाएगी।`,
-      async () => {
-        await StorageService.deleteMilkEntry(entryId, supplier?.id);
-        await refreshMilkEntries();
-        if (activeDetailSummary) {
-          CardSyncService.syncCustomerCard(
-            activeDetailSummary.customer.id,
-            supplier,
-            customers.filter(c => !c.isDeleted),
-            milkEntries.filter(e => e.id !== entryId && !e.isDeleted),
-            payments.filter(p => !p.isDeleted)
-          );
-        }
-      },
-      '🗑️ हटाएं (Delete)',
-      'रद्द करें (Cancel)',
-      true
-    );
+    requireAuth(() => {
+      confirmAction(
+        'डिलीवरी एंट्री हटाएं (Delete Delivery)',
+        `क्या आप यह डिलीवरी एंट्री हटाना चाहते हैं?\n• तारीख (Date): ${dateStr}\n• सूचना: यह एंट्री हिसाब और रिपोर्ट से हट जाएगी।`,
+        async () => {
+          await StorageService.deleteMilkEntry(entryId, supplier?.id);
+          await refreshMilkEntries();
+          if (activeDetailSummary) {
+            CardSyncService.syncCustomerCard(
+              activeDetailSummary.customer.id,
+              supplier,
+              customers.filter(c => !c.isDeleted),
+              milkEntries.filter(e => e.id !== entryId && !e.isDeleted),
+              payments.filter(p => !p.isDeleted)
+            );
+          }
+        },
+        '🗑️ हटाएं (Delete)',
+        'रद्द करें (Cancel)',
+        true
+      );
+    });
   };
 
 

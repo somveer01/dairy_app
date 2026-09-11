@@ -25,7 +25,11 @@ import {
   ConfirmationResult
 } from 'firebase/auth';
 
-export const LoginScreen = () => {
+interface LoginScreenProps {
+  onClose?: () => void;
+}
+
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
   const { t, lang, setSupplier } = useApp();
 
   // Mode: 'login' | 'signup'
@@ -479,6 +483,17 @@ export const LoginScreen = () => {
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
+        {onClose && (
+          <TouchableOpacity
+            style={styles.closeModalBtn}
+            onPress={onClose}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.closeModalBtnText}>✕ {lang === 'hi' ? 'बंद करें (रद्द)' : 'Close'}</Text>
+          </TouchableOpacity>
+        )}
+
         <View style={styles.headerBox}>
           <Text style={styles.icon}>🥛</Text>
           <Text style={styles.appTitle}>{t.appTitle}</Text>
@@ -930,6 +945,19 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     alignSelf: 'center',
     width: '100%'
+  },
+  closeModalBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 10
+  },
+  closeModalBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569'
   },
   headerBox: { alignItems: 'center', marginBottom: 20 },
   icon: { fontSize: 48, marginBottom: 8 },
