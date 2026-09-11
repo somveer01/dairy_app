@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dairy-pwa-1789147216308';
+const CACHE_NAME = 'dairy-pwa-1789152428945';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
@@ -6,7 +6,11 @@ const CORE_ASSETS = [
   '/dairy_app/manifest.json',
   '/dairy_app/manifest-card.json',
   '/dairy_app/favicon.ico',
-  '/dairy_app/assets/icon.png'
+  '/dairy_app/assets/icon-192.png',
+  '/dairy_app/assets/icon-512.png',
+  '/dairy_app/assets/icon.png',
+  '/dairy_app/_expo/static/js/web/index-d38bcec42aee0b9a66a8d239f8eaa665.js',
+  '/dairy_app/_expo/static/js/web/jszip-2a67ffc103fc39ffd63659cab1624a9c.js'
 ];
 
 self.addEventListener('install', (e) => {
@@ -68,20 +72,22 @@ self.addEventListener('fetch', (e) => {
 
   if (e.request.method !== 'GET') return;
 
-  // For HTML navigation requests: NETWORK FIRST, fallback to cache when offline
+  // For HTML navigation requests: Cache-first with background network revalidation (Stale-While-Revalidate)
   if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
     e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-          }
-          return res;
-        })
-        .catch(() => {
-          return caches.match('/dairy_app/index.html').then(m => m || caches.match('/dairy_app/'));
-        })
+      caches.match('/dairy_app/index.html').then((cached) => {
+        const networkFetch = fetch(e.request)
+          .then((res) => {
+            if (res && res.status === 200) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+            }
+            return res;
+          })
+          .catch(() => cached);
+        // Instant load from cache if available, else wait for network
+        return cached || networkFetch;
+      })
     );
     return;
   }

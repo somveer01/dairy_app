@@ -5,16 +5,22 @@
   "id": "/dairy_app/",
   "icons": [
     {
-      "src": "/dairy_app/assets/icon.png",
+      "src": "/dairy_app/assets/icon-192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "/dairy_app/assets/icon.png",
+      "src": "/dairy_app/assets/icon-512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/dairy_app/assets/icon.png",
+      "type": "image/png",
+      "sizes": "1024x1024",
+      "purpose": "any"
     }
   ],
   "start_url": "/dairy_app/",
