@@ -260,7 +260,7 @@ export const DueReportsScreen = () => {
     const entriesByCust = new Map<string, MilkEntry[]>();
     for (let i = 0; i < milkEntries.length; i++) {
       const e = milkEntries[i];
-      if (e.date >= startDate && e.date <= endDate) {
+      if (!e.isDeleted && e.date >= startDate && e.date <= endDate) {
         let list = entriesByCust.get(e.customerId);
         if (!list) {
           list = [];
@@ -275,13 +275,14 @@ export const DueReportsScreen = () => {
     const paymentsInPeriodByCust = new Map<string, number>();
     for (let i = 0; i < payments.length; i++) {
       const p = payments[i];
+      if (p.isDeleted) continue;
       paymentsAllTimeByCust.set(p.customerId, (paymentsAllTimeByCust.get(p.customerId) || 0) + p.amountPaid);
       if (p.date >= startDate && p.date <= endDate) {
         paymentsInPeriodByCust.set(p.customerId, (paymentsInPeriodByCust.get(p.customerId) || 0) + p.amountPaid);
       }
     }
 
-    return customers.map(cust => {
+    return customers.filter(c => !c.isDeleted).map(cust => {
       const custEntries = entriesByCust.get(cust.id) || [];
       const totalPaidAllTime = paymentsAllTimeByCust.get(cust.id) || 0;
       const totalPaid = paymentsInPeriodByCust.get(cust.id) || 0;
@@ -362,7 +363,7 @@ export const DueReportsScreen = () => {
     const dates: string[] = [];
 
     if (reportMode === 'all') {
-      const custEntries = milkEntries.filter(e => e.customerId === activeDetailSummary.customer.id);
+      const custEntries = milkEntries.filter(e => !e.isDeleted && e.customerId === activeDetailSummary.customer.id);
       const today = new Date();
       const todayNoon = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
       if (custEntries.length > 0) {
@@ -398,7 +399,7 @@ export const DueReportsScreen = () => {
 
     return dates.map(dateStr => {
       const entries = milkEntries.filter(
-        e => e.customerId === activeDetailSummary.customer.id && e.date === dateStr
+        e => !e.isDeleted && e.customerId === activeDetailSummary.customer.id && e.date === dateStr
       );
       const isDelivered = entries.length > 0;
       const totalLitres = entries.reduce((sum, e) => sum + e.quantityLitres, 0);
@@ -488,9 +489,14 @@ export const DueReportsScreen = () => {
       lang === 'hi' ? 'भुगतान हटाएं?' : 'Delete Payment?',
       lang === 'hi' ? 'क्या आप इस भुगतान को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं होगी।' : 'Are you sure you want to delete this payment? This cannot be undone.',
       async () => {
-        await StorageService.deletePayment(payId);
+        await StorageService.deletePayment(payId, supplier?.id);
         await refreshPayments();
-        CardSyncService.syncAllCards(supplier, customers, milkEntries, payments.filter(p => p.id !== payId));
+        CardSyncService.syncAllCards(
+          supplier,
+          customers.filter(c => !c.isDeleted),
+          milkEntries.filter(e => !e.isDeleted),
+          payments.filter(p => p.id !== payId && !p.isDeleted)
+        );
       },
       lang === 'hi' ? 'हटाएं' : 'Delete',
       lang === 'hi' ? 'रद्द करें' : 'Cancel',
@@ -568,14 +574,19 @@ export const DueReportsScreen = () => {
       ratePerLitre: r,
       amount: qty * r,
       isPaid: false,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
 
     await StorageService.saveMilkEntry(newEntry);
     await refreshMilkEntries();
-    if (activeDetailSummary) {
-      CardSyncService.syncCustomerCard(activeDetailSummary.customer.id, supplier, customers, [...milkEntries, newEntry], payments);
-    }
+    CardSyncService.syncCustomerCard(
+      activeDetailSummary.customer.id,
+      supplier,
+      customers.filter(c => !c.isDeleted),
+      [...milkEntries.filter(e => !e.isDeleted), newEntry],
+      payments.filter(p => !p.isDeleted)
+    );
     setQuickEntryModalVisible(false);
     showAlert('Entry Recorded', `Delivery of ${qty}L for ${quickEntryDate} (${quickEntrySession}) saved.`);
   };
@@ -585,10 +596,16 @@ export const DueReportsScreen = () => {
       'डिलीवरी एंट्री हटाएं (Delete Delivery)',
       `क्या आप यह डिलीवरी एंट्री हटाना चाहते हैं?\n• तारीख (Date): ${dateStr}\n• सूचना: यह एंट्री हिसाब और रिपोर्ट से हट जाएगी।`,
       async () => {
-        await StorageService.deleteMilkEntry(entryId);
+        await StorageService.deleteMilkEntry(entryId, supplier?.id);
         await refreshMilkEntries();
         if (activeDetailSummary) {
-          CardSyncService.syncCustomerCard(activeDetailSummary.customer.id, supplier, customers, milkEntries.filter(e => e.id !== entryId), payments);
+          CardSyncService.syncCustomerCard(
+            activeDetailSummary.customer.id,
+            supplier,
+            customers.filter(c => !c.isDeleted),
+            milkEntries.filter(e => e.id !== entryId && !e.isDeleted),
+            payments.filter(p => !p.isDeleted)
+          );
         }
       },
       '🗑️ हटाएं (Delete)',

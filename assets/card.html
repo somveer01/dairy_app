@@ -1194,8 +1194,10 @@
         if (!res.ok) throw new Error('Network error');
         const data = await res.json();
 
-        if (!data) {
-          document.getElementById('loadingText').innerText = 'कार्ड डेटा अभी उपलब्ध नहीं है।\nकृप्या सप्लायर से संपर्क करें।';
+        if (!data || data.isDeleted) {
+          const spinner = document.getElementById('loadingSpinner');
+          if (spinner) spinner.style.display = 'none';
+          document.getElementById('loadingText').innerText = 'यह डिजिटल दूध कार्ड हटा दिया गया है या निष्क्रिय है।\nThis milk card has been deleted or deactivated.';
           return;
         }
 
@@ -1322,7 +1324,8 @@
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const dayEntries = entriesMap[dateKey] || [];
+        const rawDayEntries = entriesMap[dateKey] || [];
+        const dayEntries = rawDayEntries.filter(e => !e.isDeleted);
 
         let totalDayLitres = 0;
         let dayAmount = 0;
@@ -1371,7 +1374,7 @@
 
     function renderSummaryAndPayments(t) {
       const entriesMap = cardData.entries || {};
-      const payments = cardData.payments || [];
+      const payments = (cardData.payments || []).filter(p => !p.isDeleted);
 
       // Calculate totals for selected month & previous months
       let totalMonthLitres = 0;
@@ -1385,7 +1388,7 @@
       let allTimeDeliveries = 0;
 
       Object.keys(entriesMap).forEach(d => {
-        const dayEntries = entriesMap[d] || [];
+        const dayEntries = (entriesMap[d] || []).filter(e => !e.isDeleted);
         dayEntries.forEach(e => {
           const amt = Number(e.amount) || 0;
           allTimeDeliveries += amt;

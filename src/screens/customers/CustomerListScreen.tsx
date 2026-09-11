@@ -392,8 +392,11 @@ export const CustomerListScreen = () => {
       'ग्राहक हटाएं (Delete Customer)',
       `क्या आप वाकई इस ग्राहक को अपनी लिस्ट से हटाना चाहते हैं?\n• ग्राहक का नाम (Customer): ${custName}\n• सूचना: हटाने पर इस ग्राहक का नाम लिस्ट से हट जाएगा।`,
       async () => {
-        await StorageService.deleteCustomer(id);
+        await StorageService.deleteCustomer(id, supplier?.id);
+        await CardSyncService.deleteCustomerCard(supplier?.id || 'supp_1', id);
         await refreshCustomers();
+        await refreshMilkEntries();
+        await refreshPayments();
       },
       '🗑️ हटाएं (Delete)',
       'रद्द करें (Cancel)',
@@ -947,9 +950,10 @@ export const CustomerListScreen = () => {
 
   const filteredCustomers = customers.filter(
     c =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.phone.includes(search) ||
-      (c.address && c.address.toLowerCase().includes(search.toLowerCase()))
+      !c.isDeleted &&
+      (c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.phone.includes(search) ||
+        (c.address && c.address.toLowerCase().includes(search.toLowerCase())))
   );
 
   const filteredPhoneContacts = deviceContacts.filter(

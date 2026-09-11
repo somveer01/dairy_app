@@ -310,25 +310,77 @@ export const StorageService = {
     this.triggerAutoSync();
   },
 
-  async deleteCustomer(id: string): Promise<void> {
-    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS);
-    const raw = await this.getRawCustomers();
+  async deleteCustomer(id: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS, sId);
+    const raw = await this.getRawCustomers(sId);
     const existing = raw.find(c => c.id === id);
     if (existing) {
       existing.isDeleted = true;
       existing.updatedAt = Date.now();
       await AsyncStorage.setItem(key, JSON.stringify(raw));
-      this.triggerAutoSync();
+    }
+
+    // Clean up legacy storage key as well
+    const legacy = await AsyncStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+    if (legacy) {
+      try {
+        const legacyList: Customer[] = JSON.parse(legacy);
+        const legacyCust = legacyList.find(c => c.id === id);
+        if (legacyCust) {
+          legacyCust.isDeleted = true;
+          legacyCust.updatedAt = Date.now();
+          await AsyncStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(legacyList));
+        }
+      } catch {}
+    }
+
+    // Cascade delete related milk entries and payments for this customer
+    await this.deleteCustomerRecords(id, sId);
+    this.triggerAutoSync();
+  },
+
+  async deleteCustomerRecords(customerId: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    // Mark milk entries as deleted
+    const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, sId);
+    const rawEntries = await this.getRawMilkEntries(sId);
+    let entriesModified = false;
+    rawEntries.forEach(e => {
+      if (e.customerId === customerId && !e.isDeleted) {
+        e.isDeleted = true;
+        e.updatedAt = Date.now();
+        entriesModified = true;
+      }
+    });
+    if (entriesModified) {
+      await AsyncStorage.setItem(entryKey, JSON.stringify(rawEntries));
+    }
+
+    // Mark payments as deleted
+    const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS, sId);
+    const rawPays = await this.getRawPayments(sId);
+    let paysModified = false;
+    rawPays.forEach(p => {
+      if (p.customerId === customerId && !p.isDeleted) {
+        p.isDeleted = true;
+        p.updatedAt = Date.now();
+        paysModified = true;
+      }
+    });
+    if (paysModified) {
+      await AsyncStorage.setItem(payKey, JSON.stringify(rawPays));
     }
   },
 
   async updateCustomerName(id: string, newName: string): Promise<void> {
     const trimmed = newName.trim();
     if (!trimmed) return;
+    const sId = currentSupplierId || (await this.getSupplier())?.id;
 
     // 1. Update in Customers
-    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS);
-    const raw = await this.getRawCustomers();
+    const key = getScopedKey(STORAGE_KEYS.CUSTOMERS, sId);
+    const raw = await this.getRawCustomers(sId);
     const cust = raw.find(c => c.id === id);
     if (cust) {
       cust.name = trimmed;
@@ -337,8 +389,8 @@ export const StorageService = {
     }
 
     // 2. Update in Milk Entries
-    const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES);
-    const rawEntries = await this.getRawMilkEntries();
+    const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, sId);
+    const rawEntries = await this.getRawMilkEntries(sId);
     let entriesChanged = false;
     rawEntries.forEach(e => {
       if (e.customerId === id && e.customerName !== trimmed) {
@@ -352,8 +404,8 @@ export const StorageService = {
     }
 
     // 3. Update in Payments
-    const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS);
-    const rawPays = await this.getRawPayments();
+    const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS, sId);
+    const rawPays = await this.getRawPayments(sId);
     let paysChanged = false;
     rawPays.forEach(p => {
       if (p.customerId === id && p.customerName !== trimmed) {
@@ -416,16 +468,31 @@ export const StorageService = {
     this.triggerAutoSync();
   },
 
-  async deleteMilkEntry(id: string): Promise<void> {
-    const key = getScopedKey(STORAGE_KEYS.MILK_ENTRIES);
-    const raw = await this.getRawMilkEntries();
+  async deleteMilkEntry(id: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    const key = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, sId);
+    const raw = await this.getRawMilkEntries(sId);
     const existing = raw.find(e => e.id === id);
     if (existing) {
       existing.isDeleted = true;
       existing.updatedAt = Date.now();
       await AsyncStorage.setItem(key, JSON.stringify(raw));
-      this.triggerAutoSync();
     }
+
+    // Also mark in legacy key if present
+    const legacy = await AsyncStorage.getItem(STORAGE_KEYS.MILK_ENTRIES);
+    if (legacy) {
+      try {
+        const legacyList: MilkEntry[] = JSON.parse(legacy);
+        const legEntry = legacyList.find(e => e.id === id);
+        if (legEntry) {
+          legEntry.isDeleted = true;
+          legEntry.updatedAt = Date.now();
+          await AsyncStorage.setItem(STORAGE_KEYS.MILK_ENTRIES, JSON.stringify(legacyList));
+        }
+      } catch {}
+    }
+    this.triggerAutoSync();
   },
 
   // Public Payments API (Filters out isDeleted === true)
@@ -475,16 +542,31 @@ export const StorageService = {
     this.triggerAutoSync();
   },
 
-  async deletePayment(id: string): Promise<void> {
-    const key = getScopedKey(STORAGE_KEYS.PAYMENTS);
-    const raw = await this.getRawPayments();
+  async deletePayment(id: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    const key = getScopedKey(STORAGE_KEYS.PAYMENTS, sId);
+    const raw = await this.getRawPayments(sId);
     const existing = raw.find(p => p.id === id);
     if (existing) {
       existing.isDeleted = true;
       existing.updatedAt = Date.now();
       await AsyncStorage.setItem(key, JSON.stringify(raw));
-      this.triggerAutoSync();
     }
+
+    // Also mark in legacy key if present
+    const legacy = await AsyncStorage.getItem(STORAGE_KEYS.PAYMENTS);
+    if (legacy) {
+      try {
+        const legacyList: Payment[] = JSON.parse(legacy);
+        const legPay = legacyList.find(p => p.id === id);
+        if (legPay) {
+          legPay.isDeleted = true;
+          legPay.updatedAt = Date.now();
+          await AsyncStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(legacyList));
+        }
+      } catch {}
+    }
+    this.triggerAutoSync();
   },
 
   // Trigger background auto-sync if supplier is active

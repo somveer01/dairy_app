@@ -83,6 +83,16 @@ Thank you! — ${dairyName}`;
     }
   },
 
+  async deleteCustomerCard(supplierId: string, customerId: string): Promise<void> {
+    try {
+      const cleanSuppId = supplierId || 'supp_1';
+      const cardRef = ref(rtdb, `cards/${cleanSuppId}/${customerId}`);
+      await set(cardRef, { isDeleted: true, lastUpdated: Date.now() });
+    } catch (err) {
+      console.warn('Could not delete customer card on RTDB:', err);
+    }
+  },
+
   async syncCustomerCard(
     customerId: string,
     supplierParam?: Supplier | null,
@@ -94,15 +104,20 @@ Thank you! — ${dairyName}`;
       const supplier = supplierParam || (await StorageService.getSupplier());
       const suppId = supplier?.id || 'supp_1';
 
-      const customers = customersParam || (await StorageService.getCustomers());
-      const customer = customers.find(c => c.id === customerId);
-      if (!customer) return;
+      const allCustomers = customersParam || (await StorageService.getCustomers(suppId));
+      const customer = allCustomers.find(c => c.id === customerId);
+      
+      // If customer is deleted or missing, remove/deactivate card in RTDB
+      if (!customer || customer.isDeleted) {
+        await this.deleteCustomerCard(suppId, customerId);
+        return;
+      }
 
-      const allEntries = entriesParam || (await StorageService.getMilkEntries());
-      const custEntries = allEntries.filter(e => e.customerId === customerId);
+      const allEntries = entriesParam || (await StorageService.getMilkEntries(suppId));
+      const custEntries = allEntries.filter(e => e.customerId === customerId && !e.isDeleted);
 
-      const allPayments = paymentsParam || (await StorageService.getPayments());
-      const custPayments = allPayments.filter(p => p.customerId === customerId);
+      const allPayments = paymentsParam || (await StorageService.getPayments(suppId));
+      const custPayments = allPayments.filter(p => p.customerId === customerId && !p.isDeleted);
 
       // Group entries by date
       const entriesMap: Record<string, CardEntryItem[]> = {};
@@ -158,16 +173,18 @@ Thank you! — ${dairyName}`;
     try {
       const supplier = supplierParam || (await StorageService.getSupplier());
       const suppId = supplier?.id || 'supp_1';
-      const customers = customersParam || (await StorageService.getCustomers());
+      const allCustomers = customersParam || (await StorageService.getCustomers(suppId));
+      const customers = allCustomers.filter(c => !c.isDeleted);
       if (!customers || customers.length === 0) return;
 
-      const allEntries = entriesParam || (await StorageService.getMilkEntries());
-      const allPayments = paymentsParam || (await StorageService.getPayments());
+      const allEntries = (entriesParam || (await StorageService.getMilkEntries(suppId))).filter(e => !e.isDeleted);
+      const allPayments = (paymentsParam || (await StorageService.getPayments(suppId))).filter(p => !p.isDeleted);
 
       // Pre-group entries by customerId and date in single pass: O(E)
       const entriesByCust = new Map<string, Record<string, CardEntryItem[]>>();
       for (let i = 0; i < allEntries.length; i++) {
         const e = allEntries[i];
+        if (e.isDeleted) continue;
         let custMap = entriesByCust.get(e.customerId);
         if (!custMap) {
           custMap = {};
@@ -190,6 +207,7 @@ Thank you! — ${dairyName}`;
       const paymentsByCust = new Map<string, CardPaymentItem[]>();
       for (let i = 0; i < allPayments.length; i++) {
         const p = allPayments[i];
+        if (p.isDeleted) continue;
         let list = paymentsByCust.get(p.customerId);
         if (!list) {
           list = [];
@@ -208,6 +226,7 @@ Thank you! — ${dairyName}`;
 
       for (let i = 0; i < customers.length; i++) {
         const customer = customers[i];
+        if (customer.isDeleted) continue;
         cardsBatch[customer.id] = {
           supplierBusinessName: supplier?.businessName || 'डेयरी फ़ार्म',
           supplierName: supplier?.name || 'सप्लायर',

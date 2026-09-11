@@ -57,7 +57,7 @@ export const DailyRegisterScreen = () => {
 
     for (let i = 0; i < milkEntries.length; i++) {
       const e = milkEntries[i];
-      if (e.date === selectedDate && e.session === activeSession) {
+      if (!e.isDeleted && e.date === selectedDate && e.session === activeSession) {
         map.set(e.customerId, e);
         if (e.milkType === 'cow') cowQty += e.quantityLitres;
         if (e.milkType === 'buffalo') buffaloQty += e.quantityLitres;
@@ -79,9 +79,10 @@ export const DailyRegisterScreen = () => {
   }, [milkEntries, selectedDate, activeSession]);
 
   const filteredCustomers = useMemo(() => {
-    if (!searchFilter.trim()) return customers;
+    const activeCusts = customers.filter(c => !c.isDeleted);
+    if (!searchFilter.trim()) return activeCusts;
     const query = searchFilter.toLowerCase();
-    return customers.filter(
+    return activeCusts.filter(
       c => c.name.toLowerCase().includes(query) || c.phone.includes(query)
     );
   }, [customers, searchFilter]);
@@ -94,9 +95,15 @@ export const DailyRegisterScreen = () => {
       'दूध एंट्री हटाएं (Delete Milk Entry)',
       `क्या आप वाकई यह एंट्री हटाना चाहते हैं?\n• ग्राहक (Customer): ${customerName}\n• मात्रा (Quantity): ${entry.quantityLitres} L (${milkLabel})\n• शिफ्ट (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(entry.date)}\n• कुल रकम (Amount): ₹${entry.amount.toFixed(0)}`,
       async () => {
-        await StorageService.deleteMilkEntry(entry.id);
+        await StorageService.deleteMilkEntry(entry.id, supplier?.id);
         await refreshMilkEntries();
-        CardSyncService.syncCustomerCard(entry.customerId, supplier, customers, milkEntries.filter(e => e.id !== entry.id), payments);
+        CardSyncService.syncCustomerCard(
+          entry.customerId,
+          supplier,
+          customers.filter(c => !c.isDeleted),
+          milkEntries.filter(e => e.id !== entry.id && !e.isDeleted),
+          payments.filter(p => !p.isDeleted)
+        );
       },
       '🗑️ हटाएं (Delete)',
       'रद्द करें (Cancel)',

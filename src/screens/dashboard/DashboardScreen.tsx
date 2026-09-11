@@ -44,7 +44,7 @@ export const DashboardScreen = ({ navigation }: any) => {
 
   // Metrics for Today
   const todayStats = useMemo(() => {
-    const todayEntries = milkEntries.filter(e => e.date === todayStr);
+    const todayEntries = milkEntries.filter(e => !e.isDeleted && e.date === todayStr);
 
     let cowLitres = 0;
     let buffaloLitres = 0;
@@ -67,22 +67,23 @@ export const DashboardScreen = ({ navigation }: any) => {
 
   // Total Outstanding Due across all customers
   const overallDue = useMemo(() => {
-    const totalDeliveriesAmount = milkEntries.reduce((sum, e) => sum + e.amount, 0);
-    const totalPaymentsReceived = payments.reduce((sum, p) => sum + p.amountPaid, 0);
+    const totalDeliveriesAmount = milkEntries.filter(e => !e.isDeleted).reduce((sum, e) => sum + e.amount, 0);
+    const totalPaymentsReceived = payments.filter(p => !p.isDeleted).reduce((sum, p) => sum + p.amountPaid, 0);
     return Math.max(0, totalDeliveriesAmount - totalPaymentsReceived);
   }, [milkEntries, payments]);
 
   // Total Received Payments All Time
   const totalReceivedAllTime = useMemo(() => {
-    return payments.reduce((sum, p) => sum + p.amountPaid, 0);
+    return payments.filter(p => !p.isDeleted).reduce((sum, p) => sum + p.amountPaid, 0);
   }, [payments]);
 
   // Customer-Wise Payment Summaries (Grouped by customer)
   const customerPaymentSummaries = useMemo(() => {
     const map = new Map<string, CustPaymentSummary>();
+    const activeCustomers = customers.filter(c => !c.isDeleted);
 
-    payments.forEach(p => {
-      const cust = customers.find(c => c.id === p.customerId);
+    payments.filter(p => !p.isDeleted).forEach(p => {
+      const cust = activeCustomers.find(c => c.id === p.customerId);
       const key = p.customerId || p.customerName;
       const name = p.customerName || cust?.name || (isHindi ? 'अज्ञात ग्राहक' : 'Unknown Customer');
       const phone = cust?.phone || '';

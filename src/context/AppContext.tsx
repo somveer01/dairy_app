@@ -78,9 +78,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           StorageService.getPayments(savedSupplier.id)
         ]);
 
-        setCustomers(custs);
-        setMilkEntries(entries);
-        setPayments(pays);
+        setCustomers(custs.filter(c => !c.isDeleted));
+        setMilkEntries(entries.filter(e => !e.isDeleted));
+        setPayments(pays.filter(p => !p.isDeleted));
 
         // Trigger background sync on launch
         AutoSyncService.queueSync(savedSupplier, 1200);
@@ -118,9 +118,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       StorageService.getPayments(newSupplier.id)
     ]);
 
-    setCustomers(custs);
-    setMilkEntries(entries);
-    setPayments(pays);
+    setCustomers(custs.filter(c => !c.isDeleted));
+    setMilkEntries(entries.filter(e => !e.isDeleted));
+    setPayments(pays.filter(p => !p.isDeleted));
 
     AutoSyncService.queueSync(newSupplier, 500);
   };
@@ -133,19 +133,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshCustomers = async () => {
     const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
     const custs = await StorageService.getCustomers(sId);
-    setCustomers(custs);
+    setCustomers(custs.filter(c => !c.isDeleted));
   };
 
   const refreshMilkEntries = async () => {
     const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
     const entries = await StorageService.getMilkEntries(sId);
-    setMilkEntries(entries);
+    setMilkEntries(entries.filter(e => !e.isDeleted));
   };
 
   const refreshPayments = async () => {
     const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
     const pays = await StorageService.getPayments(sId);
-    setPayments(pays);
+    setPayments(pays.filter(p => !p.isDeleted));
   };
 
   return (
