@@ -9,16 +9,22 @@ const manifest = {
   id: '/dairy_app/',
   icons: [
     {
-      src: '/dairy_app/assets/icon.png',
+      src: '/dairy_app/assets/icon-192.png',
       type: 'image/png',
       sizes: '192x192',
       purpose: 'any maskable'
     },
     {
-      src: '/dairy_app/assets/icon.png',
+      src: '/dairy_app/assets/icon-512.png',
       type: 'image/png',
       sizes: '512x512',
       purpose: 'any maskable'
+    },
+    {
+      src: '/dairy_app/assets/icon.png',
+      type: 'image/png',
+      sizes: '1024x1024',
+      purpose: 'any'
     }
   ],
   start_url: '/dairy_app/',
@@ -54,11 +60,14 @@ const manifest = {
 
 fs.writeFileSync('dist/manifest.json', JSON.stringify(manifest, null, 2));
 
-// 2. Copy App Icon & .nojekyll
-if (fs.existsSync('assets/icon.png')) {
-  if (!fs.existsSync('dist/assets')) fs.mkdirSync('dist/assets', { recursive: true });
-  fs.copyFileSync('assets/icon.png', 'dist/assets/icon.png');
-}
+// 2. Copy App Icons & .nojekyll
+if (!fs.existsSync('dist/assets')) fs.mkdirSync('dist/assets', { recursive: true });
+['icon-192.png', 'icon-512.png', 'icon.png'].forEach(iconFile => {
+  if (fs.existsSync(`assets/${iconFile}`)) {
+    fs.copyFileSync(`assets/${iconFile}`, `dist/assets/${iconFile}`);
+  }
+});
+
 if (fs.existsSync('assets/training.html')) {
   fs.copyFileSync('assets/training.html', 'dist/training.html');
 }
@@ -69,6 +78,15 @@ if (fs.existsSync('assets/manifest-card.json')) {
   fs.copyFileSync('assets/manifest-card.json', 'dist/manifest-card.json');
 }
 fs.writeFileSync('dist/.nojekyll', '');
+
+// Discover generated JS bundles in dist/_expo/static/js/web/
+let jsBundles = [];
+const jsDir = path.join('dist', '_expo', 'static', 'js', 'web');
+if (fs.existsSync(jsDir)) {
+  jsBundles = fs.readdirSync(jsDir)
+    .filter(f => f.endsWith('.js'))
+    .map(f => `/dairy_app/_expo/static/js/web/${f}`);
+}
 
 // 3. PWA Service Worker (dist/sw.js)
 const BUILD_TIME = Date.now();
@@ -83,7 +101,9 @@ const CORE_ASSETS = [
   '/dairy_app/manifest.json',
   '/dairy_app/manifest-card.json',
   '/dairy_app/favicon.ico',
-  '/dairy_app/assets/icon.png'
+  '/dairy_app/assets/icon-192.png',
+  '/dairy_app/assets/icon-512.png',
+  '/dairy_app/assets/icon.png'${jsBundles.length ? ',\n  ' + jsBundles.map(b => `'${b}'`).join(',\n  ') : ''}
 ];
 
 self.addEventListener('install', (e) => {
@@ -145,20 +165,22 @@ self.addEventListener('fetch', (e) => {
 
   if (e.request.method !== 'GET') return;
 
-  // For HTML navigation requests: NETWORK FIRST, fallback to cache when offline
+  // For HTML navigation requests: Cache-first with background network revalidation (Stale-While-Revalidate)
   if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
     e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-          }
-          return res;
-        })
-        .catch(() => {
-          return caches.match('/dairy_app/index.html').then(m => m || caches.match('/dairy_app/'));
-        })
+      caches.match('/dairy_app/index.html').then((cached) => {
+        const networkFetch = fetch(e.request)
+          .then((res) => {
+            if (res && res.status === 200) {
+              const clone = res.clone();
+              caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+            }
+            return res;
+          })
+          .catch(() => cached);
+        // Instant load from cache if available, else wait for network
+        return cached || networkFetch;
+      })
     );
     return;
   }
@@ -206,7 +228,13 @@ html = html.replace(/<meta name=apple-mobile-web-app-capable[^>]*>/g, '');
 html = html.replace(/<meta name="apple-mobile-web-app-status-bar-style"[^>]*>/g, '');
 html = html.replace(/<meta name=apple-mobile-web-app-status-bar-style[^>]*>/g, '');
 
-const pwaHead = `  <link rel="manifest" href="/dairy_app/manifest.json"/>
+let preloadTags = '';
+jsBundles.forEach(bundlePath => {
+  preloadTags += `  <link rel="preload" href="${bundlePath}" as="script" fetchpriority="high"/>\n`;
+});
+
+const pwaHead = `  <link rel="preconnect" href="https://somveer01.github.io"/>
+${preloadTags}  <link rel="manifest" href="/dairy_app/manifest.json"/>
   <meta name="theme-color" content="#0284c7"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>

@@ -23,7 +23,6 @@ import { CardSyncService } from '../../services/cardSyncService';
 import { Customer, MilkType } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { parseWhatsAppText, ParsedWhatsAppCustomer, extractWhatsAppGroupName } from '../../utils/whatsappParser';
-import JSZip from 'jszip';
 
 interface PhoneContactItem {
   id: string;
@@ -136,6 +135,7 @@ export const CustomerListScreen = () => {
 
           let text = '';
           if (fileName.toLowerCase().endsWith('.zip')) {
+            const { default: JSZip } = await import('jszip');
             const zip = await JSZip.loadAsync(blob);
             const txtEntry = Object.values(zip.files).find(
               f => f.name.toLowerCase().endsWith('.txt') && !f.dir
@@ -179,6 +179,7 @@ export const CustomerListScreen = () => {
           setIsScanningWhatsApp(true);
           let text = '';
           if (file.name.toLowerCase().endsWith('.zip')) {
+            const { default: JSZip } = await import('jszip');
             const zip = await JSZip.loadAsync(file);
             const txtEntry = Object.values(zip.files).find(
               f => f.name.toLowerCase().endsWith('.txt') && !f.dir
