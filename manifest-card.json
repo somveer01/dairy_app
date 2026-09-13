@@ -21,6 +21,5 @@
   "background_color": "#ffffff",
   "theme_color": "#0284c7",
   "display": "standalone",
-  "orientation": "portrait",
-  "scope": "/dairy_app/"
+  "scope": "/dairy_app/card.html"
 }
