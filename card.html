@@ -148,6 +148,76 @@
       50% { opacity: 0.5; transform: scale(1.2); }
     }
 
+    /* Party Type Banner (Customer vs Vendor Identification) */
+    .party-type-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      margin-bottom: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .party-type-banner.party-customer {
+      background: #eff6ff;
+      border: 1.5px solid #bfdbfe;
+    }
+
+    .party-type-banner.party-vendor {
+      background: #fff7ed;
+      border: 1.5px solid #fed7aa;
+    }
+
+    .party-type-icon {
+      font-size: 20px;
+      width: 36px;
+      height: 36px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .party-customer .party-type-icon {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .party-vendor .party-type-icon {
+      background: #ffedd5;
+      color: #c2410c;
+    }
+
+    .party-type-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: -0.2px;
+    }
+
+    .party-customer .party-type-title {
+      color: #1e40af;
+    }
+
+    .party-vendor .party-type-title {
+      color: #c2410c;
+    }
+
+    .party-type-sub {
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 1px;
+    }
+
+    .party-customer .party-type-sub {
+      color: #3b82f6;
+    }
+
+    .party-vendor .party-type-sub {
+      color: #ea580c;
+    }
+
     /* Customer Info Banner */
     .customer-card {
       margin: 14px 16px;
@@ -431,6 +501,19 @@
       align-items: center;
     }
 
+    .due-hero-banner.vendor-due-hero {
+      background: #f0fdf4;
+      border-top: 1px dashed #bbf7d0;
+    }
+
+    .due-hero-banner.vendor-due-hero .due-hero-title {
+      color: #15803d;
+    }
+
+    .due-hero-banner.vendor-due-hero .due-hero-amount {
+      color: #16a34a;
+    }
+
     .due-hero-title {
       font-size: 13px;
       font-weight: 800;
@@ -441,6 +524,19 @@
       font-size: 24px;
       font-weight: 900;
       color: #dc2626;
+    }
+
+    .rate-badge.rate-vendor {
+      background: #fff7ed;
+      border-color: #fed7aa;
+    }
+
+    .rate-badge.rate-vendor .rate-label {
+      color: #c2410c;
+    }
+
+    .rate-badge.rate-vendor .rate-amount {
+      color: #ea580c;
     }
 
     /* Payments History List */
@@ -766,14 +862,23 @@
       </div>
     </div>
 
-    <!-- Customer Information Card -->
-    <section class="customer-card">
+    <!-- Customer / Vendor Information Card -->
+    <section class="customer-card" id="customerCard">
+      <!-- Party Identity Banner (Customer vs Vendor) -->
+      <div class="party-type-banner party-customer" id="partyTypeBanner">
+        <div class="party-type-icon" id="partyTypeIcon">👤</div>
+        <div style="flex: 1;">
+          <div class="party-type-title" id="partyTypeTitle">👤 ग्राहक डिजिटल दूध कार्ड</div>
+          <div class="party-type-sub" id="partyTypeSub">दूध खरीदार (Retail Milk Buyer)</div>
+        </div>
+      </div>
+
       <div class="cust-main-info">
         <div>
           <div class="cust-name" id="customerName">ग्राहक का नाम</div>
           <div class="cust-phone" id="customerPhone">📞 -</div>
         </div>
-        <div class="rate-badge">
+        <div class="rate-badge" id="rateBadgeBox">
           <div class="rate-label" id="rateLabel">दूध का भाव</div>
           <div class="rate-amount" id="rateValue">₹- / L</div>
         </div>
@@ -889,6 +994,14 @@
         langToggleText: 'English',
         liveStatus: 'लाइव ऑटो-अपडेट कार्ड',
         justUpdated: 'अभी अपडेटेड',
+        // Party Type Identity
+        customerBadgeTitle: '👤 ग्राहक डिजिटल दूध कार्ड',
+        customerBadgeSub: 'दूध खरीदार (Retail Milk Buyer)',
+        vendorBadgeTitle: '🚜 दूध विक्रेता / किसान कार्ड',
+        vendorBadgeSub: 'दूध आपूर्तिकर्ता / सप्लायर (Milk Seller to Dairy)',
+        customerDefaultName: 'ग्राहक का नाम',
+        vendorDefaultName: 'दूध विक्रेता / किसान का नाम',
+        // Customer Labels
         rateLabel: 'दूध का भाव',
         perLitre: '/ लीटर',
         cowMilk: '🐄 गाय का दूध',
@@ -907,11 +1020,21 @@
         monthDue: 'इस महीने का कुल बकाया:',
         netDue: '🔴 कुल बकाया राशि (Net Due)',
         netDueSub: 'कृपया समय पर भुगतान करें',
+        noMilkDay: 'कोई डिलीवरी नहीं (छूटा हुआ)',
+        // Vendor Labels
+        vendorRateLabel: 'दूध खरीद भाव',
+        vendorTotalDelivered: 'कुल आवक दूध:',
+        vendorDeliveredDays: 'दूध सप्लाय दिन:',
+        vendorTotalBill: 'कुल खरीद राशि:',
+        vendorTotalPaid: 'डेयरी से प्राप्त भुगतान:',
+        vendorMonthDue: 'इस महीने का देय बाकी:',
+        vendorNetDue: '🟢 कुल देय बाकी (Net Payable)',
+        vendorNetDueSub: 'डेयरी द्वारा आपको देय राशि',
+        vendorNoMilkDay: 'नागा / दूध नहीं आया (No Supply)',
         paymentsTitle: '💳 हालिया भुगतान रसीदें',
         noPayments: 'इस महीने कोई भुगतान दर्ज नहीं है।',
         callSupplier: 'सप्लायर को कॉल करें',
         waSupplier: 'व्हाट्सएप पर संपर्क',
-        noMilkDay: 'कोई डिलीवरी नहीं (छूटा हुआ)',
         sessionMorning: 'सुबह',
         sessionEvening: 'शाम',
         sessionCustom: 'अन्य समय',
@@ -931,6 +1054,14 @@
         langToggleText: 'हिंदी',
         liveStatus: 'Live Auto-Synced Card',
         justUpdated: 'Updated just now',
+        // Party Type Identity
+        customerBadgeTitle: '👤 Customer Digital Milk Card',
+        customerBadgeSub: 'Retail Milk Buyer',
+        vendorBadgeTitle: '🚜 Vendor / Farmer Milk Card',
+        vendorBadgeSub: 'Milk Supplier / Seller to Dairy',
+        customerDefaultName: 'Customer Name',
+        vendorDefaultName: 'Vendor / Farmer Name',
+        // Customer Labels
         rateLabel: 'Milk Rate',
         perLitre: '/ Litre',
         cowMilk: '🐄 Cow Milk',
@@ -949,11 +1080,21 @@
         monthDue: 'This Month Total Due:',
         netDue: '🔴 Net Pending Due Balance',
         netDueSub: 'Please clear at your earliest',
+        noMilkDay: 'No Milk Delivered (Skipped)',
+        // Vendor Labels
+        vendorRateLabel: 'Milk Purchase Rate',
+        vendorTotalDelivered: 'Total Milk Supplied:',
+        vendorDeliveredDays: 'Supplied Days:',
+        vendorTotalBill: 'Total Purchase Amount:',
+        vendorTotalPaid: 'Payments Received from Dairy:',
+        vendorMonthDue: 'This Month Total Payable:',
+        vendorNetDue: '🟢 Net Amount Payable by Dairy',
+        vendorNetDueSub: 'Total balance payable to you by Dairy',
+        vendorNoMilkDay: 'No Milk Supplied (Skipped)',
         paymentsTitle: '💳 Recent Payment Receipts',
         noPayments: 'No payment records for this month.',
         callSupplier: 'Call Supplier',
         waSupplier: 'WhatsApp Supplier',
-        noMilkDay: 'No Milk Delivered (Skipped)',
         sessionMorning: 'Morning',
         sessionEvening: 'Evening',
         sessionCustom: 'Custom',
@@ -980,20 +1121,53 @@
     const urlParams = new URLSearchParams(window.location.search);
     let supplierId = urlParams.get('s') || '';
     let customerId = urlParams.get('c') || '';
+    let partyTypeParam = (urlParams.get('type') || '').toLowerCase();
 
     if (supplierId && customerId) {
       localStorage.setItem('dairy_card_s', supplierId);
       localStorage.setItem('dairy_card_c', customerId);
+      if (partyTypeParam) localStorage.setItem('dairy_card_type', partyTypeParam);
     } else if (!supplierId || !customerId) {
       const savedS = localStorage.getItem('dairy_card_s');
       const savedC = localStorage.getItem('dairy_card_c');
+      const savedType = localStorage.getItem('dairy_card_type') || '';
       if (savedS && savedC) {
         supplierId = savedS;
         customerId = savedC;
+        if (!partyTypeParam && savedType) partyTypeParam = savedType;
         if (window.history && window.history.replaceState) {
-          window.history.replaceState(null, '', `card.html?s=${encodeURIComponent(savedS)}&c=${encodeURIComponent(savedC)}`);
+          window.history.replaceState(null, '', `card.html?s=${encodeURIComponent(savedS)}&c=${encodeURIComponent(savedC)}${savedType ? '&type=' + encodeURIComponent(savedType) : ''}`);
         }
       }
+    }
+
+    // Instant 0ms visual cue before network data loads
+    const initIsVendor = (partyTypeParam === 'vendor');
+    const initT = I18N[currentLang];
+    const initBanner = document.getElementById('partyTypeBanner');
+    const initIcon = document.getElementById('partyTypeIcon');
+    const initTitle = document.getElementById('partyTypeTitle');
+    const initSub = document.getElementById('partyTypeSub');
+    const initRateBox = document.getElementById('rateBadgeBox');
+    const initRateLabel = document.getElementById('rateLabel');
+    const initCustName = document.getElementById('customerName');
+
+    if (initIsVendor) {
+      if (initBanner) initBanner.className = 'party-type-banner party-vendor';
+      if (initIcon) initIcon.innerText = '🚜';
+      if (initTitle) initTitle.innerText = initT.vendorBadgeTitle;
+      if (initSub) initSub.innerText = initT.vendorBadgeSub;
+      if (initRateBox) initRateBox.className = 'rate-badge rate-vendor';
+      if (initRateLabel) initRateLabel.innerText = initT.vendorRateLabel;
+      if (initCustName) initCustName.innerText = initT.vendorDefaultName;
+    } else {
+      if (initBanner) initBanner.className = 'party-type-banner party-customer';
+      if (initIcon) initIcon.innerText = '👤';
+      if (initTitle) initTitle.innerText = initT.customerBadgeTitle;
+      if (initSub) initSub.innerText = initT.customerBadgeSub;
+      if (initRateBox) initRateBox.className = 'rate-badge';
+      if (initRateLabel) initRateLabel.innerText = initT.rateLabel;
+      if (initCustName) initCustName.innerText = initT.customerDefaultName;
     }
 
     // Instant offline cache restore for 0-delay display
@@ -1306,13 +1480,39 @@
       document.getElementById('businessName').innerText = cardData.supplierBusinessName || 'डेयरी फ़ार्म';
       document.getElementById('supplierName').innerText = (cardData.supplierName ? cardData.supplierName + ' (सप्लायर)' : 'सप्लायर');
 
-      // Customer Info
-      document.getElementById('customerName').innerText = cardData.customerName || 'ग्राहक';
+      // Check if Card is for Customer or Vendor (Sub-Supplier)
+      const paramType = (urlParams.get('type') || '').toLowerCase();
+      const isVendor = (paramType === 'vendor' || (cardData && cardData.partyType === 'vendor'));
+
+      // Update Party Type Banner & Card Theme
+      const partyBanner = document.getElementById('partyTypeBanner');
+      const partyIcon = document.getElementById('partyTypeIcon');
+      const partyTitle = document.getElementById('partyTypeTitle');
+      const partySub = document.getElementById('partyTypeSub');
+      const rateBadgeBox = document.getElementById('rateBadgeBox');
+
+      if (isVendor) {
+        if (partyBanner) partyBanner.className = 'party-type-banner party-vendor';
+        if (partyIcon) partyIcon.innerText = '🚜';
+        if (partyTitle) partyTitle.innerText = t.vendorBadgeTitle;
+        if (partySub) partySub.innerText = t.vendorBadgeSub;
+        if (rateBadgeBox) rateBadgeBox.className = 'rate-badge rate-vendor';
+        document.getElementById('rateLabel').innerText = t.vendorRateLabel;
+        document.getElementById('customerName').innerText = cardData.customerName || t.vendorDefaultName;
+      } else {
+        if (partyBanner) partyBanner.className = 'party-type-banner party-customer';
+        if (partyIcon) partyIcon.innerText = '👤';
+        if (partyTitle) partyTitle.innerText = t.customerBadgeTitle;
+        if (partySub) partySub.innerText = t.customerBadgeSub;
+        if (rateBadgeBox) rateBadgeBox.className = 'rate-badge';
+        document.getElementById('rateLabel').innerText = t.rateLabel;
+        document.getElementById('customerName').innerText = cardData.customerName || t.customerDefaultName;
+      }
+
       document.getElementById('customerPhone').innerText = cardData.customerPhone ? '📞 ' + cardData.customerPhone : '';
 
       // Rate & Milk Type
       const rate = cardData.ratePerLitre || 60;
-      document.getElementById('rateLabel').innerText = t.rateLabel;
       document.getElementById('rateValue').innerText = `₹${rate} ${t.perLitre}`;
 
       const milkType = (cardData.milkType || 'buffalo').toLowerCase();
@@ -1492,35 +1692,40 @@
       const now = new Date();
       const isCurrentMonth = (now.getFullYear() === selectedYear && now.getMonth() === selectedMonth);
 
+      // Check if Card is for Customer or Vendor (Sub-Supplier)
+      const paramType = (urlParams.get('type') || '').toLowerCase();
+      const isVendor = (paramType === 'vendor' || (cardData && cardData.partyType === 'vendor'));
+
       // Inject into Summary
       document.getElementById('summaryCardTitle').innerText = t.summaryTitle;
       document.getElementById('summaryRangeLabel').innerText = t.summaryRange;
 
-      document.getElementById('labelTotalDelivered').innerText = t.totalDelivered;
+      document.getElementById('labelTotalDelivered').innerText = isVendor ? t.vendorTotalDelivered : t.totalDelivered;
       document.getElementById('valTotalLitres').innerText = `${totalMonthLitres.toFixed(1)} L`;
 
-      document.getElementById('labelDeliveredDays').innerText = t.deliveredDays;
+      document.getElementById('labelDeliveredDays').innerText = isVendor ? t.vendorDeliveredDays : t.deliveredDays;
       document.getElementById('valDeliveredDays').innerText = `${deliveredDaysCount} ${t.daysUnit}`;
 
-      document.getElementById('labelPrevDue').innerText = t.prevDue;
+      document.getElementById('labelPrevDue').innerText = isVendor ? (currentLang === 'hi' ? 'पिछला देय बाकी:' : 'Previous Payable:') : t.prevDue;
       document.getElementById('valPrevDue').innerText = `₹${prevDue.toFixed(2)}`;
 
-      document.getElementById('labelTotalBill').innerText = t.totalBill;
+      document.getElementById('labelTotalBill').innerText = isVendor ? t.vendorTotalBill : t.totalBill;
       document.getElementById('valTotalBill').innerText = `₹${totalMonthBilled.toFixed(2)}`;
 
-      document.getElementById('labelTotalPaid').innerText = t.totalPaid;
+      document.getElementById('labelTotalPaid').innerText = isVendor ? t.vendorTotalPaid : t.totalPaid;
       document.getElementById('valTotalPaid').innerText = `₹${totalMonthPaid.toFixed(2)}`;
 
-      document.getElementById('labelMonthDue').innerText = t.monthDue;
+      document.getElementById('labelMonthDue').innerText = isVendor ? t.vendorMonthDue : t.monthDue;
       document.getElementById('valMonthDue').innerText = `₹${monthDue.toFixed(2)}`;
 
-      // Show Net Pending Due Hero Banner ONLY on current month
+      // Show Net Pending Due / Net Payable Hero Banner ONLY on current month
       const heroBanner = document.getElementById('dueHeroBanner');
       if (heroBanner) {
         if (isCurrentMonth) {
           heroBanner.style.display = 'flex';
-          document.getElementById('labelNetDue').innerText = t.netDue;
-          document.getElementById('subNetDue').innerText = t.netDueSub;
+          heroBanner.className = isVendor ? 'due-hero-banner vendor-due-hero' : 'due-hero-banner';
+          document.getElementById('labelNetDue').innerText = isVendor ? t.vendorNetDue : t.netDue;
+          document.getElementById('subNetDue').innerText = isVendor ? t.vendorNetDueSub : t.netDueSub;
           document.getElementById('valNetDue').innerText = `₹${netDue.toFixed(2)}`;
         } else {
           heroBanner.style.display = 'none';
@@ -1554,6 +1759,8 @@
 
     function openDayModal(dayNum, dateStr, entries, litres, amount) {
       const t = I18N[currentLang];
+      const paramType = (urlParams.get('type') || '').toLowerCase();
+      const isVendor = (paramType === 'vendor' || (cardData && cardData.partyType === 'vendor'));
       document.getElementById('modalDayTitle').innerText = `📅 ${dateStr}`;
       const content = document.getElementById('modalDayContent');
 
@@ -1561,7 +1768,7 @@
         content.innerHTML = `
           <div style="text-align: center; padding: 16px 0;">
             <div style="font-size: 32px; margin-bottom: 6px;">⚪</div>
-            <div style="font-weight: 700; color: #64748b;">${t.noMilkDay}</div>
+            <div style="font-weight: 700; color: #64748b;">${isVendor ? t.vendorNoMilkDay : t.noMilkDay}</div>
           </div>
         `;
       } else {
