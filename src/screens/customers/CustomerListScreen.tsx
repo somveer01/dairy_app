@@ -72,7 +72,7 @@ const cleanPhoneInput = (raw?: string | null): string => {
 };
 
 export const CustomerListScreen = () => {
-  const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, subSuppliers, refreshSubSuppliers, supplier, requireAuth } = useApp();
+  const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, subSuppliers, refreshSubSuppliers, milkInwardEntries, subSupplierPayments, supplier, requireAuth } = useApp();
   const [directoryMode, setDirectoryMode] = useState<'customers' | 'subSuppliers'>('customers');
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -1456,30 +1456,38 @@ export const CustomerListScreen = () => {
                 <View style={styles.actionsRow}>
                   <TouchableOpacity
                     style={styles.shareCardBtn}
-                    onPress={() => {
-                      let cleanPhone = sub.phone.replace(/\D/g, '');
-                      if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
-                      Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-                        lang === 'hi'
-                          ? `नमस्ते ${sub.name} जी! 🙏 दूध आपूर्ति के संबंध में...`
-                          : `Hello ${sub.name}! Regarding milk supply...`
-                      )}`);
+                    onPress={async () => {
+                      await CardSyncService.syncSubSupplierCard(sub.id, supplier, subSuppliers, milkInwardEntries, subSupplierPayments);
+                      await CardSyncService.shareSubSupplierCardViaWhatsApp(sub, supplier, lang);
                     }}
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
-                    <Text style={styles.shareCardBtnText}>💬 {lang === 'hi' ? 'व्हाट्सएप' : 'WhatsApp'}</Text>
+                    <Text style={styles.shareCardBtnText}>🔗 {lang === 'hi' ? 'कार्ड शेयर' : 'Share Card'}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.viewCardBtn}
-                    onPress={() => {
-                      Linking.openURL(`tel:${sub.phone}`);
+                    onPress={async () => {
+                      await CardSyncService.syncSubSupplierCard(sub.id, supplier, subSuppliers, milkInwardEntries, subSupplierPayments);
+                      const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', sub.id, true);
+                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                        try {
+                          const win = window.open(url, '_blank');
+                          if (!win || win.closed || typeof win.closed === 'undefined') {
+                            window.location.href = url;
+                          }
+                        } catch (e) {
+                          window.location.href = url;
+                        }
+                      } else {
+                        Linking.openURL(url);
+                      }
                     }}
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
                   >
-                    <Text style={styles.viewCardBtnText}>📞 {lang === 'hi' ? 'कॉल' : 'Call'}</Text>
+                    <Text style={styles.viewCardBtnText}>👁️ {lang === 'hi' ? 'देखें' : 'View'}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity

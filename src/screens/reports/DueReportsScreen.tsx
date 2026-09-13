@@ -132,13 +132,25 @@ export const DueReportsScreen = () => {
   const [selectedDetailCustomerId, setSelectedDetailCustomerId] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<AuditFilterType>('all');
 
-  // Quick Log Entry for a Missing Day Modal State
+  // Date-wise Sub-Supplier Detail Modal State
+  const [selectedDetailSubId, setSelectedDetailSubId] = useState<string | null>(null);
+  const [subAuditFilter, setSubAuditFilter] = useState<AuditFilterType>('all');
+
+  // Quick Log Entry for a Missing Day Modal State (Customer)
   const [quickEntryModalVisible, setQuickEntryModalVisible] = useState(false);
   const [quickEntryDate, setQuickEntryDate] = useState('');
   const [quickEntrySession, setQuickEntrySession] = useState<SessionType>('Morning');
   const [quickEntryMilkType, setQuickEntryMilkType] = useState<MilkType>('cow');
   const [quickEntryLitres, setQuickEntryLitres] = useState('');
   const [quickEntryRate, setQuickEntryRate] = useState('');
+
+  // Quick Log Entry for Sub-Supplier (Inward) Modal State
+  const [quickSubEntryModalVisible, setQuickSubEntryModalVisible] = useState(false);
+  const [quickSubEntryDate, setQuickSubEntryDate] = useState('');
+  const [quickSubEntrySession, setQuickSubEntrySession] = useState<SessionType>('Morning');
+  const [quickSubEntryMilkType, setQuickSubEntryMilkType] = useState<MilkType>('cow');
+  const [quickSubEntryLitres, setQuickSubEntryLitres] = useState('');
+  const [quickSubEntryRate, setQuickSubEntryRate] = useState('');
 
   const dateRange = useMemo(() => {
     if (reportMode === 'month') {
@@ -587,6 +599,97 @@ export const DueReportsScreen = () => {
     return auditDateList;
   }, [auditDateList, auditFilter]);
 
+  // Active sub-supplier selected for the Date-wise Detail Modal
+  const activeSubDetailSummary = useMemo(() => {
+    if (!selectedDetailSubId) return null;
+    return allSubDueSummaries.find(s => s.subSupplier.id === selectedDetailSubId) || null;
+  }, [allSubDueSummaries, selectedDetailSubId]);
+
+  // Generate date list and entries for the active detail sub-supplier
+  const subAuditDateList = useMemo(() => {
+    if (!activeSubDetailSummary) return [];
+
+    const { startDate, endDate } = dateRange;
+    const dates: string[] = [];
+
+    if (reportMode === 'all') {
+      const subEntries = milkInwardEntries.filter(
+        e => !e.isDeleted && e.subSupplierId === activeSubDetailSummary.subSupplier.id
+      );
+      const today = new Date();
+      const todayNoon = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+      if (subEntries.length > 0) {
+        const sorted = subEntries.map(e => e.date).sort();
+        const earliestParts = sorted[0].split('-').map(Number);
+        const earliest = new Date(earliestParts[0], earliestParts[1] - 1, earliestParts[2], 12, 0, 0);
+        const diffTime = Math.abs(todayNoon.getTime() - earliest.getTime());
+        const diffDays = Math.min(Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1, 90);
+        const cur = new Date(todayNoon);
+        for (let i = 0; i < diffDays; i++) {
+          dates.push(toLocalIso(cur));
+          cur.setDate(cur.getDate() - 1);
+        }
+      } else {
+        const cur = new Date(todayNoon);
+        for (let i = 0; i < 30; i++) {
+          dates.push(toLocalIso(cur));
+          cur.setDate(cur.getDate() - 1);
+        }
+      }
+    } else {
+      const startParts = startDate.split('-').map(Number);
+      const endParts = endDate.split('-').map(Number);
+      const startObj = new Date(startParts[0], startParts[1] - 1, startParts[2], 12, 0, 0);
+      const endObj = new Date(endParts[0], endParts[1] - 1, endParts[2], 12, 0, 0);
+
+      const cur = new Date(endObj);
+      while (cur >= startObj) {
+        dates.push(toLocalIso(cur));
+        cur.setDate(cur.getDate() - 1);
+      }
+    }
+
+    return dates.map(dateStr => {
+      const entries = milkInwardEntries.filter(
+        e => !e.isDeleted && e.subSupplierId === activeSubDetailSummary.subSupplier.id && e.date === dateStr
+      );
+      const isDelivered = entries.length > 0;
+      const totalLitres = entries.reduce((sum, e) => sum + e.quantityLitres, 0);
+      const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
+
+      const parts = dateStr.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      const dateObj = new Date(y, m - 1, d, 12, 0, 0);
+      const dayName = DAYS_SHORT[dateObj.getDay()] || '';
+      const formattedDate = `${formatToDisplayDate(dateStr)} (${dayName})`;
+
+      return {
+        date: dateStr,
+        formattedDate,
+        isDelivered,
+        entries,
+        totalLitres,
+        totalAmount
+      };
+    });
+  }, [activeSubDetailSummary, dateRange, reportMode, milkInwardEntries]);
+
+  const subDeliveredDaysCount = useMemo(() => {
+    return subAuditDateList.filter(d => d.isDelivered).length;
+  }, [subAuditDateList]);
+
+  const subMissingDaysCount = useMemo(() => {
+    return subAuditDateList.filter(d => !d.isDelivered).length;
+  }, [subAuditDateList]);
+
+  const filteredSubAuditList = useMemo(() => {
+    if (subAuditFilter === 'missing') return subAuditDateList.filter(d => !d.isDelivered);
+    if (subAuditFilter === 'delivered') return subAuditDateList.filter(d => d.isDelivered);
+    return subAuditDateList;
+  }, [subAuditDateList, subAuditFilter]);
+
   const openPayModal = (cust: Customer) => {
     Keyboard.dismiss();
     requireAuth(() => {
@@ -858,6 +961,118 @@ export const DueReportsScreen = () => {
         },
         '🗑️ हटाएं (Delete)',
         'रद्द करें (Cancel)',
+        true
+      );
+    });
+  };
+
+  const handleShareItemizedSubWhatsApp = async () => {
+    if (!activeSubDetailSummary) return;
+    const periodName = dateRange.label;
+
+    try {
+      await WhatsAppService.sendItemizedDatewiseSubSupplierBillViaWhatsApp(
+        activeSubDetailSummary.subSupplier.phone,
+        activeSubDetailSummary,
+        supplier?.businessName || 'Dairy Farm',
+        periodName,
+        subAuditDateList
+      );
+    } catch {
+      showAlert('त्रुटि (Error)', 'Could not open WhatsApp.');
+    }
+  };
+
+  const openQuickSubEntryForDate = (dateStr: string) => {
+    requireAuth(() => {
+      if (!activeSubDetailSummary) return;
+      setQuickSubEntryDate(dateStr);
+      setQuickSubEntrySession('Morning');
+      setQuickSubEntryMilkType(activeSubDetailSummary.subSupplier.milkType || 'cow');
+      setQuickSubEntryLitres('10');
+      setQuickSubEntryRate(activeSubDetailSummary.subSupplier.ratePerLitre?.toString() || '60');
+      setQuickSubEntryModalVisible(true);
+    });
+  };
+
+  const handleSaveQuickSubEntry = async () => {
+    Keyboard.dismiss();
+    requireAuth(async () => {
+      if (!activeSubDetailSummary || !quickSubEntryDate) return;
+      const qty = parseFloat(quickSubEntryLitres);
+      const r = parseFloat(quickSubEntryRate);
+      if (isNaN(qty) || qty <= 0) {
+        showAlert(
+          lang === 'hi' ? 'अमान्य मात्रा' : 'Invalid Quantity',
+          lang === 'hi' ? 'कृपया लीटर में मान्य मात्रा दर्ज करें।' : 'Please enter a valid quantity in litres.'
+        );
+        return;
+      }
+      if (isNaN(r) || r <= 0) {
+        showAlert(
+          lang === 'hi' ? 'अमान्य दर' : 'Invalid Rate',
+          lang === 'hi' ? 'कृपया प्रति लीटर मान्य दर दर्ज करें।' : 'Please enter a valid rate per litre.'
+        );
+        return;
+      }
+
+      const newEntry: MilkInwardEntry = {
+        id: `inward_${quickSubEntryDate}_${quickSubEntrySession}_${activeSubDetailSummary.subSupplier.id}_${Date.now()}`,
+        supplierId: supplier?.id || 'supp_default',
+        subSupplierId: activeSubDetailSummary.subSupplier.id,
+        subSupplierName: activeSubDetailSummary.subSupplier.name,
+        date: quickSubEntryDate,
+        session: quickSubEntrySession,
+        milkType: quickSubEntryMilkType,
+        quantityLitres: qty,
+        ratePerLitre: r,
+        amount: qty * r,
+        isPaid: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      await StorageService.saveMilkInwardEntry(newEntry);
+      await refreshMilkInwardEntries();
+      CardSyncService.syncSubSupplierCard(
+        activeSubDetailSummary.subSupplier.id,
+        supplier,
+        subSuppliers.filter(s => !s.isDeleted),
+        [...milkInwardEntries.filter(e => !e.isDeleted), newEntry],
+        subSupplierPayments.filter(p => !p.isDeleted)
+      );
+      setQuickSubEntryModalVisible(false);
+      showAlert(
+        lang === 'hi' ? '✓ दूध आवक दर्ज' : '✓ Inward Recorded',
+        lang === 'hi'
+          ? `${formatToDisplayDate(quickSubEntryDate)} (${quickSubEntrySession === 'Morning' ? 'सुबह' : 'शाम'}) को ${qty}L दूध आवक दर्ज की गई।`
+          : `Inward delivery of ${qty}L for ${formatToDisplayDate(quickSubEntryDate)} (${quickSubEntrySession}) saved.`
+      );
+    });
+  };
+
+  const handleDeleteSubEntry = (entryId: string, dateStr: string) => {
+    requireAuth(() => {
+      confirmAction(
+        lang === 'hi' ? 'दूध आवक एंट्री हटाएं?' : 'Delete Inward Entry?',
+        lang === 'hi'
+          ? `क्या आप यह दूध आवक एंट्री हटाना चाहते हैं?\n• तारीख: ${dateStr}\n• सूचना: यह एंट्री हिसाब और रिपोर्ट से हट जाएगी।`
+          : `Are you sure you want to delete this milk inward entry?\n• Date: ${dateStr}\n• Note: This will be removed from accounts and reports.`,
+        async () => {
+          await StorageService.deleteMilkInwardEntry(entryId, supplier?.id);
+          await refreshMilkInwardEntries();
+          if (activeSubDetailSummary) {
+            CardSyncService.syncSubSupplierCard(
+              activeSubDetailSummary.subSupplier.id,
+              supplier,
+              subSuppliers.filter(s => !s.isDeleted),
+              milkInwardEntries.filter(e => e.id !== entryId && !e.isDeleted),
+              subSupplierPayments.filter(p => !p.isDeleted)
+            );
+          }
+        },
+        lang === 'hi' ? '🗑️ हटाएं' : 'Delete',
+        lang === 'hi' ? 'रद्द करें' : 'Cancel',
         true
       );
     });
@@ -1323,7 +1538,11 @@ export const DueReportsScreen = () => {
             windowSize={10}
             removeClippedSubviews={true}
             renderItem={({ item, index }) => (
-              <View style={styles.dueCard}>
+              <TouchableOpacity
+                style={styles.dueCard}
+                activeOpacity={0.88}
+                onPress={() => setSelectedDetailSubId(item.subSupplier.id)}
+              >
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1, marginRight: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
@@ -1331,7 +1550,7 @@ export const DueReportsScreen = () => {
                       <Text style={styles.custName} numberOfLines={1}>{item.subSupplier.name}</Text>
                       <View style={[styles.viewReportBadge, { backgroundColor: '#ffedd5', borderColor: '#fed7aa' }]}>
                         <Text style={[styles.viewReportBadgeText, { color: '#c2410c' }]}>
-                          📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'}
+                          📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'} ›
                         </Text>
                       </View>
                     </View>
@@ -1370,15 +1589,18 @@ export const DueReportsScreen = () => {
                   <Text style={styles.finText}>{lang === 'hi' ? 'कुल खरीद' : 'Purchased'}: ₹{item.totalAmountBilled.toFixed(0)}</Text>
                   <Text style={styles.finText}>{lang === 'hi' ? 'भुगतान किया' : 'Paid'}: ₹{item.totalPaid.toFixed(0)}</Text>
                   <Text style={[styles.cardTapPromptText, { color: '#ea580c' }]}>
-                    ₹{item.subSupplier.ratePerLitre}/L
+                    Tap for full report ›
                   </Text>
                 </View>
 
-                {/* Action Buttons: Record Payment, History & WhatsApp Statement */}
+                {/* Action Buttons: Record Payment, Live Card & WhatsApp Statement */}
                 <View style={styles.cardActions}>
                   <TouchableOpacity
                     style={[styles.payBtn, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}
-                    onPress={() => openSubPayModal(item.subSupplier)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      openSubPayModal(item.subSupplier);
+                    }}
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   >
@@ -1389,21 +1611,25 @@ export const DueReportsScreen = () => {
 
                   <TouchableOpacity
                     style={[styles.liveCardBtn, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}
-                    onPress={() => {
-                      setSubPayHistoryVendor(item.subSupplier);
-                      setSubPayHistoryVisible(true);
+                    onPress={async (e) => {
+                      e.stopPropagation();
+                      await CardSyncService.syncSubSupplierCard(item.subSupplier.id, supplier, subSuppliers, milkInwardEntries, subSupplierPayments);
+                      await CardSyncService.shareSubSupplierCardViaWhatsApp(item.subSupplier, supplier, lang);
                     }}
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   >
                     <Text style={[styles.liveCardBtnText, { color: '#c2410c' }]}>
-                      📋 {lang === 'hi' ? 'इतिहास' : 'History'}
+                      🔗 {lang === 'hi' ? 'लाइव कार्ड' : 'Live Card'}
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={styles.whatsappBtn}
-                    onPress={() => handleShareSubWhatsAppSummary(item)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleShareSubWhatsAppSummary(item);
+                    }}
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   >
@@ -1412,7 +1638,7 @@ export const DueReportsScreen = () => {
                     </Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </TouchableOpacity>
             )}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
@@ -1791,6 +2017,379 @@ export const DueReportsScreen = () => {
                   activeOpacity={0.85}
                 >
                   <Text style={styles.modalSaveBtnText}>Save Delivery</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ------------------------------------------------------------- */}
+        {/* DATE-WISE SUB-SUPPLIER (VENDOR) INWARD REPORT MODAL */}
+        {/* ------------------------------------------------------------- */}
+        <Modal
+          visible={!!activeSubDetailSummary}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setSelectedDetailSubId(null)}
+        >
+          {activeSubDetailSummary && (
+            <SafeAreaView style={styles.detailModalSafeArea}>
+              {/* Modal Top Bar */}
+              <View style={styles.modalHeaderBar}>
+                <TouchableOpacity
+                  style={styles.modalBackBtn}
+                  onPress={() => setSelectedDetailSubId(null)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.modalBackBtnText}>✕ Close</Text>
+                </TouchableOpacity>
+                <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+                  {lang === 'hi' ? 'तारीख-वार आवक रिपोर्ट' : 'Date-Wise Inward Report'} ({subAuditDateList.length} {lang === 'hi' ? 'दिन' : 'Days'})
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <TouchableOpacity
+                    style={[styles.modalHeaderPayBtn, { backgroundColor: '#ea580c' }]}
+                    onPress={() => openSubPayModal(activeSubDetailSummary.subSupplier)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.modalHeaderPayBtnText}>+ Pay</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView style={styles.detailScrollContent} contentContainerStyle={{ paddingBottom: 40 }}>
+                {/* Vendor Info Card */}
+                <View style={styles.detailCustCard}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.detailCustName}>{activeSubDetailSummary.subSupplier.name}</Text>
+                      <Text style={styles.detailCustPhone}>📞 {activeSubDetailSummary.subSupplier.phone}</Text>
+                      {activeSubDetailSummary.subSupplier.address ? (
+                        <Text style={styles.detailCustAddress}>📍 {activeSubDetailSummary.subSupplier.address}</Text>
+                      ) : null}
+                      <Text style={styles.detailCustPref}>
+                        Rate: ₹{activeSubDetailSummary.subSupplier.ratePerLitre}/L (
+                        {activeSubDetailSummary.subSupplier.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'})
+                      </Text>
+                    </View>
+
+                    <View style={styles.detailNetDueBadge}>
+                      <Text style={styles.detailNetDueLabel}>{lang === 'hi' ? 'देय बाकी' : 'Net Payable'}</Text>
+                      <Text style={[styles.detailNetDueAmount, activeSubDetailSummary.netPayable > 0 ? { color: '#ea580c' } : styles.dueGreen]}>
+                        ₹{activeSubDetailSummary.netPayable.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Inside-Modal Active Date Range & Month Navigation */}
+                  <View style={styles.modalPeriodBadgeContainer}>
+                    <View style={styles.modalPeriodBadge}>
+                      <Text style={styles.modalPeriodBadgeIcon}>
+                        {reportMode === 'month' ? '📅' : reportMode === 'custom' ? '🗓️' : '♾️'}
+                      </Text>
+                      <Text style={styles.modalPeriodBadgeText} numberOfLines={1}>
+                        {dateRange.label} • {subAuditDateList.length} {lang === 'hi' ? 'दिन' : 'Days'}
+                      </Text>
+                    </View>
+                    {reportMode === 'month' && (
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          style={styles.modalMonthNavBtn}
+                          onPress={handlePrevMonth}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.modalMonthNavBtnText}>
+                            {lang === 'hi' ? '◀ पिछला' : `◀ ${t.prev || 'Prev'}`}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.modalMonthNavBtn}
+                          onPress={handleNextMonth}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.modalMonthNavBtnText}>
+                            {lang === 'hi' ? 'अगला ▶' : `${t.next || 'Next'} ▶`}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* KPI Metrics Strip */}
+                <View style={styles.kpiContainer}>
+                  <View style={[styles.kpiBox, { backgroundColor: '#f0fdf4', borderColor: '#86efac' }]}>
+                    <Text style={[styles.kpiValue, { color: '#16a34a' }]}>{subDeliveredDaysCount}</Text>
+                    <Text style={styles.kpiLabel}>✓ {lang === 'hi' ? 'आवक दिन' : 'Supplied'}</Text>
+                  </View>
+
+                  <View style={[styles.kpiBox, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
+                    <Text style={[styles.kpiValue, { color: '#d97706' }]}>{subMissingDaysCount}</Text>
+                    <Text style={styles.kpiLabel}>⚠️ {lang === 'hi' ? 'नागा दिन' : 'Missing'}</Text>
+                  </View>
+
+                  <View style={[styles.kpiBox, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}>
+                    <Text style={[styles.kpiValue, { color: '#ea580c' }]}>
+                      {activeSubDetailSummary.totalLitres.toFixed(1)}L
+                    </Text>
+                    <Text style={styles.kpiLabel}>{lang === 'hi' ? 'कुल आवक' : 'Total Vol'}</Text>
+                  </View>
+
+                  <View style={[styles.kpiBox, { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' }]}>
+                    <Text style={[styles.kpiValue, { color: '#7e22ce' }]}>
+                      ₹{activeSubDetailSummary.totalAmountBilled.toFixed(0)}
+                    </Text>
+                    <Text style={styles.kpiLabel}>{lang === 'hi' ? 'कुल खरीद' : 'Purchased'}</Text>
+                  </View>
+                </View>
+
+                {/* Audit Filter Tabs: All, Missing Only, Delivered Only */}
+                <View style={styles.auditFilterRow}>
+                  <TouchableOpacity
+                    style={[styles.auditFilterChip, subAuditFilter === 'all' && styles.auditFilterChipActive]}
+                    onPress={() => setSubAuditFilter('all')}
+                  >
+                    <Text style={[styles.auditFilterChipText, subAuditFilter === 'all' && styles.auditFilterChipTextActive]}>
+                      {lang === 'hi' ? `सभी ${subAuditDateList.length} दिन` : `All ${subAuditDateList.length} Days`}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.auditFilterChip, subAuditFilter === 'missing' && styles.auditFilterChipActiveMissing]}
+                    onPress={() => setSubAuditFilter('missing')}
+                  >
+                    <Text style={[styles.auditFilterChipText, subAuditFilter === 'missing' && styles.auditFilterChipTextActiveMissing]}>
+                      ⚠️ {lang === 'hi' ? `नागा (${subMissingDaysCount})` : `Missing (${subMissingDaysCount})`}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.auditFilterChip, subAuditFilter === 'delivered' && styles.auditFilterChipActiveDelivered]}
+                    onPress={() => setSubAuditFilter('delivered')}
+                  >
+                    <Text style={[styles.auditFilterChipText, subAuditFilter === 'delivered' && styles.auditFilterChipTextActiveDelivered]}>
+                      ✓ {lang === 'hi' ? `आवक दर्ज (${subDeliveredDaysCount})` : `Supplied (${subDeliveredDaysCount})`}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Day-by-Day List */}
+                <View style={styles.dayListContainer}>
+                  {filteredSubAuditList.map((dayItem) => (
+                    <View
+                      key={dayItem.date}
+                      style={[
+                        styles.dayCard,
+                        dayItem.isDelivered ? styles.dayCardDelivered : styles.dayCardMissing
+                      ]}
+                    >
+                      <View style={styles.dayCardTopRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View
+                            style={[
+                              styles.statusIconCircle,
+                              dayItem.isDelivered ? styles.iconDelivered : styles.iconMissing
+                            ]}
+                          >
+                            <Text style={styles.statusIconEmoji}>
+                              {dayItem.isDelivered ? '✓' : '⚠️'}
+                            </Text>
+                          </View>
+                          <View>
+                            <Text style={styles.dayDateText}>{dayItem.formattedDate}</Text>
+                            <Text
+                              style={[
+                                styles.dayStatusSubText,
+                                dayItem.isDelivered ? styles.subDelivered : styles.subMissing
+                              ]}
+                            >
+                              {dayItem.isDelivered ? (lang === 'hi' ? 'आवक प्राप्त (INWARD)' : 'INWARD RECEIVED') : (lang === 'hi' ? 'नागा / दूध नहीं आया (NO INWARD)' : 'NO INWARD / MISSING')}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {dayItem.isDelivered ? (
+                          <View style={styles.dayAmountBox}>
+                            <Text style={styles.dayAmountText}>₹{dayItem.totalAmount.toFixed(2)}</Text>
+                            <Text style={styles.dayLitresText}>{dayItem.totalLitres.toFixed(1)} Litres</Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={[styles.quickAddEntryBtn, { backgroundColor: '#ea580c' }]}
+                            onPress={() => openQuickSubEntryForDate(dayItem.date)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={styles.quickAddEntryBtnText}>+ {lang === 'hi' ? 'दूध दर्ज करें' : 'Log Milk'}</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Entries Breakdown for delivered days */}
+                      {dayItem.isDelivered && (
+                        <View style={styles.dayEntriesBreakdown}>
+                          {dayItem.entries.map((e) => (
+                            <View key={e.id} style={styles.entryLine}>
+                              <View style={styles.entryLineLeft}>
+                                <Text style={styles.entrySessionTag}>
+                                  {e.session === 'Morning' ? '🌅 Morning' : e.session === 'Evening' ? '🌇 Evening' : '🥛 Custom'}
+                                </Text>
+                                <Text style={styles.entryDetailTag}>
+                                  {e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'} • {e.quantityLitres}L @ ₹{e.ratePerLitre}/L
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={styles.entryAmountText}>= ₹{e.amount.toFixed(0)}</Text>
+                                <TouchableOpacity
+                                  onPress={() => handleDeleteSubEntry(e.id, dayItem.formattedDate)}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <Text style={styles.entryDeleteText}>🗑️</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </View>
+
+                {/* Bottom WhatsApp Actions */}
+                <View style={styles.modalBottomActions}>
+                  <TouchableOpacity
+                    style={[styles.modalWhatsappBtn, { backgroundColor: '#15803d' }]}
+                    onPress={handleShareItemizedSubWhatsApp}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.modalWhatsappBtnText}>
+                      💬 {lang === 'hi' ? 'तारीख-वार हिसाब व्हाट्सएप करें' : 'Share Date-wise Log on WhatsApp'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.modalWhatsappSummaryBtn}
+                    onPress={() => handleShareSubWhatsAppSummary(activeSubDetailSummary)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.modalWhatsappSummaryBtnText}>
+                      📄 {lang === 'hi' ? 'केवल सारांश शेयर करें' : 'Share Statement Summary Only'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </SafeAreaView>
+          )}
+        </Modal>
+
+        {/* ------------------------------------------------------------- */}
+        {/* QUICK MILK INWARD ENTRY POPUP FOR MISSING DATE */}
+        {/* ------------------------------------------------------------- */}
+        <Modal
+          visible={quickSubEntryModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setQuickSubEntryModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.quickModalBox}>
+              <Text style={styles.quickModalTitle}>
+                {lang === 'hi' ? 'दूध आवक दर्ज करें' : 'Log Milk Inward'} — {formatToDisplayDate(quickSubEntryDate) || quickSubEntryDate}
+              </Text>
+              <Text style={styles.quickModalSubtitle}>
+                {lang === 'hi' ? 'विक्रेता' : 'Vendor'}: {activeSubDetailSummary?.subSupplier.name}
+              </Text>
+
+              {/* Session Picker */}
+              <Text style={styles.label}>Session</Text>
+              <View style={styles.quickSessionRow}>
+                {(['Morning', 'Evening'] as SessionType[]).map(s => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.quickSessionBtn, quickSubEntrySession === s && styles.quickSessionBtnActive]}
+                    onPress={() => setQuickSubEntrySession(s)}
+                  >
+                    <Text style={[styles.quickSessionText, quickSubEntrySession === s && styles.quickSessionTextActive]}>
+                      {s === 'Morning' ? '🌅 Morning (सुबह)' : '🌇 Evening (शाम)'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Milk Type Picker */}
+              <Text style={styles.label}>Milk Type</Text>
+              <View style={styles.quickSessionRow}>
+                <TouchableOpacity
+                  style={[styles.quickSessionBtn, quickSubEntryMilkType === 'cow' && styles.quickSessionBtnActive]}
+                  onPress={() => setQuickSubEntryMilkType('cow')}
+                >
+                  <Text style={[styles.quickSessionText, quickSubEntryMilkType === 'cow' && styles.quickSessionTextActive]}>
+                    🐄 Cow Milk
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.quickSessionBtn, quickSubEntryMilkType === 'buffalo' && styles.quickSessionBtnActive]}
+                  onPress={() => setQuickSubEntryMilkType('buffalo')}
+                >
+                  <Text style={[styles.quickSessionText, quickSubEntryMilkType === 'buffalo' && styles.quickSessionTextActive]}>
+                    🐃 Buffalo Milk
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Litres & Rate */}
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{lang === 'hi' ? 'मात्रा (लीटर) *' : 'Litres *'}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 10.0"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={quickSubEntryLitres}
+                    onChangeText={setQuickSubEntryLitres}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{lang === 'hi' ? 'दर प्रति लीटर (₹) *' : 'Rate / Litre (₹) *'}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 60"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={quickSubEntryRate}
+                    onChangeText={setQuickSubEntryRate}
+                  />
+                </View>
+              </View>
+
+              {/* Total Calculation Display */}
+              <View style={styles.quickTotalDisplay}>
+                <Text style={styles.quickTotalText}>
+                  {lang === 'hi' ? 'कुल राशि' : 'Total'}: ₹
+                  {((parseFloat(quickSubEntryLitres) || 0) * (parseFloat(quickSubEntryRate) || 0)).toFixed(2)}
+                </Text>
+              </View>
+
+              {/* Buttons */}
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setQuickSubEntryModalVisible(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalCancelBtnText}>{t.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { backgroundColor: '#ea580c' }]}
+                  onPress={handleSaveQuickSubEntry}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.modalSaveBtnText}>{lang === 'hi' ? 'आवक सहेजें' : 'Save Inward'}</Text>
                 </TouchableOpacity>
               </View>
             </View>

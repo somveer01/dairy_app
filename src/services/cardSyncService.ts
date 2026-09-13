@@ -1,7 +1,7 @@
 import { ref, set } from 'firebase/database';
 import * as Linking from 'expo-linking';
 import { rtdb } from '../config/firebase';
-import { Customer, MilkEntry, Payment, Supplier } from '../types';
+import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
 import { StorageService } from './storageService';
 
 export interface CardEntryItem {
@@ -89,6 +89,47 @@ Thank you! — ${dairyName}`;
     }
   },
 
+  async shareSubSupplierCardViaWhatsApp(subSupplier: SubSupplier, supplier: Supplier | null, lang: 'hi' | 'en' = 'hi'): Promise<void> {
+    const suppId = supplier?.id || 'supp_1';
+    const dairyName = supplier?.businessName || 'डेयरी फ़ार्म';
+    const cardUrl = this.getCardUrl(suppId, subSupplier.id);
+
+    let cleanPhone = subSupplier.phone.replace(/\D/g, '');
+    if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
+
+    const msgHi = `🥛 *${dairyName}*
+
+नमस्ते ${subSupplier.name} जी! 🙏
+
+यह आपका *दूध विक्रेता / किसान ऑनलाइन डिजिटल कार्ड (Vendor Digital Card)* है। इसे अपने पास सुरक्षित रखें। 
+जब भी आपकी दूध खरीद (आवक) या भुगतान दर्ज होगा, यह कार्ड आपके फ़ोन पर तुरंत अपने-आप अपडेट हो जाएगा:
+
+👉 ${cardUrl}
+
+• आप जब चाहें इस लिंक को खोलकर रोज़ का दिया गया दूध, भाव, भुगतान और अपना बकाया हिसाब देख सकते हैं।
+
+धन्यवाद! — ${dairyName}`;
+
+    const msgEn = `🥛 *${dairyName}*
+
+Hello ${subSupplier.name}! 🙏
+
+Here is your *Online Digital Milk Card*. Save this link to check your daily milk supplied, purchase rate, payments received, and pending balance anytime. It updates automatically:
+
+👉 ${cardUrl}
+
+Thank you! — ${dairyName}`;
+
+    const message = lang === 'hi' ? msgHi : msgEn;
+    const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+
+    try {
+      await Linking.openURL(whatsappUrl);
+    } catch (err) {
+      console.warn('Could not open WhatsApp for vendor card share:', err);
+    }
+  },
+
   async deleteCustomerCard(supplierId: string, customerId: string): Promise<void> {
     try {
       const cleanSuppId = supplierId || 'supp_1';
@@ -167,6 +208,76 @@ Thank you! — ${dairyName}`;
       await set(cardRef, cardPayload);
     } catch (err) {
       console.warn('Silent card sync error (safe to ignore if offline):', err);
+    }
+  },
+
+  async syncSubSupplierCard(
+    subSupplierId: string,
+    supplierParam?: Supplier | null,
+    subSuppliersParam?: SubSupplier[],
+    inwardEntriesParam?: MilkInwardEntry[],
+    subSupplierPaymentsParam?: SubSupplierPayment[]
+  ): Promise<void> {
+    try {
+      const supplier = supplierParam || (await StorageService.getSupplier());
+      const suppId = supplier?.id || 'supp_1';
+
+      const allSubSuppliers = subSuppliersParam || (await StorageService.getSubSuppliers(suppId));
+      const sub = allSubSuppliers.find(s => s.id === subSupplierId);
+
+      if (!sub || sub.isDeleted) {
+        await this.deleteCustomerCard(suppId, subSupplierId);
+        return;
+      }
+
+      const allInward = inwardEntriesParam || (await StorageService.getMilkInwardEntries(suppId));
+      const subEntries = allInward.filter(e => e.subSupplierId === subSupplierId && !e.isDeleted);
+
+      const allPayments = subSupplierPaymentsParam || (await StorageService.getSubSupplierPayments(suppId));
+      const subPayments = allPayments.filter(p => p.subSupplierId === subSupplierId && !p.isDeleted);
+
+      // Group inward entries by date
+      const entriesMap: Record<string, CardEntryItem[]> = {};
+      subEntries.forEach(e => {
+        if (!entriesMap[e.date]) {
+          entriesMap[e.date] = [];
+        }
+        entriesMap[e.date].push({
+          id: e.id,
+          session: e.session,
+          milkType: e.milkType,
+          quantityLitres: e.quantityLitres,
+          ratePerLitre: e.ratePerLitre,
+          amount: e.amount
+        });
+      });
+
+      const paymentsList: CardPaymentItem[] = subPayments.map(p => ({
+        id: p.id,
+        date: p.date,
+        amountPaid: p.amountPaid,
+        notes: p.notes
+      }));
+
+      const cardPayload: CustomerCardData = {
+        supplierBusinessName: supplier?.businessName || 'डेयरी फ़ार्म',
+        supplierName: supplier?.name || 'सप्लायर',
+        supplierPhone: supplier?.phone || '',
+        customerId: sub.id,
+        customerName: sub.name,
+        customerPhone: sub.phone,
+        milkType: sub.milkType,
+        ratePerLitre: sub.ratePerLitre,
+        defaultLitres: sub.defaultLitres,
+        entries: entriesMap,
+        payments: paymentsList,
+        lastUpdated: Date.now()
+      };
+
+      const cardRef = ref(rtdb, `cards/${suppId}/${subSupplierId}`);
+      await set(cardRef, cardPayload);
+    } catch (err) {
+      console.warn('Silent vendor card sync error (safe to ignore if offline):', err);
     }
   },
 

@@ -172,6 +172,74 @@ Thank you for your milk supply! 🙏`;
     await this.openWhatsAppWithText(phone, message);
   },
 
+  formatItemizedDatewiseSubSupplierBill(
+    summary: SubSupplierDueSummary,
+    supplierBusinessName: string,
+    periodLabel: string,
+    auditItems: CustomerDateAuditItem[]
+  ): string {
+    const { subSupplier, totalLitresCow, totalLitresBuffalo, totalLitres, totalAmountBilled, totalPaid, netPayable } = summary;
+
+    const suppliedDays = auditItems.filter(item => item.isDelivered).length;
+    const missingDays = auditItems.filter(item => !item.isDelivered).length;
+
+    let breakdownText = '';
+    const chronologicalItems = [...auditItems].reverse();
+    chronologicalItems.forEach(item => {
+      const parts = item.date.split('-');
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      const dateObj = new Date(y, m - 1, d);
+      const dayName = DAYS_SHORT[dateObj.getDay()] || '';
+      const dateFormatted = `${formatToDisplayDate(item.date)} (${dayName})`;
+
+      if (item.isDelivered) {
+        const details = item.entries
+          .map((e: any) => `${e.quantityLitres}L ${e.milkType === 'cow' ? 'Cow' : 'Buf'} [${e.session}]`)
+          .join(', ');
+        breakdownText += `\n✓ ${dateFormatted}: ${details} = ₹${item.totalAmount.toFixed(0)}`;
+      } else {
+        breakdownText += `\n⚠️ ${dateFormatted}: ❌ No Supply / दूध नहीं आया`;
+      }
+    });
+
+    let itemsText = '';
+    if (totalLitresCow > 0) itemsText += `\n🐄 Cow Milk: ${totalLitresCow.toFixed(1)} L`;
+    if (totalLitresBuffalo > 0) itemsText += `\n🐃 Buffalo Milk: ${totalLitresBuffalo.toFixed(1)} L`;
+    if (totalLitresCow > 0 && totalLitresBuffalo > 0) itemsText += `\n🥛 Total Milk: ${totalLitres.toFixed(1)} L`;
+
+    const message = `🌾 *दूध खरीद तारीख-वार हिसाब / Inward Milk Statement*
+🥛 *${supplierBusinessName}*
+-----------------------------
+👤 Vendor/Farmer: *${subSupplier.name}*
+📅 Period: ${periodLabel}
+📊 Status: ${suppliedDays} Days Supplied | ${missingDays} Days No Supply (${auditItems.length} Days)
+-----------------------------
+📅 *DATE-WISE INWARD SUPPLY LOG:*${breakdownText}
+-----------------------------
+${itemsText}
+💰 Total Milk Amount: ₹${totalAmountBilled.toFixed(2)}
+💵 Payment Made: ₹${totalPaid.toFixed(2)}
+-----------------------------
+⚖️ *Pending Balance Payable: ₹${netPayable.toFixed(2)}*
+-----------------------------
+Thank you for your milk supply! 🙏`;
+
+    return message;
+  },
+
+  async sendItemizedDatewiseSubSupplierBillViaWhatsApp(
+    phone: string,
+    summary: SubSupplierDueSummary,
+    supplierBusinessName: string,
+    periodLabel: string,
+    auditItems: CustomerDateAuditItem[]
+  ): Promise<void> {
+    const message = this.formatItemizedDatewiseSubSupplierBill(summary, supplierBusinessName, periodLabel, auditItems);
+    await this.openWhatsAppWithText(phone, message);
+  },
+
   async openWhatsAppWithText(phone: string, message: string): Promise<void> {
     let cleanPhone = phone.replace(/[^0-9]/g, '');
     if (cleanPhone.length === 10) {
