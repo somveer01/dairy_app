@@ -124,6 +124,10 @@ export const DueReportsScreen = () => {
   const [payHistoryVisible, setPayHistoryVisible] = useState(false);
   const [payHistoryCustomer, setPayHistoryCustomer] = useState<Customer | null>(null); // null = all customers
 
+  // Sub-Supplier Payment History Modal State
+  const [subPayHistoryVisible, setSubPayHistoryVisible] = useState(false);
+  const [subPayHistoryVendor, setSubPayHistoryVendor] = useState<SubSupplier | null>(null); // null = all vendors
+
   // Date-wise Customer Detail Modal State
   const [selectedDetailCustomerId, setSelectedDetailCustomerId] = useState<string | null>(null);
   const [auditFilter, setAuditFilter] = useState<AuditFilterType>('all');
@@ -655,6 +659,28 @@ export const DueReportsScreen = () => {
     });
   };
 
+  const handleDeleteSubSupplierPayment = (payId: string) => {
+    requireAuth(() => {
+      confirmAction(
+        lang === 'hi' ? 'सप्लायर भुगतान हटाएं?' : 'Delete Vendor Payment?',
+        lang === 'hi'
+          ? 'क्या आप इस भुगतान रिकॉर्ड को हटाना चाहते हैं? हटाने पर सप्लायर के बकाया में यह राशि दोबारा जुड़ जाएगी।'
+          : 'Are you sure you want to delete this payment record? Outstanding balance will be updated accordingly.',
+        async () => {
+          await StorageService.deleteSubSupplierPayment(payId, supplier?.id);
+          await refreshSubSupplierPayments();
+          showAlert(
+            lang === 'hi' ? '✓ भुगतान हटाया गया' : '✓ Payment Deleted',
+            lang === 'hi' ? 'सप्लायर भुगतान रिकॉर्ड हटा दिया गया है।' : 'Vendor payment record deleted successfully.'
+          );
+        },
+        lang === 'hi' ? 'हटाएं' : 'Delete',
+        lang === 'hi' ? 'रद्द करें' : 'Cancel',
+        true
+      );
+    });
+  };
+
   const handleShareWhatsAppSummary = async (summary: CustomerDueSummary) => {
     Keyboard.dismiss();
     const periodName = dateRange.label;
@@ -1065,7 +1091,7 @@ export const DueReportsScreen = () => {
         )}
 
         {/* All Payments History Button */}
-        {partyMode === 'customers' && (
+        {partyMode === 'customers' ? (
           <TouchableOpacity
             style={styles.allPaymentsBtn}
             onPress={() => { setPayHistoryCustomer(null); setPayHistoryVisible(true); }}
@@ -1073,6 +1099,16 @@ export const DueReportsScreen = () => {
           >
             <Text style={styles.allPaymentsBtnText}>
               💰 {t.allPayments} ({payments.length})
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.allPaymentsBtn, { backgroundColor: '#ea580c' }]}
+            onPress={() => { setSubPayHistoryVendor(null); setSubPayHistoryVisible(true); }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.allPaymentsBtnText}>
+              📋 {lang === 'hi' ? 'सप्लायर भुगतान इतिहास' : 'Vendor Payment History'} ({subSupplierPayments.length})
             </Text>
           </TouchableOpacity>
         )}
@@ -1338,7 +1374,7 @@ export const DueReportsScreen = () => {
                   </Text>
                 </View>
 
-                {/* Action Buttons: Record Payment & WhatsApp Statement */}
+                {/* Action Buttons: Record Payment, History & WhatsApp Statement */}
                 <View style={styles.cardActions}>
                   <TouchableOpacity
                     style={[styles.payBtn, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}
@@ -1348,6 +1384,20 @@ export const DueReportsScreen = () => {
                   >
                     <Text style={[styles.payBtnText, { color: '#c2410c' }]}>
                       💳 {lang === 'hi' ? 'भुगतान दर्ज' : 'Record Pay'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.liveCardBtn, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}
+                    onPress={() => {
+                      setSubPayHistoryVendor(item.subSupplier);
+                      setSubPayHistoryVisible(true);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={[styles.liveCardBtnText, { color: '#c2410c' }]}>
+                      📋 {lang === 'hi' ? 'इतिहास' : 'History'}
                     </Text>
                   </TouchableOpacity>
 
@@ -2019,6 +2069,23 @@ export const DueReportsScreen = () => {
                 onChangeText={setSubPayNotes}
               />
 
+              {/* View History button */}
+              {paymentSubSupplier && (
+                <TouchableOpacity
+                  style={styles.payHistoryLinkBtn}
+                  onPress={() => {
+                    setSubPaymentModalVisible(false);
+                    setSubPayHistoryVendor(paymentSubSupplier);
+                    setSubPayHistoryVisible(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.payHistoryLinkText, { color: '#c2410c' }]}>
+                    📋 {lang === 'hi' ? 'सप्लायर भुगतान इतिहास' : 'Vendor Payment History'} ({subSupplierPayments.filter(p => p.subSupplierId === paymentSubSupplier.id).length})
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <View style={styles.modalButtonRow}>
                 <TouchableOpacity
                   style={styles.modalCancelBtn}
@@ -2153,6 +2220,128 @@ export const DueReportsScreen = () => {
                       <View style={styles.payModalInfoBox}>
                         <Text style={styles.payModalInfoLabel}>{t.outstandingDue}</Text>
                         <Text style={[styles.payModalInfoValue, { color: '#dc2626' }]}>₹{(summary?.netDue || 0).toFixed(0)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()}
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
+        {/* ------------------------------------------------------------- */}
+        {/* SUB-SUPPLIER (VENDOR) PAYMENT HISTORY MODAL */}
+        {/* ------------------------------------------------------------- */}
+        <Modal
+          visible={subPayHistoryVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setSubPayHistoryVisible(false)}
+        >
+          <SafeAreaView style={styles.detailModalSafeArea}>
+            {/* Header */}
+            <View style={styles.modalHeaderBar}>
+              <TouchableOpacity
+                style={styles.modalBackBtn}
+                onPress={() => setSubPayHistoryVisible(false)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.modalBackBtnText}>✕ {t.cancel}</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalHeaderTitle} numberOfLines={1}>
+                🚜 {subPayHistoryVendor ? `${subPayHistoryVendor.name} — ${lang === 'hi' ? 'भुगतान इतिहास' : 'Payment History'}` : (lang === 'hi' ? 'सभी सप्लायर भुगतान' : 'All Vendor Payments')}
+              </Text>
+              <View style={{ width: 70 }} />
+            </View>
+
+            {/* Payment List */}
+            <ScrollView style={styles.detailScrollContent} contentContainerStyle={{ paddingBottom: 40 }}>
+              {(() => {
+                const filteredPays = subPayHistoryVendor
+                  ? subSupplierPayments.filter(p => p.subSupplierId === subPayHistoryVendor.id)
+                  : [...subSupplierPayments];
+                const sortedPays = filteredPays.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+                if (sortedPays.length === 0) {
+                  return (
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyEmoji}>🚜</Text>
+                      <Text style={styles.emptyText}>
+                        {lang === 'hi' ? 'कोई सप्लायर भुगतान नहीं मिला।' : 'No vendor payment records found.'}
+                      </Text>
+                    </View>
+                  );
+                }
+
+                // Group by date
+                const grouped: Record<string, SubSupplierPayment[]> = {};
+                sortedPays.forEach(p => {
+                  if (!grouped[p.date]) grouped[p.date] = [];
+                  grouped[p.date].push(p);
+                });
+
+                return Object.entries(grouped).map(([date, dayPayments]) => {
+                  const displayDate = formatToDisplayDate(date);
+                  const dayTotal = dayPayments.reduce((s, p) => s + p.amountPaid, 0);
+                  return (
+                    <View key={date}>
+                      {/* Date Header */}
+                      <View style={styles.payHistoryDateHeader}>
+                        <Text style={styles.payHistoryDateText}>{displayDate}</Text>
+                        <Text style={[styles.payHistoryDayTotal, { color: '#ea580c' }]}>-₹{dayTotal.toFixed(0)}</Text>
+                      </View>
+                      {/* Payments for this date */}
+                      {dayPayments.map(pay => (
+                        <View key={pay.id} style={styles.payHistoryRow}>
+                          <View style={{ flex: 1 }}>
+                            {!subPayHistoryVendor && (
+                              <Text style={styles.payHistoryCustomerLabel}>
+                                {pay.subSupplierName || subSuppliers.find(s => s.id === pay.subSupplierId)?.name || (lang === 'hi' ? 'सप्लायर' : 'Vendor')}
+                              </Text>
+                            )}
+                            <Text style={styles.payHistoryNotes} numberOfLines={1}>
+                              {pay.notes || (lang === 'hi' ? 'कोई नोट नहीं' : 'No notes')}
+                            </Text>
+                          </View>
+                          <Text style={[styles.payHistoryAmount, { color: '#ea580c' }]}>₹{pay.amountPaid.toFixed(0)}</Text>
+                          <TouchableOpacity
+                            style={styles.payHistoryDeleteBtn}
+                            onPress={() => handleDeleteSubSupplierPayment(pay.id)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Text style={styles.payHistoryDeleteText}>🗑️</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                });
+              })()}
+
+              {/* Total Summary */}
+              {subPayHistoryVendor && (() => {
+                const vendorPays = subSupplierPayments.filter(p => p.subSupplierId === subPayHistoryVendor.id);
+                const totalPaidAllTime = vendorPays.reduce((s, p) => s + p.amountPaid, 0);
+                const summary = allSubDueSummaries.find(s => s.subSupplier.id === subPayHistoryVendor.id);
+                return (
+                  <View style={styles.payHistorySummaryBox}>
+                    <Text style={styles.payHistorySummaryTitle}>
+                      {lang === 'hi' ? '📊 सप्लायर खाता सारांश' : '📊 Vendor Account Summary'}
+                    </Text>
+                    <View style={styles.payModalInfoRow}>
+                      <View style={styles.payModalInfoBox}>
+                        <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'कुल भुगतान' : 'Total Payments'}</Text>
+                        <Text style={styles.payModalInfoValue}>{vendorPays.length}</Text>
+                      </View>
+                      <View style={styles.payModalInfoBox}>
+                        <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'कुल दिया गया' : 'Lifetime Paid'}</Text>
+                        <Text style={[styles.payModalInfoValue, { color: '#16a34a' }]}>₹{totalPaidAllTime.toFixed(0)}</Text>
+                      </View>
+                      <View style={styles.payModalInfoBox}>
+                        <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'देना बाकी' : 'Net Payable'}</Text>
+                        <Text style={[styles.payModalInfoValue, { color: '#ea580c' }]}>₹{(summary?.netPayable || 0).toFixed(0)}</Text>
                       </View>
                     </View>
                   </View>

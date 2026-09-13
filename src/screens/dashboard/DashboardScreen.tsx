@@ -18,7 +18,7 @@ import { StorageService } from '../../services/storageService';
 import { InstallAppModal } from '../../components/InstallAppModal';
 import { formatToDisplayDate } from '../../utils/dateUtils';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
-import { Payment } from '../../types';
+import { Payment, SubSupplierPayment } from '../../types';
 
 const toLocalIso = (d: Date): string => {
   const y = d.getFullYear();
@@ -30,6 +30,15 @@ const toLocalIso = (d: Date): string => {
 interface CustPaymentSummary {
   customerId: string;
   customerName: string;
+  phone?: string;
+  count: number;
+  totalPaid: number;
+  latestDate: string;
+}
+
+interface SubPaymentSummary {
+  subSupplierId: string;
+  subSupplierName: string;
   phone?: string;
   count: number;
   totalPaid: number;
@@ -49,7 +58,8 @@ export const DashboardScreen = ({ navigation }: any) => {
     requireAuth,
     subSuppliers,
     milkInwardEntries,
-    subSupplierPayments
+    subSupplierPayments,
+    refreshSubSupplierPayments
   } = useApp();
 
   const isHindi = lang === 'hi';
@@ -196,6 +206,105 @@ export const DashboardScreen = ({ navigation }: any) => {
 
   // Payment History Modal State
   const [payHistoryVisible, setPayHistoryVisible] = useState(false);
+  const [payHistoryParty, setPayHistoryParty] = useState<'customers' | 'subSuppliers'>('customers');
+
+  // Sub-Supplier Payment Summaries (Grouped by sub-supplier/vendor)
+  const subSupplierPaymentSummaries = useMemo(() => {
+    const map = new Map<string, SubPaymentSummary>();
+    const activeSubSuppliers = subSuppliers.filter(s => !s.isDeleted);
+
+    (subSupplierPayments || []).filter(p => !p.isDeleted).forEach(p => {
+      const sub = activeSubSuppliers.find(s => s.id === p.subSupplierId);
+      const key = p.subSupplierId || p.subSupplierName || 'unknown';
+      const name = p.subSupplierName || sub?.name || (isHindi ? 'अज्ञात सप्लायर' : 'Unknown Vendor');
+      const phone = sub?.phone || '';
+
+      if (!map.has(key)) {
+        map.set(key, {
+          subSupplierId: key,
+          subSupplierName: name,
+          phone,
+          count: 1,
+          totalPaid: p.amountPaid,
+          latestDate: p.date
+        });
+      } else {
+        const existing = map.get(key)!;
+        existing.count += 1;
+        existing.totalPaid += p.amountPaid;
+        if (p.date > existing.latestDate) {
+          existing.latestDate = p.date;
+        }
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.latestDate.localeCompare(a.latestDate));
+  }, [subSupplierPayments, subSuppliers, isHindi]);
+
+  // Total Paid to Sub-Suppliers All Time
+  const totalSubPaidAllTime = useMemo(() => {
+    return (subSupplierPayments || []).filter(p => !p.isDeleted).reduce((sum, p) => sum + p.amountPaid, 0);
+  }, [subSupplierPayments]);
+
+  // All Sub-Supplier Payments sorted chronologically (Newest first)
+  const sortedSubPayments = useMemo(() => {
+    return [...(subSupplierPayments || [])].sort((a, b) => {
+      const timeA = new Date(a.date).getTime() || a.createdAt || 0;
+      const timeB = new Date(b.date).getTime() || b.createdAt || 0;
+      return timeB - timeA;
+    });
+  }, [subSupplierPayments]);
+
+  // Selected sub-supplier for drill-down view in Payment History modal
+  const [selectedPaymentSubId, setSelectedPaymentSubId] = useState<string | null>(null);
+  const [paymentSubSearch, setPaymentSubSearch] = useState('');
+
+  const filteredSubSummaries = useMemo(() => {
+    if (!paymentSubSearch.trim()) return subSupplierPaymentSummaries;
+    const q = paymentSubSearch.trim().toLowerCase();
+    return subSupplierPaymentSummaries.filter(
+      s => s.subSupplierName.toLowerCase().includes(q) || (s.phone && s.phone.includes(q))
+    );
+  }, [subSupplierPaymentSummaries, paymentSubSearch]);
+
+  const selectedSubPayments = useMemo(() => {
+    if (!selectedPaymentSubId) return [];
+    return (subSupplierPayments || [])
+      .filter(p => p.subSupplierId === selectedPaymentSubId || (!p.subSupplierId && p.subSupplierName === selectedPaymentSubId) || p.subSupplierName === selectedPaymentSubId)
+      .sort((a, b) => {
+        const timeA = new Date(a.date).getTime() || a.createdAt || 0;
+        const timeB = new Date(b.date).getTime() || b.createdAt || 0;
+        return timeB - timeA;
+      });
+  }, [subSupplierPayments, selectedPaymentSubId]);
+
+  const selectedSubSummary = useMemo(() => {
+    if (!selectedPaymentSubId) return null;
+    return subSupplierPaymentSummaries.find(s => s.subSupplierId === selectedPaymentSubId) || null;
+  }, [subSupplierPaymentSummaries, selectedPaymentSubId]);
+
+  // Quick Action: Delete individual sub-supplier payment from dashboard history modal
+  const handleDeleteSubPaymentFromDashboard = (paymentId: string) => {
+    requireAuth(() => {
+      confirmAction(
+        isHindi ? 'सप्लायर भुगतान रिकॉर्ड हटाएं?' : 'Delete Vendor Payment Record?',
+        isHindi
+          ? 'क्या आप वाकई इस भुगतान रिकॉर्ड को हटाना चाहते हैं? हटाने पर सप्लायर के बकाया (देय राशि) में यह राशि दोबारा जुड़ जाएगी।'
+          : 'Are you sure you want to delete this payment record? Outstanding balance will be updated accordingly.',
+        async () => {
+          await StorageService.deleteSubSupplierPayment(paymentId, supplier?.id);
+          await refreshSubSupplierPayments();
+          showAlert(
+            isHindi ? '✓ भुगतान हटाया गया' : '✓ Payment Deleted',
+            isHindi ? 'सप्लायर भुगतान रिकॉर्ड हटा दिया गया है।' : 'Vendor payment record removed.'
+          );
+        },
+        isHindi ? 'हटाएं' : 'Delete',
+        isHindi ? 'रद्द करें' : 'Cancel',
+        true
+      );
+    });
+  };
 
   // Automatically prompt if authenticated supplier profile has placeholder/default name
   useEffect(() => {
@@ -532,6 +641,7 @@ export const DashboardScreen = ({ navigation }: any) => {
           <TouchableOpacity
             style={styles.paymentCardCompact}
             onPress={() => {
+              setPayHistoryParty('customers');
               setSelectedPaymentCustId(null);
               setPaymentCustSearch('');
               setPaymentViewMode('customer');
@@ -695,15 +805,33 @@ export const DashboardScreen = ({ navigation }: any) => {
               <Text style={styles.procurementFooterAmount}>₹{overallSubPayable.toFixed(0)}</Text>
             </View>
 
-            <TouchableOpacity
-              style={styles.procurementActionBtn}
-              onPress={() => navigation.navigate('ReportsTab')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.procurementActionBtnText}>
-                💳 {isHindi ? 'सप्लायर भुगतान' : 'Pay Vendors'}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              <TouchableOpacity
+                style={styles.procurementHistoryBtn}
+                onPress={() => {
+                  setPayHistoryParty('subSuppliers');
+                  setSelectedPaymentSubId(null);
+                  setPaymentSubSearch('');
+                  setPaymentViewMode('customer');
+                  setPayHistoryVisible(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.procurementHistoryBtnText}>
+                  📋 {isHindi ? 'इतिहास' : 'History'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.procurementActionBtn}
+                onPress={() => navigation.navigate('ReportsTab')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.procurementActionBtnText}>
+                  💳 {isHindi ? 'भुगतान करें' : 'Pay'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -786,7 +914,7 @@ export const DashboardScreen = ({ navigation }: any) => {
         <View style={styles.modalOverlay}>
           <View style={styles.payHistoryModalContent}>
 
-            {/* SCENARIO A: CUSTOMER DETAIL DRILL-DOWN VIEW */}
+            {/* SCENARIO A1: CUSTOMER DETAIL DRILL-DOWN VIEW */}
             {selectedPaymentCustId ? (
               <>
                 <View style={styles.payHistoryHeader}>
@@ -865,18 +993,105 @@ export const DashboardScreen = ({ navigation }: any) => {
                   />
                 )}
               </>
+            ) : selectedPaymentSubId ? (
+              /* SCENARIO A2: SUB-SUPPLIER (VENDOR) DETAIL DRILL-DOWN VIEW */
+              <>
+                <View style={styles.payHistoryHeader}>
+                  <TouchableOpacity
+                    style={styles.payBackBtn}
+                    onPress={() => setSelectedPaymentSubId(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.payBackBtnText}>‹ {isHindi ? 'वापस' : 'Back'}</Text>
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, paddingHorizontal: 10 }}>
+                    <Text style={styles.payHistoryTitle} numberOfLines={1}>
+                      {selectedSubSummary?.subSupplierName || (isHindi ? 'सप्लायर भुगतान' : 'Vendor Payments')}
+                    </Text>
+                    <Text style={[styles.payHistorySub, { color: '#ea580c' }]}>
+                      {isHindi
+                        ? `कुल भुगतान दिया: ₹${selectedSubSummary?.totalPaid.toFixed(0) || 0} (${selectedSubPayments.length} बार)`
+                        : `Total Paid: ₹${selectedSubSummary?.totalPaid.toFixed(0) || 0} (${selectedSubPayments.length} payments)`}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setPayHistoryVisible(false)}
+                    style={styles.modalCloseBtn}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.modalCloseBtnText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {selectedSubPayments.length === 0 ? (
+                  <View style={styles.emptyPayState}>
+                    <Text style={{ fontSize: 36, marginBottom: 8 }}>🚜</Text>
+                    <Text style={styles.emptyPayText}>
+                      {isHindi ? 'इस सप्लायर का कोई भुगतान रिकॉर्ड नहीं है।' : 'No payment records for this vendor.'}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.backLinkBtn}
+                      onPress={() => setSelectedPaymentSubId(null)}
+                    >
+                      <Text style={styles.backLinkBtnText}>‹ {isHindi ? 'सभी सप्लायर पर वापस जाएं' : 'Back to all vendors'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={selectedSubPayments}
+                    keyExtractor={item => item.id}
+                    contentContainerStyle={{ paddingVertical: 8 }}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={({ item }) => (
+                      <View style={styles.payRecordCard}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.payRecordDate}>📅 {formatToDisplayDate(item.date)}</Text>
+                            <View style={[styles.payModeBadge, { backgroundColor: '#ffedd5' }]}>
+                              <Text style={[styles.payModeText, { color: '#c2410c' }]}>{item.paymentMode || 'PAID'}</Text>
+                            </View>
+                          </View>
+                          {item.notes ? (
+                            <Text style={styles.payRecordNotes} numberOfLines={1}>📝 {item.notes}</Text>
+                          ) : null}
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
+                          <Text style={[styles.payRecordAmount, { color: '#ea580c' }]}>-₹{item.amountPaid.toFixed(0)}</Text>
+                          <TouchableOpacity
+                            style={styles.payDeleteBtn}
+                            onPress={() => handleDeleteSubPaymentFromDashboard(item.id)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={styles.payDeleteBtnText}>🗑️ {isHindi ? 'हटाएं' : 'Delete'}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  />
+                )}
+              </>
             ) : (
-              /* SCENARIO B: MAIN PAYMENT OVERVIEW (Customer-Wise Totals & All Records) */
+              /* SCENARIO B: MAIN PAYMENT OVERVIEW (Customer vs Vendor Totals & Records) */
               <>
                 <View style={styles.payHistoryHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontSize: 24 }}>💰</Text>
+                    <Text style={{ fontSize: 24 }}>{payHistoryParty === 'customers' ? '💰' : '🚜'}</Text>
                     <View>
-                      <Text style={styles.payHistoryTitle}>{isHindi ? 'भुगतान इतिहास' : 'Payment History'}</Text>
-                      <Text style={styles.payHistorySub}>
-                        {isHindi
-                          ? `कुल प्राप्त: ₹${totalReceivedAllTime.toFixed(0)} • ${customerPaymentSummaries.length} ग्राहक`
-                          : `Total: ₹${totalReceivedAllTime.toFixed(0)} • ${customerPaymentSummaries.length} Customers`}
+                      <Text style={styles.payHistoryTitle}>
+                        {payHistoryParty === 'customers'
+                          ? (isHindi ? 'ग्राहक भुगतान इतिहास' : 'Customer Payment History')
+                          : (isHindi ? 'सप्लायर भुगतान इतिहास' : 'Vendor Payment History')}
+                      </Text>
+                      <Text style={[styles.payHistorySub, payHistoryParty === 'subSuppliers' && { color: '#ea580c' }]}>
+                        {payHistoryParty === 'customers'
+                          ? (isHindi
+                            ? `कुल प्राप्त: ₹${totalReceivedAllTime.toFixed(0)} • ${customerPaymentSummaries.length} ग्राहक`
+                            : `Total In: ₹${totalReceivedAllTime.toFixed(0)} • ${customerPaymentSummaries.length} Customers`)
+                          : (isHindi
+                            ? `कुल दिया: ₹${totalSubPaidAllTime.toFixed(0)} • ${subSupplierPaymentSummaries.length} सप्लायर`
+                            : `Total Out: ₹${totalSubPaidAllTime.toFixed(0)} • ${subSupplierPaymentSummaries.length} Vendors`)}
                       </Text>
                     </View>
                   </View>
@@ -889,133 +1104,298 @@ export const DashboardScreen = ({ navigation }: any) => {
                   </TouchableOpacity>
                 </View>
 
-                {/* View Switcher: Customer-Wise (Default) vs All Records */}
-                <View style={styles.payTabRow}>
+                {/* Party Switcher: Customers vs Sub-Suppliers */}
+                <View style={styles.partySwitcherRow}>
                   <TouchableOpacity
-                    style={[styles.payTabBtn, paymentViewMode === 'customer' && styles.payTabBtnActive]}
-                    onPress={() => setPaymentViewMode('customer')}
+                    style={[styles.partySwitcherBtn, payHistoryParty === 'customers' && styles.partySwitcherBtnActive]}
+                    onPress={() => {
+                      setPayHistoryParty('customers');
+                      setSelectedPaymentCustId(null);
+                    }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.payTabBtnText, paymentViewMode === 'customer' && styles.payTabBtnTextActive]}>
-                      👥 {isHindi ? 'ग्राहक अनुसार कुल' : 'Customer Wise'} ({customerPaymentSummaries.length})
+                    <Text style={[styles.partySwitcherText, payHistoryParty === 'customers' && styles.partySwitcherTextActive]}>
+                      👥 {isHindi ? 'ग्राहक भुगतान (प्राप्ति)' : 'Customer In'} ({payments.length})
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.payTabBtn, paymentViewMode === 'all' && styles.payTabBtnActive]}
-                    onPress={() => setPaymentViewMode('all')}
+                    style={[styles.partySwitcherBtn, payHistoryParty === 'subSuppliers' && styles.partySwitcherBtnActiveSub]}
+                    onPress={() => {
+                      setPayHistoryParty('subSuppliers');
+                      setSelectedPaymentSubId(null);
+                    }}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.payTabBtnText, paymentViewMode === 'all' && styles.payTabBtnTextActive]}>
-                      📋 {isHindi ? 'सभी भुगतान' : 'All Payments'} ({payments.length})
+                    <Text style={[styles.partySwitcherText, payHistoryParty === 'subSuppliers' && styles.partySwitcherTextActive]}>
+                      🚜 {isHindi ? 'सप्लायर भुगतान (खर्च)' : 'Vendor Out'} ({subSupplierPayments?.length || 0})
                     </Text>
                   </TouchableOpacity>
                 </View>
 
-                {payments.length === 0 ? (
-                  <View style={styles.emptyPayState}>
-                    <Text style={{ fontSize: 40, marginBottom: 8 }}>💳</Text>
-                    <Text style={styles.emptyPayText}>
-                      {isHindi ? 'अभी तक कोई भुगतान दर्ज नहीं है।' : 'No payment records found.'}
-                    </Text>
-                    <Text style={styles.emptyPaySub}>
-                      {isHindi ? 'बकाया रिपोर्ट से भुगतान दर्ज करें।' : 'Record payments from the Due Reports tab.'}
-                    </Text>
-                  </View>
-                ) : paymentViewMode === 'customer' ? (
-                  /* 1. CUSTOMER-WISE TOTAL PAYMENTS LIST */
+                {payHistoryParty === 'customers' ? (
+                  /* ---------------- CUSTOMER PAYMENTS CONTENT ---------------- */
                   <>
-                    <View style={styles.paySearchBox}>
-                      <Text style={{ fontSize: 13, marginRight: 6 }}>🔍</Text>
-                      <TextInput
-                        style={styles.paySearchInput}
-                        placeholder={isHindi ? 'ग्राहक का नाम या फ़ोन खोजें...' : 'Search customer name or phone...'}
-                        placeholderTextColor="#94a3b8"
-                        value={paymentCustSearch}
-                        onChangeText={setPaymentCustSearch}
-                      />
-                      {paymentCustSearch ? (
-                        <TouchableOpacity onPress={() => setPaymentCustSearch('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                          <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: 'bold' }}>✕</Text>
-                        </TouchableOpacity>
-                      ) : null}
+                    {/* View Switcher: Customer-Wise (Default) vs All Records */}
+                    <View style={styles.payTabRow}>
+                      <TouchableOpacity
+                        style={[styles.payTabBtn, paymentViewMode === 'customer' && styles.payTabBtnActive]}
+                        onPress={() => setPaymentViewMode('customer')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.payTabBtnText, paymentViewMode === 'customer' && styles.payTabBtnTextActive]}>
+                          👥 {isHindi ? 'ग्राहक अनुसार कुल' : 'Customer Wise'} ({customerPaymentSummaries.length})
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.payTabBtn, paymentViewMode === 'all' && styles.payTabBtnActive]}
+                        onPress={() => setPaymentViewMode('all')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.payTabBtnText, paymentViewMode === 'all' && styles.payTabBtnTextActive]}>
+                          📋 {isHindi ? 'सभी भुगतान' : 'All Payments'} ({payments.length})
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.custWiseHint}>
-                      {isHindi ? '👇 ग्राहक पर क्लिक करके उसके सभी भुगतान देखें:' : '👇 Tap customer to view all their payments:'}
-                    </Text>
+                    {payments.length === 0 ? (
+                      <View style={styles.emptyPayState}>
+                        <Text style={{ fontSize: 40, marginBottom: 8 }}>💳</Text>
+                        <Text style={styles.emptyPayText}>
+                          {isHindi ? 'अभी तक कोई भुगतान दर्ज नहीं है।' : 'No payment records found.'}
+                        </Text>
+                        <Text style={styles.emptyPaySub}>
+                          {isHindi ? 'बकाया रिपोर्ट से भुगतान दर्ज करें।' : 'Record payments from the Due Reports tab.'}
+                        </Text>
+                      </View>
+                    ) : paymentViewMode === 'customer' ? (
+                      /* 1. CUSTOMER-WISE TOTAL PAYMENTS LIST */
+                      <>
+                        <View style={styles.paySearchBox}>
+                          <Text style={{ fontSize: 13, marginRight: 6 }}>🔍</Text>
+                          <TextInput
+                            style={styles.paySearchInput}
+                            placeholder={isHindi ? 'ग्राहक का नाम या फ़ोन खोजें...' : 'Search customer name or phone...'}
+                            placeholderTextColor="#94a3b8"
+                            value={paymentCustSearch}
+                            onChangeText={setPaymentCustSearch}
+                          />
+                          {paymentCustSearch ? (
+                            <TouchableOpacity onPress={() => setPaymentCustSearch('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                              <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: 'bold' }}>✕</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
 
-                    <FlatList
-                      data={filteredCustSummaries}
-                      keyExtractor={item => item.customerId}
-                      contentContainerStyle={{ paddingVertical: 4 }}
-                      showsVerticalScrollIndicator={false}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={styles.custPaySummaryCard}
-                          onPress={() => setSelectedPaymentCustId(item.customerId)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={{ flex: 1, paddingRight: 6 }}>
-                            <Text style={styles.custPaySummaryName}>{item.customerName}</Text>
-                            <Text style={styles.custPaySummarySub}>
-                              {item.phone ? `📞 ${item.phone} • ` : ''}
-                              {item.count} {isHindi ? 'बार भुगतान' : 'payments'}
-                            </Text>
-                            <Text style={styles.custPayLatestDate}>
-                              {isHindi ? `अंतिम: ${formatToDisplayDate(item.latestDate)}` : `Latest: ${formatToDisplayDate(item.latestDate)}`}
-                            </Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                            <View style={styles.custPayTotalBadge}>
-                              <Text style={styles.custPayTotalLabel}>{isHindi ? 'कुल' : 'Total'}</Text>
-                              <Text style={styles.custPayTotalText}>₹{item.totalPaid.toFixed(0)}</Text>
-                            </View>
-                            <Text style={styles.drillDownArrow}>›</Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  </>
-                ) : (
-                  /* 2. CHRONOLOGICAL ALL PAYMENTS LIST */
-                  <FlatList
-                    data={sortedPayments}
-                    keyExtractor={item => item.id}
-                    contentContainerStyle={{ paddingVertical: 8 }}
-                    showsVerticalScrollIndicator={false}
-                    renderItem={({ item }) => {
-                      const cust = customers.find(c => c.id === item.customerId);
-                      const custName = item.customerName || cust?.name || (isHindi ? 'अज्ञात ग्राहक' : 'Unknown Customer');
-                      return (
-                        <View style={styles.payRecordCard}>
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={styles.payRecordName}>{custName}</Text>
-                              <View style={styles.payModeBadge}>
-                                <Text style={styles.payModeText}>PAID</Text>
+                        <Text style={styles.custWiseHint}>
+                          {isHindi ? '👇 ग्राहक पर क्लिक करके उसके सभी भुगतान देखें:' : '👇 Tap customer to view all their payments:'}
+                        </Text>
+
+                        <FlatList
+                          data={filteredCustSummaries}
+                          keyExtractor={item => item.customerId}
+                          contentContainerStyle={{ paddingVertical: 4 }}
+                          showsVerticalScrollIndicator={false}
+                          renderItem={({ item }) => (
+                            <TouchableOpacity
+                              style={styles.custPaySummaryCard}
+                              onPress={() => setSelectedPaymentCustId(item.customerId)}
+                              activeOpacity={0.7}
+                            >
+                              <View style={{ flex: 1, paddingRight: 6 }}>
+                                <Text style={styles.custPaySummaryName}>{item.customerName}</Text>
+                                <Text style={styles.custPaySummarySub}>
+                                  {item.phone ? `📞 ${item.phone} • ` : ''}
+                                  {item.count} {isHindi ? 'बार भुगतान' : 'payments'}
+                                </Text>
+                                <Text style={styles.custPayLatestDate}>
+                                  {isHindi ? `अंतिम: ${formatToDisplayDate(item.latestDate)}` : `Latest: ${formatToDisplayDate(item.latestDate)}`}
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                                <View style={styles.custPayTotalBadge}>
+                                  <Text style={styles.custPayTotalLabel}>{isHindi ? 'कुल' : 'Total'}</Text>
+                                  <Text style={styles.custPayTotalText}>₹{item.totalPaid.toFixed(0)}</Text>
+                                </View>
+                                <Text style={styles.drillDownArrow}>›</Text>
+                              </View>
+                            </TouchableOpacity>
+                          )}
+                        />
+                      </>
+                    ) : (
+                      /* 2. CHRONOLOGICAL ALL PAYMENTS LIST */
+                      <FlatList
+                        data={sortedPayments}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={{ paddingVertical: 8 }}
+                        showsVerticalScrollIndicator={false}
+                        renderItem={({ item }) => {
+                          const cust = customers.find(c => c.id === item.customerId);
+                          const custName = item.customerName || cust?.name || (isHindi ? 'अज्ञात ग्राहक' : 'Unknown Customer');
+                          return (
+                            <View style={styles.payRecordCard}>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text style={styles.payRecordName}>{custName}</Text>
+                                  <View style={styles.payModeBadge}>
+                                    <Text style={styles.payModeText}>PAID</Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.payRecordDate}>📅 {formatToDisplayDate(item.date)}</Text>
+                                {item.notes ? (
+                                  <Text style={styles.payRecordNotes} numberOfLines={1}>📝 {item.notes}</Text>
+                                ) : null}
+                              </View>
+
+                              <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
+                                <Text style={styles.payRecordAmount}>+₹{item.amountPaid.toFixed(0)}</Text>
+                                <TouchableOpacity
+                                  style={styles.payDeleteBtn}
+                                  onPress={() => handleDeletePayment(item)}
+                                  activeOpacity={0.7}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <Text style={styles.payDeleteBtnText}>🗑️ {isHindi ? 'हटाएं' : 'Delete'}</Text>
+                                </TouchableOpacity>
                               </View>
                             </View>
-                            <Text style={styles.payRecordDate}>📅 {formatToDisplayDate(item.date)}</Text>
-                            {item.notes ? (
-                              <Text style={styles.payRecordNotes} numberOfLines={1}>📝 {item.notes}</Text>
-                            ) : null}
-                          </View>
+                          );
+                        }}
+                      />
+                    )}
+                  </>
+                ) : (
+                  /* ---------------- SUB-SUPPLIER (VENDOR) PAYMENTS CONTENT ---------------- */
+                  <>
+                    {/* View Switcher: Vendor-Wise (Default) vs All Records */}
+                    <View style={styles.payTabRow}>
+                      <TouchableOpacity
+                        style={[styles.payTabBtn, paymentViewMode === 'customer' && styles.payTabBtnActiveSub]}
+                        onPress={() => setPaymentViewMode('customer')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.payTabBtnText, paymentViewMode === 'customer' && styles.payTabBtnTextActive]}>
+                          🚜 {isHindi ? 'सप्लायर अनुसार कुल' : 'Vendor Wise'} ({subSupplierPaymentSummaries.length})
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.payTabBtn, paymentViewMode === 'all' && styles.payTabBtnActiveSub]}
+                        onPress={() => setPaymentViewMode('all')}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.payTabBtnText, paymentViewMode === 'all' && styles.payTabBtnTextActive]}>
+                          📋 {isHindi ? 'सभी भुगतान' : 'All Payments'} ({subSupplierPayments?.length || 0})
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
-                          <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
-                            <Text style={styles.payRecordAmount}>+₹{item.amountPaid.toFixed(0)}</Text>
-                            <TouchableOpacity
-                              style={styles.payDeleteBtn}
-                              onPress={() => handleDeletePayment(item)}
-                              activeOpacity={0.7}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <Text style={styles.payDeleteBtnText}>🗑️ {isHindi ? 'हटाएं' : 'Delete'}</Text>
+                    {(subSupplierPayments?.length || 0) === 0 ? (
+                      <View style={styles.emptyPayState}>
+                        <Text style={{ fontSize: 40, marginBottom: 8 }}>🚜</Text>
+                        <Text style={styles.emptyPayText}>
+                          {isHindi ? 'अभी तक कोई सप्लायर भुगतान दर्ज नहीं है।' : 'No vendor payment records found.'}
+                        </Text>
+                        <Text style={styles.emptyPaySub}>
+                          {isHindi ? 'बकाया रिपोर्ट से सप्लायर को भुगतान दर्ज करें।' : 'Record vendor payments from the Due Reports tab.'}
+                        </Text>
+                      </View>
+                    ) : paymentViewMode === 'customer' ? (
+                      /* 1. VENDOR-WISE TOTAL PAYMENTS LIST */
+                      <>
+                        <View style={styles.paySearchBox}>
+                          <Text style={{ fontSize: 13, marginRight: 6 }}>🔍</Text>
+                          <TextInput
+                            style={styles.paySearchInput}
+                            placeholder={isHindi ? 'सप्लायर का नाम या फ़ोन खोजें...' : 'Search vendor name or phone...'}
+                            placeholderTextColor="#94a3b8"
+                            value={paymentSubSearch}
+                            onChangeText={setPaymentSubSearch}
+                          />
+                          {paymentSubSearch ? (
+                            <TouchableOpacity onPress={() => setPaymentSubSearch('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                              <Text style={{ fontSize: 12, color: '#94a3b8', fontWeight: 'bold' }}>✕</Text>
                             </TouchableOpacity>
-                          </View>
+                          ) : null}
                         </View>
-                      );
-                    }}
-                  />
+
+                        <Text style={styles.custWiseHint}>
+                          {isHindi ? '👇 सप्लायर पर क्लिक करके उसके सभी भुगतान देखें:' : '👇 Tap vendor to view all payments made to them:'}
+                        </Text>
+
+                        <FlatList
+                          data={filteredSubSummaries}
+                          keyExtractor={item => item.subSupplierId}
+                          contentContainerStyle={{ paddingVertical: 4 }}
+                          showsVerticalScrollIndicator={false}
+                          renderItem={({ item }) => (
+                            <TouchableOpacity
+                              style={styles.custPaySummaryCard}
+                              onPress={() => setSelectedPaymentSubId(item.subSupplierId)}
+                              activeOpacity={0.7}
+                            >
+                              <View style={{ flex: 1, paddingRight: 6 }}>
+                                <Text style={styles.custPaySummaryName}>{item.subSupplierName}</Text>
+                                <Text style={styles.custPaySummarySub}>
+                                  {item.phone ? `📞 ${item.phone} • ` : ''}
+                                  {item.count} {isHindi ? 'बार भुगतान दिया' : 'payments'}
+                                </Text>
+                                <Text style={styles.custPayLatestDate}>
+                                  {isHindi ? `अंतिम: ${formatToDisplayDate(item.latestDate)}` : `Latest: ${formatToDisplayDate(item.latestDate)}`}
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                                <View style={styles.subPayTotalBadge}>
+                                  <Text style={styles.subPayTotalLabel}>{isHindi ? 'कुल दिया' : 'Paid'}</Text>
+                                  <Text style={styles.subPayTotalText}>₹{item.totalPaid.toFixed(0)}</Text>
+                                </View>
+                                <Text style={styles.drillDownArrow}>›</Text>
+                              </View>
+                            </TouchableOpacity>
+                          )}
+                        />
+                      </>
+                    ) : (
+                      /* 2. CHRONOLOGICAL ALL SUB-SUPPLIER PAYMENTS LIST */
+                      <FlatList
+                        data={sortedSubPayments}
+                        keyExtractor={item => item.id}
+                        contentContainerStyle={{ paddingVertical: 8 }}
+                        showsVerticalScrollIndicator={false}
+                        renderItem={({ item }) => {
+                          const sub = subSuppliers.find(s => s.id === item.subSupplierId);
+                          const subName = item.subSupplierName || sub?.name || (isHindi ? 'अज्ञात सप्लायर' : 'Unknown Vendor');
+                          return (
+                            <View style={styles.payRecordCard}>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text style={styles.payRecordName}>{subName}</Text>
+                                  <View style={[styles.payModeBadge, { backgroundColor: '#ffedd5' }]}>
+                                    <Text style={[styles.payModeText, { color: '#c2410c' }]}>{item.paymentMode || 'PAID'}</Text>
+                                  </View>
+                                </View>
+                                <Text style={styles.payRecordDate}>📅 {formatToDisplayDate(item.date)}</Text>
+                                {item.notes ? (
+                                  <Text style={styles.payRecordNotes} numberOfLines={1}>📝 {item.notes}</Text>
+                                ) : null}
+                              </View>
+
+                              <View style={{ alignItems: 'flex-end', marginLeft: 10 }}>
+                                <Text style={[styles.payRecordAmount, { color: '#ea580c' }]}>-₹{item.amountPaid.toFixed(0)}</Text>
+                                <TouchableOpacity
+                                  style={styles.payDeleteBtn}
+                                  onPress={() => handleDeleteSubPaymentFromDashboard(item.id)}
+                                  activeOpacity={0.7}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <Text style={styles.payDeleteBtnText}>🗑️ {isHindi ? 'हटाएं' : 'Delete'}</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          );
+                        }}
+                      />
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -1312,6 +1692,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 'bold'
   },
+  procurementHistoryBtn: {
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fed7aa'
+  },
+  procurementHistoryBtnText: {
+    color: '#c2410c',
+    fontSize: 11,
+    fontWeight: 'bold'
+  },
 
   // SLEEK QUICK LINKS GRID (2 columns x 4 rows)
   quickLinksGrid: {
@@ -1500,6 +1893,40 @@ const styles = StyleSheet.create({
   },
   modalCloseBtnText: { fontSize: 14, color: '#64748b', fontWeight: 'bold' },
 
+  // Party Switcher (Customers vs Sub-Suppliers)
+  partySwitcherRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 4
+  },
+  partySwitcherBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  partySwitcherBtnActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669'
+  },
+  partySwitcherBtnActiveSub: {
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c'
+  },
+  partySwitcherText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  partySwitcherTextActive: {
+    color: '#ffffff'
+  },
+
   // Payment Tabs (Customer Wise vs All Records)
   payTabRow: {
     flexDirection: 'row',
@@ -1519,6 +1946,10 @@ const styles = StyleSheet.create({
   payTabBtnActive: {
     backgroundColor: '#059669',
     borderColor: '#059669'
+  },
+  payTabBtnActiveSub: {
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c'
   },
   payTabBtnText: {
     fontSize: 11,
@@ -1605,6 +2036,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     color: '#059669'
+  },
+  subPayTotalBadge: {
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    alignItems: 'flex-end'
+  },
+  subPayTotalLabel: {
+    fontSize: 9,
+    color: '#c2410c',
+    fontWeight: '600',
+    textTransform: 'uppercase'
+  },
+  subPayTotalText: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#ea580c'
   },
   drillDownArrow: {
     fontSize: 18,
