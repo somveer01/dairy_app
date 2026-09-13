@@ -126,3 +126,13 @@ export function shiftDisplayDate(displayDate: string, days: number): string {
   }
   return displayDate;
 }
+
+/**
+ * Returns local YYYY-MM-DD safely without UTC timezone shift
+ */
+export function toLocalIso(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}

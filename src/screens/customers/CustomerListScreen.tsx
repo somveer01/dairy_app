@@ -20,7 +20,7 @@ import { Contact } from 'expo-contacts';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
-import { Customer, MilkType } from '../../types';
+import { Customer, MilkType, SubSupplier } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { parseWhatsAppText, ParsedWhatsAppCustomer, extractWhatsAppGroupName } from '../../utils/whatsappParser';
 
@@ -72,12 +72,24 @@ const cleanPhoneInput = (raw?: string | null): string => {
 };
 
 export const CustomerListScreen = () => {
-  const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier, requireAuth } = useApp();
+  const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, subSuppliers, refreshSubSuppliers, supplier, requireAuth } = useApp();
+  const [directoryMode, setDirectoryMode] = useState<'customers' | 'subSuppliers'>('customers');
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
-  // Form State for Single Add / Edit
+  // Sub-Supplier Modal State
+  const [subModalVisible, setSubModalVisible] = useState(false);
+  const [editingSubSupplier, setEditingSubSupplier] = useState<SubSupplier | null>(null);
+  const [subName, setSubName] = useState('');
+  const [subPhone, setSubPhone] = useState('');
+  const [subAddress, setSubAddress] = useState('');
+  const [subMilkType, setSubMilkType] = useState<MilkType>('cow');
+  const [subDefaultLitres, setSubDefaultLitres] = useState('5.0');
+  const [subRatePerLitre, setSubRatePerLitre] = useState('45');
+  const [subNotes, setSubNotes] = useState('');
+
+  // Form State for Single Add / Edit Customer
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -410,6 +422,99 @@ export const CustomerListScreen = () => {
         },
         '🗑️ हटाएं (Delete)',
         'रद्द करें (Cancel)',
+        true
+      );
+    });
+  };
+
+  // --- SUB-SUPPLIER MODAL & CRUD HANDLERS ---
+  const openAddSubModal = () => {
+    Keyboard.dismiss();
+    requireAuth(() => {
+      setEditingSubSupplier(null);
+      setSubName('');
+      setSubPhone('');
+      setSubAddress('');
+      setSubMilkType('cow');
+      setSubDefaultLitres('5.0');
+      setSubRatePerLitre('45');
+      setSubNotes('');
+      setSubModalVisible(true);
+    });
+  };
+
+  const openEditSubModal = (sub: SubSupplier) => {
+    Keyboard.dismiss();
+    requireAuth(() => {
+      setEditingSubSupplier(sub);
+      setSubName(sub.name);
+      setSubPhone(sub.phone);
+      setSubAddress(sub.address || '');
+      setSubMilkType(sub.milkType);
+      setSubDefaultLitres(sub.defaultLitres.toString());
+      setSubRatePerLitre(sub.ratePerLitre.toString());
+      setSubNotes(sub.notes || '');
+      setSubModalVisible(true);
+    });
+  };
+
+  const handleSaveSubSupplier = async () => {
+    Keyboard.dismiss();
+    requireAuth(async () => {
+      const trimmedName = subName.trim();
+      if (!trimmedName) {
+        showAlert(
+          lang === 'hi' ? 'नाम आवश्यक है' : 'Validation Error',
+          lang === 'hi' ? 'कृपया विक्रेता / किसान का नाम दर्ज करें।' : 'Please enter vendor / farmer name.'
+        );
+        return;
+      }
+
+      const normPhone = normalizePhoneDigits(subPhone);
+      if (!normPhone || normPhone.length < 10) {
+        showAlert(
+          lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
+          lang === 'hi' ? 'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।' : 'Please enter a valid 10-digit mobile number.'
+        );
+        return;
+      }
+
+      const defaultQty = parseFloat(subDefaultLitres) || 1;
+      const rate = parseFloat(subRatePerLitre) || 45;
+      const suppId = supplier?.id || StorageService.getActiveSupplierId() || 'supp_1';
+
+      const subData: SubSupplier = {
+        id: editingSubSupplier ? editingSubSupplier.id : `sub_supp_${Date.now()}`,
+        supplierId: suppId,
+        name: trimmedName,
+        phone: normPhone,
+        address: subAddress.trim(),
+        milkType: subMilkType,
+        defaultLitres: defaultQty,
+        ratePerLitre: rate,
+        notes: subNotes.trim(),
+        createdAt: editingSubSupplier ? editingSubSupplier.createdAt : Date.now()
+      };
+
+      await StorageService.saveSubSupplier(subData);
+      await refreshSubSuppliers();
+      setSubModalVisible(false);
+    });
+  };
+
+  const handleDeleteSub = (id: string, sName: string) => {
+    requireAuth(() => {
+      confirmAction(
+        lang === 'hi' ? 'विक्रेता हटाएं (Delete Vendor)' : 'Delete Vendor',
+        lang === 'hi'
+          ? `क्या आप वाकई "${sName}" को अपनी विक्रेता लिस्ट से हटाना चाहते हैं?`
+          : `Are you sure you want to delete vendor "${sName}"?`,
+        async () => {
+          await StorageService.deleteSubSupplier(id, supplier?.id);
+          await refreshSubSuppliers();
+        },
+        lang === 'hi' ? '🗑️ हटाएं (Delete)' : 'Delete',
+        lang === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel',
         true
       );
     });
@@ -962,6 +1067,14 @@ export const CustomerListScreen = () => {
         (c.address && c.address.toLowerCase().includes(search.toLowerCase())))
   );
 
+  const filteredSubSuppliers = subSuppliers.filter(
+    s =>
+      !s.isDeleted &&
+      (s.name.toLowerCase().includes(search.toLowerCase()) ||
+        s.phone.includes(search) ||
+        (s.address && s.address.toLowerCase().includes(search.toLowerCase())))
+  );
+
   const filteredPhoneContacts = deviceContacts.filter(
     c =>
       c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
@@ -974,18 +1087,45 @@ export const CustomerListScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
+        {/* Directory Mode Switcher (Customers vs Sub-Suppliers) */}
+        <View style={styles.directoryToggleRow}>
+          <TouchableOpacity
+            style={[styles.directoryToggleBtn, directoryMode === 'customers' && styles.directoryToggleBtnActive]}
+            onPress={() => { setDirectoryMode('customers'); setSearch(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.directoryToggleText, directoryMode === 'customers' && styles.directoryToggleTextActive]}>
+              👥 {lang === 'hi' ? 'ग्राहक (Customers)' : 'Customers'} ({customers.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.directoryToggleBtn, directoryMode === 'subSuppliers' && styles.directoryToggleBtnActive]}
+            onPress={() => { setDirectoryMode('subSuppliers'); setSearch(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.directoryToggleText, directoryMode === 'subSuppliers' && styles.directoryToggleTextActive]}>
+              🚜 {lang === 'hi' ? 'विक्रेता / किसान' : 'Vendors / Farmers'} ({subSuppliers.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Search Bar Row */}
         <View style={styles.searchRow}>
           <TextInput
             style={styles.searchInput}
-            placeholder={`🔍 ${t.searchCustomers}`}
+            placeholder={
+              directoryMode === 'customers'
+                ? `🔍 ${t.searchCustomers}`
+                : `🔍 ${lang === 'hi' ? 'विक्रेता या किसान खोजें...' : 'Search vendors / farmers...'}`
+            }
             placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={setSearch}
           />
         </View>
 
-        {/* Action Buttons Row (Contacts, WhatsApp & Add Customer) */}
+        {/* Action Buttons Row */}
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.contactImportBtn}
@@ -996,145 +1136,259 @@ export const CustomerListScreen = () => {
             <Text style={styles.contactImportBtnText}>📱 {t.contacts || 'Contacts'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.whatsappImportBtn}
-            onPress={openWhatsAppModal}
-            activeOpacity={0.8}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-          >
-            <Text style={styles.whatsappImportBtnText}>💬 {t.whatsappImport || 'WhatsApp'}</Text>
-          </TouchableOpacity>
+          {directoryMode === 'customers' && (
+            <TouchableOpacity
+              style={styles.whatsappImportBtn}
+              onPress={openWhatsAppModal}
+              activeOpacity={0.8}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            >
+              <Text style={styles.whatsappImportBtnText}>💬 {t.whatsappImport || 'WhatsApp'}</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.addButton}
-            onPress={openAddModal}
+            onPress={directoryMode === 'customers' ? openAddModal : openAddSubModal}
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-            <Text style={styles.addButtonText}>+ {t.addCustomer || 'Add'}</Text>
+            <Text style={styles.addButtonText}>
+              + {directoryMode === 'customers' ? (t.addCustomer || 'Add') : (lang === 'hi' ? 'नया विक्रेता' : 'Add Vendor')}
+            </Text>
           </TouchableOpacity>
         </View>
 
-
-
-        {/* Customer List */}
-        <FlatList
-          data={filteredCustomers}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="on-drag"
-          initialNumToRender={15}
-          maxToRenderPerBatch={20}
-          windowSize={10}
-          removeClippedSubviews={true}
-          renderItem={({ item, index }) => (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.indexNum}>{index + 1}. </Text>
-                    <Text style={styles.customerName}>{item.name}</Text>
+        {/* Directory List: Customers OR Sub-Suppliers */}
+        {directoryMode === 'customers' ? (
+          <FlatList
+            data={filteredCustomers}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            initialNumToRender={15}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            renderItem={({ item, index }) => (
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.indexNum}>{index + 1}. </Text>
+                      <Text style={styles.customerName}>{item.name}</Text>
+                    </View>
+                    <Text style={styles.customerPhone}>📞 {item.phone}</Text>
+                    {item.address ? <Text style={styles.customerAddress} numberOfLines={1}>📍 {item.address}</Text> : null}
                   </View>
-                  <Text style={styles.customerPhone}>📞 {item.phone}</Text>
-                  {item.address ? <Text style={styles.customerAddress} numberOfLines={1}>📍 {item.address}</Text> : null}
+                  <View style={[styles.milkTypeBadge, item.milkType === 'cow' ? styles.cowBadge : styles.buffaloBadge]}>
+                    <Text style={styles.milkTypeText}>
+                      {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}
+                    </Text>
+                  </View>
                 </View>
-                <View style={[styles.milkTypeBadge, item.milkType === 'cow' ? styles.cowBadge : styles.buffaloBadge]}>
-                  <Text style={styles.milkTypeText}>
-                    {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}
-                  </Text>
-                </View>
-              </View>
 
-              <View style={styles.detailsRow}>
-                <View style={styles.detailBox}>
-                  <Text style={styles.detailLabel}>{t.defaultLitres}</Text>
-                  <Text style={styles.detailValue}>{item.defaultLitres} L</Text>
+                <View style={styles.detailsRow}>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>{t.defaultLitres}</Text>
+                    <Text style={styles.detailValue}>{item.defaultLitres} L</Text>
+                  </View>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>{t.ratePerLitre}</Text>
+                    <Text style={styles.detailValue}>₹{item.ratePerLitre}</Text>
+                  </View>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>Daily Est.</Text>
+                    <Text style={[styles.detailValue, { color: '#059669' }]}>
+                      ₹{(item.defaultLitres * item.ratePerLitre).toFixed(0)}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.detailBox}>
-                  <Text style={styles.detailLabel}>{t.ratePerLitre}</Text>
-                  <Text style={styles.detailValue}>₹{item.ratePerLitre}</Text>
-                </View>
-                <View style={styles.detailBox}>
-                  <Text style={styles.detailLabel}>Daily Est.</Text>
-                  <Text style={[styles.detailValue, { color: '#059669' }]}>
-                    ₹{(item.defaultLitres * item.ratePerLitre).toFixed(0)}
-                  </Text>
-                </View>
-              </View>
 
-              <View style={styles.actionsRow}>
-                <TouchableOpacity
-                  style={styles.shareCardBtn}
-                  onPress={async () => {
-                    await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
-                    await CardSyncService.shareCardViaWhatsApp(item, supplier, lang);
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <Text style={styles.shareCardBtnText}>🔗 {lang === 'hi' ? 'कार्ड शेयर' : 'Share Card'}</Text>
-                </TouchableOpacity>
+                <View style={styles.actionsRow}>
+                  <TouchableOpacity
+                    style={styles.shareCardBtn}
+                    onPress={async () => {
+                      await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                      await CardSyncService.shareCardViaWhatsApp(item, supplier, lang);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.shareCardBtnText}>🔗 {lang === 'hi' ? 'कार्ड शेयर' : 'Share Card'}</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.viewCardBtn}
-                  onPress={() => {
-                    // Sync customer card in background
-                    CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
-                    const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true);
-                    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                      try {
-                        const win = window.open(url, '_blank');
-                        if (!win || win.closed || typeof win.closed === 'undefined') {
+                  <TouchableOpacity
+                    style={styles.viewCardBtn}
+                    onPress={() => {
+                      CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                      const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true);
+                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                        try {
+                          const win = window.open(url, '_blank');
+                          if (!win || win.closed || typeof win.closed === 'undefined') {
+                            window.location.href = url;
+                          }
+                        } catch (e) {
                           window.location.href = url;
                         }
-                      } catch (e) {
-                        window.location.href = url;
+                      } else {
+                        Linking.openURL(url);
                       }
-                    } else {
-                      Linking.openURL(url);
-                    }
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <Text style={styles.viewCardBtnText}>👁️ {lang === 'hi' ? 'देखें' : 'View'}</Text>
-                </TouchableOpacity>
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.viewCardBtnText}>👁️ {lang === 'hi' ? 'देखें' : 'View'}</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.editBtn}
-                  onPress={() => openEditModal(item)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <Text style={styles.editBtnText}>✏️ {t.editPrompt || 'Edit'}</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={() => openEditModal(item)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.editBtnText}>✏️ {t.editPrompt || 'Edit'}</Text>
+                  </TouchableOpacity>
 
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => handleDelete(item.id, item.name)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.deleteBtnText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>👥</Text>
+                <Text style={styles.emptyText}>{t.noCustomersFound}</Text>
                 <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => handleDelete(item.id, item.name)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  style={styles.emptyImportBtn}
+                  onPress={openContactsImportModal}
                 >
-                  <Text style={styles.deleteBtnText}>🗑️</Text>
+                  <Text style={styles.emptyImportBtnText}>📱 Import from Contacts</Text>
                 </TouchableOpacity>
               </View>
+            }
+          />
+        ) : (
+          <FlatList
+            data={filteredSubSuppliers}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            initialNumToRender={15}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            renderItem={({ item: sub, index }) => (
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.indexNum}>{index + 1}. </Text>
+                      <Text style={styles.customerName}>{sub.name}</Text>
+                    </View>
+                    <Text style={styles.customerPhone}>📞 {sub.phone}</Text>
+                    {sub.address ? <Text style={styles.customerAddress} numberOfLines={1}>📍 {sub.address}</Text> : null}
+                  </View>
+                  <View style={[styles.milkTypeBadge, sub.milkType === 'cow' ? styles.cowBadge : styles.buffaloBadge]}>
+                    <Text style={styles.milkTypeText}>
+                      {sub.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}
+                    </Text>
+                  </View>
+                </View>
 
-            </View>
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>👥</Text>
-              <Text style={styles.emptyText}>{t.noCustomersFound}</Text>
-              <TouchableOpacity
-                style={styles.emptyImportBtn}
-                onPress={openContactsImportModal}
-              >
-                <Text style={styles.emptyImportBtnText}>📱 Import from Contacts</Text>
-              </TouchableOpacity>
-            </View>
-          }
-        />
+                <View style={styles.detailsRow}>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>{lang === 'hi' ? 'दैनिक अनुमान' : 'Daily Est.'}</Text>
+                    <Text style={styles.detailValue}>{sub.defaultLitres} L</Text>
+                  </View>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>{lang === 'hi' ? 'खरीद भाव' : 'Purchase Rate'}</Text>
+                    <Text style={[styles.detailValue, { color: '#ea580c' }]}>₹{sub.ratePerLitre}/L</Text>
+                  </View>
+                  <View style={styles.detailBox}>
+                    <Text style={styles.detailLabel}>{lang === 'hi' ? 'दैनिक खर्च' : 'Daily Cost'}</Text>
+                    <Text style={[styles.detailValue, { color: '#059669' }]}>
+                      ₹{(sub.defaultLitres * sub.ratePerLitre).toFixed(0)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.actionsRow}>
+                  <TouchableOpacity
+                    style={styles.shareCardBtn}
+                    onPress={() => {
+                      let cleanPhone = sub.phone.replace(/\D/g, '');
+                      if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
+                      Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                        lang === 'hi'
+                          ? `नमस्ते ${sub.name} जी! 🙏 दूध आपूर्ति के संबंध में...`
+                          : `Hello ${sub.name}! Regarding milk supply...`
+                      )}`);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.shareCardBtnText}>💬 {lang === 'hi' ? 'व्हाट्सएप' : 'WhatsApp'}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.viewCardBtn}
+                    onPress={() => {
+                      Linking.openURL(`tel:${sub.phone}`);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.viewCardBtnText}>📞 {lang === 'hi' ? 'कॉल' : 'Call'}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.editBtn}
+                    onPress={() => openEditSubModal(sub)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.editBtnText}>✏️ {t.editPrompt || 'Edit'}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => handleDeleteSub(sub.id, sub.name)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.deleteBtnText}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>🚜</Text>
+                <Text style={styles.emptyText}>
+                  {lang === 'hi'
+                    ? 'कोई विक्रेता / किसान नहीं मिला। नया विक्रेता जोड़ें!'
+                    : 'No vendors / farmers found. Add your first vendor!'}
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyImportBtn}
+                  onPress={openAddSubModal}
+                >
+                  <Text style={styles.emptyImportBtnText}>+ {lang === 'hi' ? 'नया विक्रेता जोड़ें' : 'Add Vendor'}</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        )}
 
         {/* --- CONTACTS IMPORT MODAL (MULTIPLE SELECTION) --- */}
         <Modal visible={contactModalVisible} animationType="slide" transparent>
@@ -1393,19 +1647,19 @@ export const CustomerListScreen = () => {
                       <View style={styles.waGuideStep}>
                         <Text style={styles.waStepBadge}>1</Text>
                         <Text style={styles.waStepText}>
-                          {t.step1Export || 'Open WhatsApp ➔ Open your customer group'}
+                          {lang === 'hi' ? 'व्हाट्सएप खोलें ➔ अपने ग्राहक ग्रुप में जाएं' : 'Open WhatsApp ➔ Open your customer group'}
                         </Text>
                       </View>
                       <View style={styles.waGuideStep}>
                         <Text style={styles.waStepBadge}>2</Text>
                         <Text style={styles.waStepText}>
-                          {t.step2Export || 'Tap 3 dots (⋮) ➔ More ➔ Export Chat ➔ Without Media'}
+                          {lang === 'hi' ? '3 डॉट्स (⋮) ➔ More ➔ Export Chat ➔ Without Media चुनें' : 'Tap 3 dots (⋮) ➔ More ➔ Export Chat ➔ Without Media'}
                         </Text>
                       </View>
                       <View style={styles.waGuideStep}>
                         <Text style={styles.waStepBadge}>3</Text>
                         <Text style={styles.waStepText}>
-                          {t.step3Export || 'Tap "Select WhatsApp Group" above to pick the file'}
+                          {lang === 'hi' ? 'ऊपर "Select WhatsApp Group" दबाकर फाइल चुनें' : 'Tap "Select WhatsApp Group" above to pick the file'}
                         </Text>
                       </View>
                     </View>
@@ -1686,6 +1940,146 @@ export const CustomerListScreen = () => {
           </View>
         </Modal>
 
+        {/* --- ADD / EDIT SUB-SUPPLIER (VENDOR / FARMER) MODAL --- */}
+        <Modal visible={subModalVisible} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                {editingSubSupplier
+                  ? (lang === 'hi' ? '🚜 विक्रेता विवरण बदलें' : '🚜 Edit Vendor / Farmer')
+                  : (lang === 'hi' ? '🚜 नया विक्रेता / किसान जोड़ें' : '🚜 Add Vendor / Farmer')}
+              </Text>
+
+              <Text style={styles.label}>
+                {lang === 'hi' ? 'विक्रेता / किसान का नाम *' : 'Vendor / Farmer Name *'}
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Ramdev Farmer / रामदेव किसान"
+                placeholderTextColor="#94a3b8"
+                value={subName}
+                onChangeText={setSubName}
+              />
+
+              <Text style={styles.label}>
+                {lang === 'hi' ? 'मोबाइल नंबर (+91) *' : 'Phone Number (+91) *'}
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="10-digit mobile"
+                placeholderTextColor="#94a3b8"
+                keyboardType="phone-pad"
+                maxLength={20}
+                value={subPhone}
+                onChangeText={(val) => setSubPhone(cleanPhoneInput(val))}
+              />
+
+              <Text style={styles.label}>
+                {lang === 'hi' ? 'गाँव / पता' : 'Village / Address'}
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Village / Farm location / गाँव या पता"
+                placeholderTextColor="#94a3b8"
+                value={subAddress}
+                onChangeText={setSubAddress}
+              />
+
+              {/* Milk Type Selector: Cow vs Buffalo */}
+              <Text style={styles.label}>
+                {lang === 'hi' ? 'दूध का प्रकार *' : 'Milk Type *'}
+              </Text>
+              <View style={styles.typeSelectorRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeOption,
+                    subMilkType === 'cow' && styles.typeOptionSelectedCow
+                  ]}
+                  onPress={() => {
+                    setSubMilkType('cow');
+                    if (!editingSubSupplier) setSubRatePerLitre('45');
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={styles.typeOptionText}>🐄 {t.cowMilk || 'Cow Milk'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.typeOption,
+                    subMilkType === 'buffalo' && styles.typeOptionSelectedBuffalo
+                  ]}
+                  onPress={() => {
+                    setSubMilkType('buffalo');
+                    if (!editingSubSupplier) setSubRatePerLitre('60');
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk || 'Buffalo Milk'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.rowTwoInputs}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.label}>
+                    {lang === 'hi' ? 'दैनिक आवक (L)' : 'Daily Inward (L)'}
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 5.0"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                    value={subDefaultLitres}
+                    onChangeText={setSubDefaultLitres}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.label}>
+                    {lang === 'hi' ? 'खरीद भाव (₹/L)' : 'Purchase Rate (₹/L)'}
+                  </Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 45"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={subRatePerLitre}
+                    onChangeText={setSubRatePerLitre}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.label}>{lang === 'hi' ? 'टिप्पणी (Notes)' : 'Notes'}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Optional notes / कोई विशेष बात"
+                placeholderTextColor="#94a3b8"
+                value={subNotes}
+                onChangeText={setSubNotes}
+              />
+
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setSubModalVisible(false)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalCancelBtnText}>{t.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { backgroundColor: '#ea580c' }]}
+                  onPress={handleSaveSubSupplier}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalSaveBtnText}>{t.save}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     </SafeAreaView>
   );
@@ -1694,6 +2088,36 @@ export const CustomerListScreen = () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, padding: 14 },
+  directoryToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10
+  },
+  directoryToggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8
+  },
+  directoryToggleBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2
+  },
+  directoryToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  directoryToggleTextActive: {
+    color: '#0f172a',
+    fontWeight: '700'
+  },
   searchRow: {
     marginBottom: 8
   },

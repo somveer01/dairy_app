@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Customer, MilkEntry, Payment, Supplier } from '../types';
+import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
 import { AutoSyncService } from './autoSyncService';
 
 const STORAGE_KEYS = {
@@ -7,7 +7,10 @@ const STORAGE_KEYS = {
   CUSTOMERS: '@dairy_customers',
   MILK_ENTRIES: '@dairy_milk_entries',
   PAYMENTS: '@dairy_payments',
-  LANGUAGE: '@dairy_lang'
+  LANGUAGE: '@dairy_lang',
+  SUB_SUPPLIERS: '@dairy_sub_suppliers',
+  MILK_INWARD_ENTRIES: '@dairy_milk_inward_entries',
+  SUB_SUPPLIER_PAYMENTS: '@dairy_sub_supplier_payments'
 };
 
 let currentSupplierId: string | null = null;
@@ -577,6 +580,181 @@ export const StorageService = {
     }
   },
 
+  // ==========================================
+  // SUB-SUPPLIER PROCUREMENT & PAYMENT APIs
+  // ==========================================
+
+  // --- Sub-Suppliers ---
+  async getRawSubSuppliers(supplierId?: string): Promise<SubSupplier[]> {
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, supplierId);
+    const data = await AsyncStorage.getItem(key);
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  },
+
+  async getSubSuppliers(supplierId?: string): Promise<SubSupplier[]> {
+    const raw = await this.getRawSubSuppliers(supplierId);
+    return raw.filter(s => !s.isDeleted);
+  },
+
+  async saveSubSupplier(subSupplier: SubSupplier): Promise<void> {
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, subSupplier.supplierId);
+    const raw = await this.getRawSubSuppliers(subSupplier.supplierId);
+    const updated: SubSupplier = {
+      ...subSupplier,
+      updatedAt: Date.now(),
+      isDeleted: false
+    };
+
+    const existingIdx = raw.findIndex(s => s.id === subSupplier.id);
+    if (existingIdx >= 0) {
+      raw[existingIdx] = updated;
+    } else {
+      raw.push(updated);
+    }
+
+    await AsyncStorage.setItem(key, JSON.stringify(raw));
+    this.triggerAutoSync();
+  },
+
+  async deleteSubSupplier(id: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, sId);
+    const raw = await this.getRawSubSuppliers(sId);
+    const existing = raw.find(s => s.id === id);
+    if (existing) {
+      existing.isDeleted = true;
+      existing.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
+      this.triggerAutoSync();
+    }
+  },
+
+  // --- Milk Inward Entries (Purchase from Sub-Suppliers) ---
+  async getRawMilkInwardEntries(supplierId?: string): Promise<MilkInwardEntry[]> {
+    const key = getScopedKey(STORAGE_KEYS.MILK_INWARD_ENTRIES, supplierId);
+    const data = await AsyncStorage.getItem(key);
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  },
+
+  async getMilkInwardEntries(supplierId?: string): Promise<MilkInwardEntry[]> {
+    const raw = await this.getRawMilkInwardEntries(supplierId);
+    return raw.filter(e => !e.isDeleted);
+  },
+
+  async saveMilkInwardEntry(entry: MilkInwardEntry): Promise<void> {
+    const key = getScopedKey(STORAGE_KEYS.MILK_INWARD_ENTRIES, entry.supplierId);
+    const raw = await this.getRawMilkInwardEntries(entry.supplierId);
+    const updated: MilkInwardEntry = {
+      ...entry,
+      updatedAt: Date.now(),
+      isDeleted: false
+    };
+
+    const existingIdx = raw.findIndex(e => e.id === entry.id);
+    if (existingIdx >= 0) {
+      raw[existingIdx] = updated;
+    } else {
+      raw.push(updated);
+    }
+
+    await AsyncStorage.setItem(key, JSON.stringify(raw));
+    this.triggerAutoSync();
+  },
+
+  async saveMilkInwardEntriesBatch(newEntries: MilkInwardEntry[]): Promise<void> {
+    if (newEntries.length === 0) return;
+    const targetSupplierId = newEntries[0].supplierId;
+    const key = getScopedKey(STORAGE_KEYS.MILK_INWARD_ENTRIES, targetSupplierId);
+    const raw = await this.getRawMilkInwardEntries(targetSupplierId);
+    const map = new Map<string, MilkInwardEntry>();
+
+    raw.forEach(e => map.set(e.id, e));
+    newEntries.forEach(e => {
+      map.set(e.id, {
+        ...e,
+        updatedAt: Date.now(),
+        isDeleted: false
+      });
+    });
+
+    const merged = Array.from(map.values());
+    await AsyncStorage.setItem(key, JSON.stringify(merged));
+    this.triggerAutoSync();
+  },
+
+  async deleteMilkInwardEntry(id: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    const key = getScopedKey(STORAGE_KEYS.MILK_INWARD_ENTRIES, sId);
+    const raw = await this.getRawMilkInwardEntries(sId);
+    const existing = raw.find(e => e.id === id);
+    if (existing) {
+      existing.isDeleted = true;
+      existing.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
+      this.triggerAutoSync();
+    }
+  },
+
+  // --- Sub-Supplier Outward Payments ---
+  async getRawSubSupplierPayments(supplierId?: string): Promise<SubSupplierPayment[]> {
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIER_PAYMENTS, supplierId);
+    const data = await AsyncStorage.getItem(key);
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  },
+
+  async getSubSupplierPayments(supplierId?: string): Promise<SubSupplierPayment[]> {
+    const raw = await this.getRawSubSupplierPayments(supplierId);
+    return raw.filter(p => !p.isDeleted);
+  },
+
+  async saveSubSupplierPayment(payment: SubSupplierPayment): Promise<void> {
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIER_PAYMENTS, payment.supplierId);
+    const raw = await this.getRawSubSupplierPayments(payment.supplierId);
+    const updated: SubSupplierPayment = {
+      ...payment,
+      updatedAt: Date.now(),
+      isDeleted: false
+    };
+
+    const existingIdx = raw.findIndex(p => p.id === payment.id);
+    if (existingIdx >= 0) {
+      raw[existingIdx] = updated;
+    } else {
+      raw.push(updated);
+    }
+
+    await AsyncStorage.setItem(key, JSON.stringify(raw));
+    this.triggerAutoSync();
+  },
+
+  async deleteSubSupplierPayment(id: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIER_PAYMENTS, sId);
+    const raw = await this.getRawSubSupplierPayments(sId);
+    const existing = raw.find(p => p.id === id);
+    if (existing) {
+      existing.isDeleted = true;
+      existing.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
+      this.triggerAutoSync();
+    }
+  },
+
   // Language
   async getLanguage(): Promise<'en' | 'hi'> {
     try {
@@ -607,11 +785,17 @@ export const StorageService = {
     const custKey = getScopedKey(STORAGE_KEYS.CUSTOMERS);
     const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES);
     const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS);
+    const subSuppKey = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS);
+    const inwardKey = getScopedKey(STORAGE_KEYS.MILK_INWARD_ENTRIES);
+    const subPayKey = getScopedKey(STORAGE_KEYS.SUB_SUPPLIER_PAYMENTS);
 
     await Promise.all([
       AsyncStorage.removeItem(custKey),
       AsyncStorage.removeItem(entryKey),
-      AsyncStorage.removeItem(payKey)
+      AsyncStorage.removeItem(payKey),
+      AsyncStorage.removeItem(subSuppKey),
+      AsyncStorage.removeItem(inwardKey),
+      AsyncStorage.removeItem(subPayKey)
     ]);
   },
 
@@ -626,6 +810,9 @@ export const StorageService = {
     customers: Customer[];
     milkEntries: MilkEntry[];
     payments: Payment[];
+    subSuppliers: SubSupplier[];
+    milkInwardEntries: MilkInwardEntry[];
+    subSupplierPayments: SubSupplierPayment[];
     language: string;
     exportedAt: string;
     storageInfo: {
@@ -634,11 +821,14 @@ export const StorageService = {
       persistence: string;
     };
   }> {
-    const [supplier, customers, milkEntries, payments, language] = await Promise.all([
+    const [supplier, customers, milkEntries, payments, subSuppliers, milkInwardEntries, subSupplierPayments, language] = await Promise.all([
       this.getSupplier(),
       this.getCustomers(),
       this.getMilkEntries(),
       this.getPayments(),
+      this.getSubSuppliers(),
+      this.getMilkInwardEntries(),
+      this.getSubSupplierPayments(),
       this.getLanguage()
     ]);
 
@@ -652,6 +842,9 @@ export const StorageService = {
       customers,
       milkEntries,
       payments,
+      subSuppliers,
+      milkInwardEntries,
+      subSupplierPayments,
       language,
       exportedAt: new Date().toISOString()
     };

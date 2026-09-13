@@ -37,7 +37,20 @@ interface CustPaymentSummary {
 }
 
 export const DashboardScreen = ({ navigation }: any) => {
-  const { t, lang, supplier, setSupplier, customers, milkEntries, payments, refreshPayments, requireAuth } = useApp();
+  const {
+    t,
+    lang,
+    supplier,
+    setSupplier,
+    customers,
+    milkEntries,
+    payments,
+    refreshPayments,
+    requireAuth,
+    subSuppliers,
+    milkInwardEntries,
+    subSupplierPayments
+  } = useApp();
 
   const isHindi = lang === 'hi';
   const todayStr = useMemo(() => toLocalIso(new Date()), []);
@@ -64,6 +77,41 @@ export const DashboardScreen = ({ navigation }: any) => {
       deliveredCount: todayEntries.length
     };
   }, [milkEntries, todayStr]);
+
+  // Metrics for Today's Inward Procurement
+  const todayProcurementStats = useMemo(() => {
+    const todayInward = (milkInwardEntries || []).filter(e => !e.isDeleted && e.date === todayStr);
+
+    let cowLitres = 0;
+    let buffaloLitres = 0;
+    let totalPurchaseCost = 0;
+
+    todayInward.forEach(entry => {
+      if (entry.milkType === 'cow') cowLitres += entry.quantityLitres;
+      if (entry.milkType === 'buffalo') buffaloLitres += entry.quantityLitres;
+      totalPurchaseCost += entry.amount;
+    });
+
+    return {
+      cowLitres,
+      buffaloLitres,
+      totalLitres: cowLitres + buffaloLitres,
+      totalPurchaseCost,
+      inwardCount: todayInward.length
+    };
+  }, [milkInwardEntries, todayStr]);
+
+  // Total Sub-Supplier Outward Payable Across All Vendors
+  const overallSubPayable = useMemo(() => {
+    const totalProcuredAmount = (milkInwardEntries || []).filter(e => !e.isDeleted).reduce((sum, e) => sum + e.amount, 0);
+    const totalPaymentsGiven = (subSupplierPayments || []).filter(p => !p.isDeleted).reduce((sum, p) => sum + p.amountPaid, 0);
+    return Math.max(0, totalProcuredAmount - totalPaymentsGiven);
+  }, [milkInwardEntries, subSupplierPayments]);
+
+  // Stock Balance (Inward litres - Delivered litres today)
+  const stockBalanceLitres = todayProcurementStats.totalLitres - todayStats.totalLitres;
+  // Daily Margin (Sales revenue - Purchase cost today)
+  const todayMargin = todayStats.totalBilled - todayProcurementStats.totalPurchaseCost;
 
   // Total Outstanding Due across all customers
   const overallDue = useMemo(() => {
@@ -365,6 +413,24 @@ export const DashboardScreen = ({ navigation }: any) => {
       bg: '#f0fdf4',
       border: '#bbf7d0',
       onPress: () => navigation.navigate('ReportsTab')
+    },
+    {
+      id: 'procure',
+      title: isHindi ? 'दूध खरीद (आवक)' : 'Milk Purchase',
+      sub: isHindi ? 'आवक दर्ज करें' : 'Log Inward',
+      icon: '📥',
+      bg: '#f0fdf4',
+      border: '#bbf7d0',
+      onPress: () => navigation.navigate('RegisterTab')
+    },
+    {
+      id: 'sub_suppliers',
+      title: isHindi ? 'दूध विक्रेता' : 'Sub-Suppliers',
+      sub: isHindi ? 'किसान सूची' : 'Vendor List',
+      icon: '🚜',
+      bg: '#fef9c3',
+      border: '#fef08a',
+      onPress: () => navigation.navigate('CustomersTab')
     }
   ];
 
@@ -541,7 +607,107 @@ export const DashboardScreen = ({ navigation }: any) => {
           </View>
         </TouchableOpacity>
 
-        {/* SLEEK QUICK LINKS (2x3 Grid - Recognizable Icons, Non-Bulky) */}
+        {/* PROCUREMENT & STOCK BALANCE CARD (दूध खरीद, आवक एवं स्टॉक संतुलन) */}
+        <View style={styles.procurementCard}>
+          <View style={styles.procurementHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 18 }}>📥</Text>
+              <Text style={styles.procurementTitle}>
+                {isHindi ? 'दूध खरीद एवं स्टॉक संतुलन' : 'Procurement & Stock Balance'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('RegisterTab')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.procurementLinkText}>
+                {isHindi ? 'आवक रजिस्टर →' : 'Inward Log →'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* 3 Metric Mini-Blocks */}
+          <View style={styles.procurementGrid}>
+            {/* 1. Today Bought */}
+            <View style={styles.procurementTile}>
+              <Text style={styles.procurementTileLabel}>{isHindi ? 'आज खरीदा' : 'Bought Today'}</Text>
+              <Text style={styles.procurementTileVal}>{todayProcurementStats.totalLitres.toFixed(1)} L</Text>
+              <Text style={styles.procurementTileSub}>
+                🐄 {todayProcurementStats.cowLitres.toFixed(1)}L • 🐃 {todayProcurementStats.buffaloLitres.toFixed(1)}L
+              </Text>
+            </View>
+
+            {/* 2. Stock Balance */}
+            <View
+              style={[
+                styles.procurementTile,
+                {
+                  backgroundColor: stockBalanceLitres >= 0 ? '#f0fdf4' : '#fef2f2',
+                  borderColor: stockBalanceLitres >= 0 ? '#bbf7d0' : '#fecaca'
+                }
+              ]}
+            >
+              <Text style={styles.procurementTileLabel}>{isHindi ? 'स्टॉक बैलेंस' : 'Stock Balance'}</Text>
+              <Text
+                style={[
+                  styles.procurementTileVal,
+                  { color: stockBalanceLitres >= 0 ? '#15803d' : '#b91c1c' }
+                ]}
+              >
+                {stockBalanceLitres >= 0 ? `+${stockBalanceLitres.toFixed(1)}` : stockBalanceLitres.toFixed(1)} L
+              </Text>
+              <Text style={styles.procurementTileSub}>
+                {stockBalanceLitres >= 0 ? (isHindi ? '✓ पर्याप्त' : '✓ In Stock') : (isHindi ? 'कम बिक्री' : 'Deficit')}
+              </Text>
+            </View>
+
+            {/* 3. Daily Margin */}
+            <View
+              style={[
+                styles.procurementTile,
+                {
+                  backgroundColor: todayMargin >= 0 ? '#eff6ff' : '#fff1f2',
+                  borderColor: todayMargin >= 0 ? '#bfdbfe' : '#fecdd3'
+                }
+              ]}
+            >
+              <Text style={styles.procurementTileLabel}>{isHindi ? 'अनुमानित बचत' : 'Est. Margin'}</Text>
+              <Text
+                style={[
+                  styles.procurementTileVal,
+                  { color: todayMargin >= 0 ? '#0369a1' : '#be123c' }
+                ]}
+              >
+                {todayMargin >= 0 ? `+₹${todayMargin.toFixed(0)}` : `-₹${Math.abs(todayMargin).toFixed(0)}`}
+              </Text>
+              <Text style={styles.procurementTileSub}>
+                {isHindi ? 'बिक्री - खरीद' : 'Sales - Cost'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Sub-Supplier Payable & Action Footer */}
+          <View style={styles.procurementFooterRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.procurementFooterLabel}>
+                {isHindi ? 'सप्लायर देय (किसान बकाया):' : 'Vendor Payables:'}
+              </Text>
+              <Text style={styles.procurementFooterAmount}>₹{overallSubPayable.toFixed(0)}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.procurementActionBtn}
+              onPress={() => navigation.navigate('ReportsTab')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.procurementActionBtnText}>
+                💳 {isHindi ? 'सप्लायर भुगतान' : 'Pay Vendors'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* SLEEK QUICK LINKS (2x4 Grid - Recognizable Icons, Non-Bulky) */}
         <Text style={styles.sectionHeading}>{t.quickActions || 'Quick Actions'}</Text>
         <View style={styles.quickLinksGrid}>
           {quickLinks.map(link => (
@@ -1058,7 +1224,96 @@ const styles = StyleSheet.create({
   },
   deliveredCountText: { fontSize: 11, fontWeight: 'bold', color: '#059669' },
 
-  // SLEEK QUICK LINKS GRID (2 columns x 3 rows)
+  // Procurement & Stock Section
+  procurementCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1
+  },
+  procurementHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  procurementTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  procurementLinkText: {
+    fontSize: 12,
+    color: '#0284c7',
+    fontWeight: '600'
+  },
+  procurementGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10
+  },
+  procurementTile: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center'
+  },
+  procurementTileLabel: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
+    textAlign: 'center'
+  },
+  procurementTileVal: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginVertical: 2
+  },
+  procurementTileSub: {
+    fontSize: 9,
+    color: '#64748b',
+    textAlign: 'center'
+  },
+  procurementFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9'
+  },
+  procurementFooterLabel: {
+    fontSize: 11,
+    color: '#64748b'
+  },
+  procurementFooterAmount: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#ea580c'
+  },
+  procurementActionBtn: {
+    backgroundColor: '#f97316',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  procurementActionBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold'
+  },
+
+  // SLEEK QUICK LINKS GRID (2 columns x 4 rows)
   quickLinksGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

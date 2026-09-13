@@ -7,28 +7,38 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Alert,
   Keyboard
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
-import { MilkEntry, MilkType, SessionType, Customer } from '../../types';
+import { MilkEntry, MilkInwardEntry, MilkType, SessionType, Customer, SubSupplier } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
-import { formatToDisplayDate } from '../../utils/dateUtils';
+import { formatToDisplayDate, toLocalIso } from '../../utils/dateUtils';
 
 export const DailyRegisterScreen = () => {
-  const { t, customers, milkEntries, refreshMilkEntries, payments, supplier, requireAuth } = useApp();
-  
-  const [selectedDate, setSelectedDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const {
+    t,
+    lang,
+    customers,
+    milkEntries,
+    refreshMilkEntries,
+    payments,
+    subSuppliers,
+    refreshSubSuppliers,
+    milkInwardEntries,
+    refreshMilkInwardEntries,
+    supplier,
+    requireAuth
+  } = useApp();
 
+  const [registerMode, setRegisterMode] = useState<'delivery' | 'procurement'>('delivery');
+  const [selectedDate, setSelectedDate] = useState(() => toLocalIso(new Date()));
   const [activeSession, setActiveSession] = useState<SessionType>('Morning');
   const [searchFilter, setSearchFilter] = useState('');
 
-  // Single Entry Modal State
+  // Single Customer Entry Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [session, setSession] = useState<SessionType>('Morning');
@@ -37,17 +47,23 @@ export const DailyRegisterScreen = () => {
   const [rate, setRate] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Sub-Supplier Inward Entry Modal State
+  const [subModalVisible, setSubModalVisible] = useState(false);
+  const [selectedSubSupplier, setSelectedSubSupplier] = useState<SubSupplier | null>(null);
+  const [subSession, setSubSession] = useState<SessionType>('Morning');
+  const [subMilkType, setSubMilkType] = useState<MilkType>('cow');
+  const [subLitres, setSubLitres] = useState('');
+  const [subRate, setSubRate] = useState('');
+  const [subNotes, setSubNotes] = useState('');
+
   const changeDateBy = (days: number) => {
     const parts = selectedDate.split('-').map(Number);
-    const current = new Date(parts[0], parts[1] - 1, parts[2]);
+    const current = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
     current.setDate(current.getDate() + days);
-    const y = current.getFullYear();
-    const m = String(current.getMonth() + 1).padStart(2, '0');
-    const d = String(current.getDate()).padStart(2, '0');
-    setSelectedDate(`${y}-${m}-${d}`);
+    setSelectedDate(toLocalIso(current));
   };
 
-
+  // --- CUSTOMER DELIVERY DATA & STATS ---
   const { sessionEntriesMap, stats } = useMemo(() => {
     const map = new Map<string, MilkEntry>();
     let cowQty = 0;
@@ -90,11 +106,57 @@ export const DailyRegisterScreen = () => {
     return list;
   }, [customers, searchFilter]);
 
+  // --- SUB-SUPPLIER INWARD DATA & STATS ---
+  const { inwardEntriesMap, inwardStats } = useMemo(() => {
+    const map = new Map<string, MilkInwardEntry>();
+    let cowQty = 0;
+    let buffaloQty = 0;
+    let totalAmt = 0;
+    let count = 0;
+
+    for (let i = 0; i < milkInwardEntries.length; i++) {
+      const e = milkInwardEntries[i];
+      if (!e.isDeleted && e.date === selectedDate && e.session === activeSession) {
+        map.set(e.subSupplierId, e);
+        if (e.milkType === 'cow') cowQty += e.quantityLitres;
+        else buffaloQty += e.quantityLitres;
+        totalAmt += e.amount;
+        count++;
+      }
+    }
+
+    return {
+      inwardEntriesMap: map,
+      inwardStats: {
+        cowQty,
+        buffaloQty,
+        totalQty: cowQty + buffaloQty,
+        totalLitres: cowQty + buffaloQty,
+        totalAmt,
+        count
+      }
+    };
+  }, [milkInwardEntries, selectedDate, activeSession]);
+
+  const filteredSubSuppliers = useMemo(() => {
+    let list = subSuppliers.filter(s => !s.isDeleted);
+    if (searchFilter.trim()) {
+      const q = searchFilter.trim().toLowerCase();
+      list = list.filter(
+        s => s.name.toLowerCase().includes(q) || s.phone.includes(q)
+      );
+    }
+    return list;
+  }, [subSuppliers, searchFilter]);
+
+  // --- CUSTOMER DELIVERY ACTIONS ---
   const handleDeleteEntry = (entry: MilkEntry, customerName: string) => {
     requireAuth(() => {
       confirmAction(
-        'एंट्री हटाएं (Delete Delivery)',
-        `क्या आप ${customerName} की ${activeSession} की डिलीवरी एंट्री हटाना चाहते हैं?`,
+        lang === 'hi' ? 'एंट्री हटाएं (Delete Delivery)' : 'Delete Delivery',
+        lang === 'hi'
+          ? `क्या आप ${customerName} की ${activeSession} की डिलीवरी एंट्री हटाना चाहते हैं?`
+          : `Delete delivery entry for ${customerName} (${activeSession})?`,
         async () => {
           await StorageService.deleteMilkEntry(entry.id, supplier?.id);
           await refreshMilkEntries();
@@ -106,8 +168,8 @@ export const DailyRegisterScreen = () => {
             payments.filter(p => !p.isDeleted)
           );
         },
-        '🗑️ हटाएं (Delete)',
-        'रद्द करें (Cancel)',
+        lang === 'hi' ? '🗑️ हटाएं (Delete)' : 'Delete',
+        lang === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel',
         true
       );
     });
@@ -145,21 +207,28 @@ export const DailyRegisterScreen = () => {
   const handleBulkFillAll = () => {
     Keyboard.dismiss();
     requireAuth(() => {
-      const unrecordedCustomers = customers.filter(c => !sessionEntriesMap.has(c.id));
+      const activeCusts = customers.filter(c => !c.isDeleted);
+      const unrecordedCustomers = activeCusts.filter(c => !sessionEntriesMap.has(c.id));
       if (unrecordedCustomers.length === 0) {
-        showAlert('सबका दूध दर्ज है (All Recorded)', `सभी ${customers.length} ग्राहकों का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`);
+        showAlert(
+          lang === 'hi' ? 'सबका दूध दर्ज है (All Recorded)' : 'All Recorded',
+          lang === 'hi'
+            ? `सभी ${activeCusts.length} ग्राहकों का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`
+            : `All ${activeCusts.length} customers are already recorded for ${activeSession}!`
+        );
         return;
       }
 
       const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
 
       confirmAction(
-        'सभी का दूध मार्क करें (Mark All Deliveries)',
-        `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`,
+        lang === 'hi' ? 'सभी का दूध मार्क करें (Mark All Deliveries)' : 'Mark All Deliveries',
+        lang === 'hi'
+          ? `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`
+          : `Record default delivery for all ${unrecordedCustomers.length} customers?\n• Session: ${sessionLabel}\n• Date: ${formatToDisplayDate(selectedDate)}`,
         async () => {
-
           const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
-            id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}`,
+            id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
             supplierId: supplier?.id || 'supp_default',
             customerId: c.id,
             customerName: c.name,
@@ -176,8 +245,8 @@ export const DailyRegisterScreen = () => {
           await refreshMilkEntries();
           CardSyncService.syncAllCards(supplier, customers, [...milkEntries, ...newEntries], payments);
         },
-        `✓ सभी दर्ज करें (${unrecordedCustomers.length})`,
-        'रद्द करें (Cancel)',
+        lang === 'hi' ? `✓ सभी दर्ज करें (${unrecordedCustomers.length})` : `✓ Record All (${unrecordedCustomers.length})`,
+        lang === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel',
         false
       );
     });
@@ -205,7 +274,7 @@ export const DailyRegisterScreen = () => {
       const rateVal = parseFloat(rate) || 0;
 
       if (qty <= 0) {
-        Alert.alert('Validation Error', 'Please enter a valid milk quantity.');
+        showAlert(lang === 'hi' ? 'अमान्य मात्रा' : 'Validation Error', lang === 'hi' ? 'कृपया दूध की सही मात्रा दर्ज करें।' : 'Please enter a valid milk quantity.');
         return;
       }
 
@@ -245,9 +314,186 @@ export const DailyRegisterScreen = () => {
     });
   };
 
+  // --- SUB-SUPPLIER INWARD MILK ACTIONS ---
+  const handleDeleteInwardEntry = (entry: MilkInwardEntry, subName: string) => {
+    requireAuth(() => {
+      confirmAction(
+        lang === 'hi' ? 'आवक एंट्री हटाएं (Delete Inward)' : 'Delete Inward Entry',
+        lang === 'hi'
+          ? `क्या आप ${subName} की ${activeSession} की आवक एंट्री हटाना चाहते हैं?`
+          : `Delete inward entry for ${subName} (${activeSession})?`,
+        async () => {
+          await StorageService.deleteMilkInwardEntry(entry.id, supplier?.id);
+          await refreshMilkInwardEntries();
+        },
+        lang === 'hi' ? '🗑️ हटाएं (Delete)' : 'Delete',
+        lang === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel',
+        true
+      );
+    });
+  };
+
+  const handleQuickAddSubDefault = async (sub: SubSupplier) => {
+    requireAuth(async () => {
+      const existing = inwardEntriesMap.get(sub.id);
+      if (existing) {
+        handleDeleteInwardEntry(existing, sub.name);
+        return;
+      }
+
+      const newEntry: MilkInwardEntry = {
+        id: `inward_${selectedDate}_${activeSession}_${sub.id}_${Date.now()}`,
+        supplierId: supplier?.id || 'supp_default',
+        subSupplierId: sub.id,
+        subSupplierName: sub.name,
+        date: selectedDate,
+        session: activeSession,
+        milkType: sub.milkType,
+        quantityLitres: sub.defaultLitres,
+        ratePerLitre: sub.ratePerLitre,
+        amount: sub.defaultLitres * sub.ratePerLitre,
+        isPaid: false,
+        createdAt: Date.now()
+      };
+
+      await StorageService.saveMilkInwardEntry(newEntry);
+      await refreshMilkInwardEntries();
+    });
+  };
+
+  const handleBulkFillAllInward = () => {
+    Keyboard.dismiss();
+    requireAuth(() => {
+      const activeSubs = subSuppliers.filter(s => !s.isDeleted);
+      const unrecordedSubs = activeSubs.filter(s => !inwardEntriesMap.has(s.id));
+      if (unrecordedSubs.length === 0) {
+        showAlert(
+          lang === 'hi' ? 'सबका दूध दर्ज है' : 'All Recorded',
+          lang === 'hi'
+            ? `सभी ${activeSubs.length} विक्रेताओं का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`
+            : `All ${activeSubs.length} vendors already recorded for ${activeSession}!`
+        );
+        return;
+      }
+
+      const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
+
+      confirmAction(
+        lang === 'hi' ? 'सभी विक्रेताओं का आवक दूध मार्क करें' : 'Mark All Inward Milk',
+        lang === 'hi'
+          ? `क्या आप शेष सभी ${unrecordedSubs.length} विक्रेताओं का डिफ़ॉल्ट आवक दूध दर्ज करना चाहते हैं?\n• कुल शेष विक्रेता: ${unrecordedSubs.length} लोग\n• समय: ${sessionLabel}\n• तारीख: ${formatToDisplayDate(selectedDate)}`
+          : `Record default inward milk for all ${unrecordedSubs.length} vendors?\n• Session: ${sessionLabel}\n• Date: ${formatToDisplayDate(selectedDate)}`,
+        async () => {
+          const newEntries: MilkInwardEntry[] = unrecordedSubs.map(s => ({
+            id: `inward_${selectedDate}_${activeSession}_${s.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            supplierId: supplier?.id || 'supp_default',
+            subSupplierId: s.id,
+            subSupplierName: s.name,
+            date: selectedDate,
+            session: activeSession,
+            milkType: s.milkType,
+            quantityLitres: s.defaultLitres,
+            ratePerLitre: s.ratePerLitre,
+            amount: s.defaultLitres * s.ratePerLitre,
+            isPaid: false,
+            createdAt: Date.now()
+          }));
+          await StorageService.saveMilkInwardEntriesBatch(newEntries);
+          await refreshMilkInwardEntries();
+        },
+        lang === 'hi' ? `✓ सभी दर्ज करें (${unrecordedSubs.length})` : `✓ Record All (${unrecordedSubs.length})`,
+        lang === 'hi' ? 'रद्द करें' : 'Cancel',
+        false
+      );
+    });
+  };
+
+  const openCustomInwardModal = (sub: SubSupplier) => {
+    Keyboard.dismiss();
+    requireAuth(() => {
+      const existing = inwardEntriesMap.get(sub.id);
+      setSelectedSubSupplier(sub);
+      setSubSession(activeSession);
+      setSubMilkType(existing ? existing.milkType : sub.milkType);
+      setSubLitres(existing ? existing.quantityLitres.toString() : sub.defaultLitres.toString());
+      setSubRate(existing ? existing.ratePerLitre.toString() : sub.ratePerLitre.toString());
+      setSubNotes(existing?.notes || '');
+      setSubModalVisible(true);
+    });
+  };
+
+  const handleSaveInwardModalEntry = async () => {
+    Keyboard.dismiss();
+    requireAuth(async () => {
+      if (!selectedSubSupplier) return;
+      const qty = parseFloat(subLitres) || 0;
+      const rateVal = parseFloat(subRate) || 0;
+
+      if (qty <= 0) {
+        showAlert(lang === 'hi' ? 'अमान्य मात्रा' : 'Validation Error', lang === 'hi' ? 'कृपया दूध की सही मात्रा दर्ज करें।' : 'Please enter a valid milk quantity.');
+        return;
+      }
+
+      const existing = inwardEntriesMap.get(selectedSubSupplier.id);
+      const entry: MilkInwardEntry = {
+        id: existing ? existing.id : `inward_${selectedDate}_${subSession}_${selectedSubSupplier.id}_${Date.now()}`,
+        supplierId: supplier?.id || 'supp_default',
+        subSupplierId: selectedSubSupplier.id,
+        subSupplierName: selectedSubSupplier.name,
+        date: selectedDate,
+        session: subSession,
+        milkType: subMilkType,
+        quantityLitres: qty,
+        ratePerLitre: rateVal,
+        amount: qty * rateVal,
+        isPaid: existing ? existing.isPaid : false,
+        notes: subNotes.trim(),
+        createdAt: existing ? existing.createdAt : Date.now()
+      };
+
+      await StorageService.saveMilkInwardEntry(entry);
+      await refreshMilkInwardEntries();
+      setSubModalVisible(false);
+    });
+  };
+
+  const toggleInwardPaidStatus = async (entry: MilkInwardEntry) => {
+    requireAuth(async () => {
+      const updated: MilkInwardEntry = {
+        ...entry,
+        isPaid: !entry.isPaid
+      };
+      await StorageService.saveMilkInwardEntry(updated);
+      await refreshMilkInwardEntries();
+    });
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
+        {/* Register Mode Switcher: Deliveries (Sales) vs Procurement (Inward) */}
+        <View style={styles.registerToggleRow}>
+          <TouchableOpacity
+            style={[styles.registerToggleBtn, registerMode === 'delivery' && styles.registerToggleBtnActive]}
+            onPress={() => { setRegisterMode('delivery'); setSearchFilter(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.registerToggleText, registerMode === 'delivery' && styles.registerToggleTextActive]}>
+              📤 {lang === 'hi' ? 'दूध बिक्री (Deliveries)' : 'Deliveries (Sales)'} ({customers.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.registerToggleBtn, registerMode === 'procurement' && styles.registerToggleBtnActive]}
+            onPress={() => { setRegisterMode('procurement'); setSearchFilter(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.registerToggleText, registerMode === 'procurement' && styles.registerToggleTextActive]}>
+              📥 {lang === 'hi' ? 'दूध खरीद (आवक)' : 'Procurement (Inward)'} ({subSuppliers.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Date Selector Header */}
         <View style={styles.dateHeader}>
           <TouchableOpacity
@@ -310,151 +556,277 @@ export const DailyRegisterScreen = () => {
         </View>
 
         {/* Session KPI Summary Banner */}
-        <View style={styles.kpiBanner}>
-          <View style={styles.kpiCol}>
-            <Text style={styles.kpiLabel}>Delivered</Text>
-            <Text style={styles.kpiValue}>{stats.count} / {customers.length}</Text>
+        {registerMode === 'delivery' ? (
+          <View style={styles.kpiBanner}>
+            <View style={styles.kpiCol}>
+              <Text style={styles.kpiLabel}>Delivered</Text>
+              <Text style={styles.kpiValue}>{stats.count} / {customers.length}</Text>
+            </View>
+            <View style={styles.kpiDivider} />
+            <View style={styles.kpiCol}>
+              <Text style={styles.kpiLabel}>Total Milk</Text>
+              <Text style={styles.kpiValue}>{stats.totalLitres.toFixed(1)} L</Text>
+              <Text style={styles.kpiSub}>🐄 {stats.cowQty.toFixed(1)}L | 🐃 {stats.buffaloQty.toFixed(1)}L</Text>
+            </View>
+            <View style={styles.kpiDivider} />
+            <View style={styles.kpiCol}>
+              <Text style={styles.kpiLabel}>Session Total</Text>
+              <Text style={[styles.kpiValue, { color: '#059669' }]}>₹{stats.totalAmt.toFixed(0)}</Text>
+            </View>
           </View>
-          <View style={styles.kpiDivider} />
-          <View style={styles.kpiCol}>
-            <Text style={styles.kpiLabel}>Total Milk</Text>
-            <Text style={styles.kpiValue}>{stats.totalLitres.toFixed(1)} L</Text>
-            <Text style={styles.kpiSub}>🐄 {stats.cowQty.toFixed(1)}L | 🐃 {stats.buffaloQty.toFixed(1)}L</Text>
+        ) : (
+          <View style={[styles.kpiBanner, { borderColor: '#fed7aa', backgroundColor: '#fffaf5' }]}>
+            <View style={styles.kpiCol}>
+              <Text style={[styles.kpiLabel, { color: '#c2410c' }]}>{lang === 'hi' ? 'आवक प्राप्त' : 'Received'}</Text>
+              <Text style={[styles.kpiValue, { color: '#c2410c' }]}>{inwardStats.count} / {subSuppliers.length}</Text>
+            </View>
+            <View style={[styles.kpiDivider, { backgroundColor: '#fed7aa' }]} />
+            <View style={styles.kpiCol}>
+              <Text style={[styles.kpiLabel, { color: '#c2410c' }]}>{lang === 'hi' ? 'कुल खरीद दूध' : 'Total Inward'}</Text>
+              <Text style={[styles.kpiValue, { color: '#0f172a' }]}>{inwardStats.totalLitres.toFixed(1)} L</Text>
+              <Text style={styles.kpiSub}>🐄 {inwardStats.cowQty.toFixed(1)}L | 🐃 {inwardStats.buffaloQty.toFixed(1)}L</Text>
+            </View>
+            <View style={[styles.kpiDivider, { backgroundColor: '#fed7aa' }]} />
+            <View style={styles.kpiCol}>
+              <Text style={[styles.kpiLabel, { color: '#c2410c' }]}>{lang === 'hi' ? 'खरीद लागत' : 'Purchase Cost'}</Text>
+              <Text style={[styles.kpiValue, { color: '#ea580c' }]}>₹{inwardStats.totalAmt.toFixed(0)}</Text>
+            </View>
           </View>
-          <View style={styles.kpiDivider} />
-          <View style={styles.kpiCol}>
-            <Text style={styles.kpiLabel}>Session Total</Text>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>₹{stats.totalAmt.toFixed(0)}</Text>
-          </View>
-        </View>
+        )}
 
         {/* Fast Action Row: Search & "Mark All" Bulk Fill Button */}
         <View style={styles.fastActionRow}>
           <TextInput
             style={styles.searchInput}
-            placeholder={`Search ${customers.length} customers...`}
+            placeholder={
+              registerMode === 'delivery'
+                ? (lang === 'hi' ? `ग्राहक खोजें (${customers.length})...` : `Search ${customers.length} customers...`)
+                : (lang === 'hi' ? `विक्रेता / किसान खोजें (${subSuppliers.length})...` : `Search ${subSuppliers.length} vendors...`)
+            }
             placeholderTextColor="#94a3b8"
             value={searchFilter}
             onChangeText={setSearchFilter}
           />
           <TouchableOpacity
-            style={styles.bulkFillBtn}
-            onPress={handleBulkFillAll}
+            style={[styles.bulkFillBtn, registerMode === 'procurement' && { backgroundColor: '#ea580c' }]}
+            onPress={registerMode === 'delivery' ? handleBulkFillAll : handleBulkFillAllInward}
             activeOpacity={0.8}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Text style={styles.bulkFillBtnText}>⚡ Mark All</Text>
+            <Text style={styles.bulkFillBtnText}>⚡ {lang === 'hi' ? 'सबका मार्क करें' : 'Mark All'}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Customer Register List */}
-        <FlatList
-          data={filteredCustomers}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="on-drag"
-          initialNumToRender={15}
-          maxToRenderPerBatch={20}
-          windowSize={10}
-          removeClippedSubviews={true}
-          renderItem={({ item, index }) => {
-            const entry = sessionEntriesMap.get(item.id);
-            const isDelivered = !!entry;
+        {/* Register List */}
+        {registerMode === 'delivery' ? (
+          <FlatList
+            data={filteredCustomers}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            initialNumToRender={15}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            renderItem={({ item, index }) => {
+              const entry = sessionEntriesMap.get(item.id);
+              const isDelivered = !!entry;
 
-            return (
-              <View style={[styles.rowCard, isDelivered && styles.rowCardDelivered]}>
-                {/* Index & Customer Info */}
-                <View style={styles.rowLeft}>
-                  <View style={[styles.indexBadge, isDelivered && styles.indexBadgeDelivered]}>
-                    <Text style={[styles.indexText, isDelivered && styles.indexTextDelivered]}>
-                      {index + 1}
-                    </Text>
+              return (
+                <View style={[styles.rowCard, isDelivered && styles.rowCardDelivered]}>
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.indexBadge, isDelivered && styles.indexBadgeDelivered]}>
+                      <Text style={[styles.indexText, isDelivered && styles.indexTextDelivered]}>
+                        {index + 1}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.rowCustSub}>
+                        {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'} • {item.defaultLitres}L @ ₹{item.ratePerLitre}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.rowCustSub}>
-                      {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'} • {item.defaultLitres}L @ ₹{item.ratePerLitre}
-                    </Text>
-                  </View>
-                </View>
 
-                {/* Status and Action Buttons */}
-                <View style={styles.rowRight}>
-                  {isDelivered ? (
-                    <View style={styles.deliveredBox}>
-                      <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
-                        <Text style={styles.deliveredQty}>{entry.quantityLitres} L</Text>
-                        <Text style={styles.deliveredAmount}>₹{entry.amount.toFixed(0)}</Text>
+                  <View style={styles.rowRight}>
+                    {isDelivered ? (
+                      <View style={styles.deliveredBox}>
+                        <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
+                          <Text style={styles.deliveredQty}>{entry.quantityLitres} L</Text>
+                          <Text style={styles.deliveredAmount}>₹{entry.amount.toFixed(0)}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[styles.paidBtn, entry.isPaid ? styles.paidBtnActive : styles.paidBtnPending]}
+                          onPress={() => togglePaidStatus(entry)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={[styles.paidBtnText, entry.isPaid ? styles.paidBtnTextActive : styles.paidBtnTextPending]}>
+                            {entry.isPaid ? '✓' : '₹'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.editIconBtn}
+                          onPress={() => openCustomEntryModal(item)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.editIconText}>✏️</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.deleteIconBtn}
+                          onPress={() => handleDeleteEntry(entry, item.name)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.deleteIconText}>🗑️</Text>
+                        </TouchableOpacity>
                       </View>
+                    ) : (
+                      <View style={styles.undeliveredBox}>
+                        <TouchableOpacity
+                          style={styles.quickAddBtn}
+                          onPress={() => handleQuickAddDefault(item)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.quickAddBtnText}>+ {item.defaultLitres}L</Text>
+                        </TouchableOpacity>
 
-                      {/* Paid Toggle Button */}
-                      <TouchableOpacity
-                        style={[styles.paidBtn, entry.isPaid ? styles.paidBtnActive : styles.paidBtnPending]}
-                        onPress={() => togglePaidStatus(entry)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Text style={[styles.paidBtnText, entry.isPaid ? styles.paidBtnTextActive : styles.paidBtnTextPending]}>
-                          {entry.isPaid ? '✓' : '₹'}
-                        </Text>
-                      </TouchableOpacity>
-
-                      {/* Edit Button */}
-                      <TouchableOpacity
-                        style={styles.editIconBtn}
-                        onPress={() => openCustomEntryModal(item)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                      >
-                        <Text style={styles.editIconText}>✏️</Text>
-                      </TouchableOpacity>
-
-                      {/* Delete Entry Button */}
-                      <TouchableOpacity
-                        style={styles.deleteIconBtn}
-                        onPress={() => handleDeleteEntry(entry, item.name)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                      >
-                        <Text style={styles.deleteIconText}>🗑️</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.undeliveredBox}>
-                      {/* One-Tap Mark Delivery Button */}
-                      <TouchableOpacity
-                        style={styles.quickAddBtn}
-                        onPress={() => handleQuickAddDefault(item)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                      >
-                        <Text style={styles.quickAddBtnText}>+ {item.defaultLitres}L</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.customQtyBtn}
-                        onPress={() => openCustomEntryModal(item)}
-                        activeOpacity={0.7}
-                        hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                      >
-                        <Text style={styles.customQtyBtnText}>Edit</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                        <TouchableOpacity
+                          style={styles.customQtyBtn}
+                          onPress={() => openCustomEntryModal(item)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.customQtyBtnText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
                 </View>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>👥</Text>
+                <Text style={styles.emptyText}>
+                  {lang === 'hi' ? 'कोई ग्राहक नहीं मिला।' : 'No matching customers found.'}
+                </Text>
               </View>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>👥</Text>
-              <Text style={styles.emptyText}>No matching customers found.</Text>
-            </View>
-          }
-        />
+            }
+          />
+        ) : (
+          <FlatList
+            data={filteredSubSuppliers}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            initialNumToRender={15}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            renderItem={({ item, index }) => {
+              const inwardEntry = inwardEntriesMap.get(item.id);
+              const isInwardLogged = !!inwardEntry;
 
-        {/* Detailed Entry Modal */}
+              return (
+                <View style={[styles.rowCard, isInwardLogged && styles.rowCardInward]}>
+                  <View style={styles.rowLeft}>
+                    <View style={[styles.indexBadge, isInwardLogged && styles.indexBadgeInward]}>
+                      <Text style={[styles.indexText, isInwardLogged && styles.indexTextInward]}>
+                        {index + 1}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.rowCustSub}>
+                        {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'} • {item.defaultLitres}L @ ₹{item.ratePerLitre}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.rowRight}>
+                    {isInwardLogged ? (
+                      <View style={styles.deliveredBox}>
+                        <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
+                          <Text style={[styles.deliveredQty, { color: '#ea580c' }]}>{inwardEntry.quantityLitres} L</Text>
+                          <Text style={styles.deliveredAmount}>₹{inwardEntry.amount.toFixed(0)}</Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={[styles.paidBtn, inwardEntry.isPaid ? styles.paidBtnActive : styles.paidBtnPending]}
+                          onPress={() => toggleInwardPaidStatus(inwardEntry)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={[styles.paidBtnText, inwardEntry.isPaid ? styles.paidBtnTextActive : styles.paidBtnTextPending]}>
+                            {inwardEntry.isPaid ? '✓' : '₹'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.editIconBtn}
+                          onPress={() => openCustomInwardModal(item)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.editIconText}>✏️</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.deleteIconBtn}
+                          onPress={() => handleDeleteInwardEntry(inwardEntry, item.name)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.deleteIconText}>🗑️</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.undeliveredBox}>
+                        <TouchableOpacity
+                          style={[styles.quickAddBtn, { backgroundColor: '#ea580c' }]}
+                          onPress={() => handleQuickAddSubDefault(item)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.quickAddBtnText}>+ {item.defaultLitres}L</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.customQtyBtn}
+                          onPress={() => openCustomInwardModal(item)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                        >
+                          <Text style={styles.customQtyBtnText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>🚜</Text>
+                <Text style={styles.emptyText}>
+                  {lang === 'hi'
+                    ? 'कोई विक्रेता / किसान नहीं मिला। ग्राहक मेनू से नया विक्रेता जोड़ें!'
+                    : 'No vendors / farmers found. Add vendors from Customers screen!'}
+                </Text>
+              </View>
+            }
+          />
+        )}
+
+        {/* Detailed Customer Delivery Entry Modal */}
         <Modal visible={modalVisible} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
@@ -462,7 +834,6 @@ export const DailyRegisterScreen = () => {
                 {selectedCustomer?.name} — {session} ({formatToDisplayDate(selectedDate)})
               </Text>
 
-              {/* Milk Type */}
               <Text style={styles.label}>{t.selectMilkType} *</Text>
               <View style={styles.typeSelectorRow}>
                 <TouchableOpacity
@@ -551,10 +922,110 @@ export const DailyRegisterScreen = () => {
                   <Text style={styles.modalSaveBtnText}>{t.save}</Text>
                 </TouchableOpacity>
               </View>
-
             </View>
           </View>
         </Modal>
+
+        {/* Detailed Sub-Supplier Inward Milk Entry Modal */}
+        <Modal visible={subModalVisible} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                🚜 {selectedSubSupplier?.name} — {subSession} ({formatToDisplayDate(selectedDate)})
+              </Text>
+
+              <Text style={styles.label}>{lang === 'hi' ? 'दूध का प्रकार *' : 'Milk Type *'}</Text>
+              <View style={styles.typeSelectorRow}>
+                <TouchableOpacity
+                  style={[styles.typeOption, subMilkType === 'cow' && styles.typeOptionSelectedCow]}
+                  onPress={() => setSubMilkType('cow')}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={styles.typeOptionText}>🐄 {t.cowMilk}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.typeOption, subMilkType === 'buffalo' && styles.typeOptionSelectedBuffalo]}
+                  onPress={() => setSubMilkType('buffalo')}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.rowTwoInputs}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.label}>{lang === 'hi' ? 'खरीद मात्रा (L)' : 'Inward Litres (L)'}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 5.0"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                    value={subLitres}
+                    onChangeText={setSubLitres}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.label}>{lang === 'hi' ? 'खरीद भाव (₹/L)' : 'Purchase Rate (₹/L)'}</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="e.g. 45"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={subRate}
+                    onChangeText={setSubRate}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.label}>{lang === 'hi' ? 'विवरण / नोट्स' : 'Notes / Remarks'}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Optional remark / कोई विशेष टिप्पणी"
+                placeholderTextColor="#94a3b8"
+                value={subNotes}
+                onChangeText={setSubNotes}
+              />
+
+              <View style={styles.modalButtonRow}>
+                {selectedSubSupplier && inwardEntriesMap.has(selectedSubSupplier.id) && (
+                  <TouchableOpacity
+                    style={styles.modalDeleteBtn}
+                    onPress={() => {
+                      const existing = inwardEntriesMap.get(selectedSubSupplier.id);
+                      if (existing) {
+                        setSubModalVisible(false);
+                        handleDeleteInwardEntry(existing, selectedSubSupplier.name);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.modalDeleteBtnText}>🗑️ {t.deletePrompt || 'Delete'}</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setSubModalVisible(false)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalCancelBtnText}>{t.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { backgroundColor: '#ea580c' }]}
+                  onPress={handleSaveInwardModalEntry}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalSaveBtnText}>{t.save}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     </SafeAreaView>
   );
@@ -563,6 +1034,36 @@ export const DailyRegisterScreen = () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, padding: 14 },
+  registerToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10
+  },
+  registerToggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8
+  },
+  registerToggleBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2
+  },
+  registerToggleText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  registerToggleTextActive: {
+    color: '#0f172a',
+    fontWeight: '700'
+  },
   dateHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -640,6 +1141,10 @@ const styles = StyleSheet.create({
     borderColor: '#bbf7d0',
     backgroundColor: '#f0fdf4'
   },
+  rowCardInward: {
+    borderColor: '#fed7aa',
+    backgroundColor: '#fffaf5'
+  },
   rowLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 },
   indexBadge: {
     width: 28,
@@ -650,8 +1155,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   indexBadgeDelivered: { backgroundColor: '#dcfce7' },
+  indexBadgeInward: { backgroundColor: '#ffedd5' },
   indexText: { fontSize: 11, fontWeight: 'bold', color: '#64748b' },
   indexTextDelivered: { color: '#16a34a' },
+  indexTextInward: { color: '#ea580c' },
   rowCustName: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
   rowCustSub: { fontSize: 11, color: '#64748b', marginTop: 2 },
   rowRight: { flexDirection: 'row', alignItems: 'center' },

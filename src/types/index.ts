@@ -71,3 +71,67 @@ export interface CustomerDueSummary {
   deliveredDaysCount?: number;
   totalRangeDays?: number;
 }
+
+// --- SUB-SUPPLIER (INWARD MILK PROCUREMENT) ---
+export interface SubSupplier {
+  id: string;
+  supplierId: string;
+  name: string;
+  phone: string;
+  address?: string;
+  defaultLitres: number;
+  milkType: MilkType;
+  ratePerLitre: number;
+  notes?: string;
+  createdAt: number;
+  updatedAt?: number;
+  isDeleted?: boolean;
+}
+
+export interface MilkInwardEntry {
+  id: string;
+  supplierId: string;
+  subSupplierId: string;
+  subSupplierName: string;
+  date: string; // YYYY-MM-DD
+  session: SessionType;
+  milkType: MilkType;
+  quantityLitres: number;
+  ratePerLitre: number;
+  amount: number;
+  isPaid: boolean;
+  notes?: string;
+  createdAt: number;
+  updatedAt?: number;
+  isDeleted?: boolean;
+}
+
+export interface SubSupplierPayment {
+  id: string;
+  supplierId: string;
+  subSupplierId: string;
+  subSupplierName?: string;
+  date: string; // YYYY-MM-DD
+  amountPaid: number;
+  paymentMode?: 'CASH' | 'UPI' | 'BANK' | string;
+  notes?: string;
+  createdAt: number;
+  updatedAt?: number;
+  isDeleted?: boolean;
+}
+
+export interface SubSupplierDueSummary {
+  subSupplier: SubSupplier;
+  totalLitresCow: number;
+  totalLitresBuffalo: number;
+  totalLitres: number;
+  totalPurchaseAmount: number;
+  totalAmountBilled: number; // alias for inward total purchase
+  totalPaid: number;
+  netPayable: number; // totalPurchaseAmount - totalPaid
+  suppliedDaysCount: number;
+  deliveredDaysCount?: number; // alias
+  unpaidEntriesCount?: number;
+  totalRangeDays?: number;
+}
+

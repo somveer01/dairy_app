@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations, Language } from '../localization/i18n';
 import { StorageService } from '../services/storageService';
 import { AutoSyncService } from '../services/autoSyncService';
-import { Customer, MilkEntry, Payment, Supplier } from '../types';
+import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
 
 interface AppContextType {
   lang: Language;
@@ -16,6 +16,12 @@ interface AppContextType {
   refreshMilkEntries: () => Promise<void>;
   payments: Payment[];
   refreshPayments: () => Promise<void>;
+  subSuppliers: SubSupplier[];
+  refreshSubSuppliers: () => Promise<void>;
+  milkInwardEntries: MilkInwardEntry[];
+  refreshMilkInwardEntries: () => Promise<void>;
+  subSupplierPayments: SubSupplierPayment[];
+  refreshSubSupplierPayments: () => Promise<void>;
   isLoading: boolean;
   isAuthModalVisible: boolean;
   openAuthModal: () => void;
@@ -59,6 +65,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [milkEntries, setMilkEntries] = useState<MilkEntry[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [subSuppliers, setSubSuppliers] = useState<SubSupplier[]>([]);
+  const [milkInwardEntries, setMilkInwardEntries] = useState<MilkInwardEntry[]>([]);
+  const [subSupplierPayments, setSubSupplierPayments] = useState<SubSupplierPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalVisible, setIsAuthModalVisible] = useState(false);
 
@@ -77,15 +86,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSupplierState(savedSupplier);
 
         // Load data scoped to this authenticated supplier
-        const [custs, entries, pays] = await Promise.all([
+        const [custs, entries, pays, subSupps, inward, subPays] = await Promise.all([
           StorageService.getCustomers(savedSupplier.id),
           StorageService.getMilkEntries(savedSupplier.id),
-          StorageService.getPayments(savedSupplier.id)
+          StorageService.getPayments(savedSupplier.id),
+          StorageService.getSubSuppliers(savedSupplier.id),
+          StorageService.getMilkInwardEntries(savedSupplier.id),
+          StorageService.getSubSupplierPayments(savedSupplier.id)
         ]);
 
         setCustomers(custs.filter(c => !c.isDeleted));
         setMilkEntries(entries.filter(e => !e.isDeleted));
         setPayments(pays.filter(p => !p.isDeleted));
+        setSubSuppliers(subSupps.filter(s => !s.isDeleted));
+        setMilkInwardEntries(inward.filter(i => !i.isDeleted));
+        setSubSupplierPayments(subPays.filter(sp => !sp.isDeleted));
 
         // Trigger background sync on launch
         AutoSyncService.queueSync(savedSupplier, 1200);
@@ -94,14 +109,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await StorageService.clearActiveSession();
         setSupplierState(null);
         // Load default/legacy customers, entries, and payments so guest mode is fully browsable
-        const [custs, entries, pays] = await Promise.all([
+        const [custs, entries, pays, subSupps, inward, subPays] = await Promise.all([
           StorageService.getCustomers(),
           StorageService.getMilkEntries(),
-          StorageService.getPayments()
+          StorageService.getPayments(),
+          StorageService.getSubSuppliers(),
+          StorageService.getMilkInwardEntries(),
+          StorageService.getSubSupplierPayments()
         ]);
         setCustomers(custs.filter(c => !c.isDeleted));
         setMilkEntries(entries.filter(e => !e.isDeleted));
         setPayments(pays.filter(p => !p.isDeleted));
+        setSubSuppliers(subSupps.filter(s => !s.isDeleted));
+        setMilkInwardEntries(inward.filter(i => !i.isDeleted));
+        setSubSupplierPayments(subPays.filter(sp => !sp.isDeleted));
       }
     } finally {
       setIsLoading(false);
@@ -112,14 +133,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!newSupplier) {
       await StorageService.clearActiveSession();
       setSupplierState(null);
-      const [custs, entries, pays] = await Promise.all([
+      const [custs, entries, pays, subSupps, inward, subPays] = await Promise.all([
         StorageService.getCustomers(),
         StorageService.getMilkEntries(),
-        StorageService.getPayments()
+        StorageService.getPayments(),
+        StorageService.getSubSuppliers(),
+        StorageService.getMilkInwardEntries(),
+        StorageService.getSubSupplierPayments()
       ]);
       setCustomers(custs.filter(c => !c.isDeleted));
       setMilkEntries(entries.filter(e => !e.isDeleted));
       setPayments(pays.filter(p => !p.isDeleted));
+      setSubSuppliers(subSupps.filter(s => !s.isDeleted));
+      setMilkInwardEntries(inward.filter(i => !i.isDeleted));
+      setSubSupplierPayments(subPays.filter(sp => !sp.isDeleted));
       return;
     }
 
@@ -129,15 +156,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAuthModalVisible(false);
 
     // Refresh records scoped to the new supplier
-    const [custs, entries, pays] = await Promise.all([
+    const [custs, entries, pays, subSupps, inward, subPays] = await Promise.all([
       StorageService.getCustomers(newSupplier.id),
       StorageService.getMilkEntries(newSupplier.id),
-      StorageService.getPayments(newSupplier.id)
+      StorageService.getPayments(newSupplier.id),
+      StorageService.getSubSuppliers(newSupplier.id),
+      StorageService.getMilkInwardEntries(newSupplier.id),
+      StorageService.getSubSupplierPayments(newSupplier.id)
     ]);
 
     setCustomers(custs.filter(c => !c.isDeleted));
     setMilkEntries(entries.filter(e => !e.isDeleted));
     setPayments(pays.filter(p => !p.isDeleted));
+    setSubSuppliers(subSupps.filter(s => !s.isDeleted));
+    setMilkInwardEntries(inward.filter(i => !i.isDeleted));
+    setSubSupplierPayments(subPays.filter(sp => !sp.isDeleted));
 
     AutoSyncService.queueSync(newSupplier, 500);
   };
@@ -163,6 +196,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
     const pays = await StorageService.getPayments(sId);
     setPayments(pays.filter(p => !p.isDeleted));
+  };
+
+  const refreshSubSuppliers = async () => {
+    const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
+    const subSupps = await StorageService.getSubSuppliers(sId);
+    setSubSuppliers(subSupps.filter(s => !s.isDeleted));
+  };
+
+  const refreshMilkInwardEntries = async () => {
+    const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
+    const inward = await StorageService.getMilkInwardEntries(sId);
+    setMilkInwardEntries(inward.filter(i => !i.isDeleted));
+  };
+
+  const refreshSubSupplierPayments = async () => {
+    const sId = supplier?.id || StorageService.getActiveSupplierId() || undefined;
+    const subPays = await StorageService.getSubSupplierPayments(sId);
+    setSubSupplierPayments(subPays.filter(sp => !sp.isDeleted));
   };
 
   const openAuthModal = () => {
@@ -200,6 +251,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshMilkEntries,
         payments,
         refreshPayments,
+        subSuppliers,
+        refreshSubSuppliers,
+        milkInwardEntries,
+        refreshMilkInwardEntries,
+        subSupplierPayments,
+        refreshSubSupplierPayments,
         isLoading,
         isAuthModalVisible,
         openAuthModal,

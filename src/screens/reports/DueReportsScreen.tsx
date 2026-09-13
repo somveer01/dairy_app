@@ -15,7 +15,18 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
 import { WhatsAppService, CustomerDateAuditItem } from '../../services/whatsappService';
-import { Customer, CustomerDueSummary, Payment, MilkEntry, MilkType, SessionType } from '../../types';
+import {
+  Customer,
+  CustomerDueSummary,
+  Payment,
+  MilkEntry,
+  MilkType,
+  SessionType,
+  SubSupplier,
+  SubSupplierDueSummary,
+  SubSupplierPayment,
+  MilkInwardEntry
+} from '../../types';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
 import { formatToDisplayDate, parseToIsoDate, getTodayDisplayDate, shiftDisplayDate } from '../../utils/dateUtils';
 
@@ -49,9 +60,26 @@ const toLocalIso = (d: Date): string => {
 };
 
 export const DueReportsScreen = () => {
-  const { t, lang, customers, milkEntries, refreshMilkEntries, payments, refreshPayments, supplier, requireAuth } = useApp();
+  const {
+    t,
+    lang,
+    customers,
+    milkEntries,
+    refreshMilkEntries,
+    payments,
+    refreshPayments,
+    subSuppliers,
+    refreshSubSuppliers,
+    milkInwardEntries,
+    refreshMilkInwardEntries,
+    subSupplierPayments,
+    refreshSubSupplierPayments,
+    supplier,
+    requireAuth
+  } = useApp();
   
   const now = new Date();
+  const [partyMode, setPartyMode] = useState<'customers' | 'subSuppliers'>('customers');
   const [reportMode, setReportMode] = useState<ReportMode>('month');
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth()); // 0-11
@@ -84,6 +112,13 @@ export const DueReportsScreen = () => {
   const [payDate, setPayDate] = useState<string>(todayDisplayStr);
   const [payAmount, setPayAmount] = useState('');
   const [payNotes, setPayNotes] = useState('');
+
+  // Sub-Supplier Payment Modal State
+  const [subPaymentModalVisible, setSubPaymentModalVisible] = useState(false);
+  const [paymentSubSupplier, setPaymentSubSupplier] = useState<SubSupplier | null>(null);
+  const [subPayDate, setSubPayDate] = useState<string>(todayDisplayStr);
+  const [subPayAmount, setSubPayAmount] = useState('');
+  const [subPayNotes, setSubPayNotes] = useState('');
 
   // Payment History Modal State
   const [payHistoryVisible, setPayHistoryVisible] = useState(false);
@@ -349,6 +384,116 @@ export const DueReportsScreen = () => {
     return allDueSummaries.reduce((sum, item) => sum + item.totalPaid, 0);
   }, [allDueSummaries]);
 
+  // All calculated due summaries for Sub-Suppliers (Procurement Payables)
+  const allSubDueSummaries: SubSupplierDueSummary[] = useMemo(() => {
+    const { startDate, endDate, totalDays } = dateRange;
+
+    // Index inward entries in range
+    const inwardBySub = new Map<string, MilkInwardEntry[]>();
+    for (let i = 0; i < milkInwardEntries.length; i++) {
+      const e = milkInwardEntries[i];
+      if (!e.isDeleted && e.date >= startDate && e.date <= endDate) {
+        let list = inwardBySub.get(e.subSupplierId);
+        if (!list) {
+          list = [];
+          inwardBySub.set(e.subSupplierId, list);
+        }
+        list.push(e);
+      }
+    }
+
+    // Index sub-supplier payments
+    const paymentsAllTimeBySub = new Map<string, number>();
+    const paymentsInPeriodBySub = new Map<string, number>();
+    for (let i = 0; i < subSupplierPayments.length; i++) {
+      const p = subSupplierPayments[i];
+      if (p.isDeleted) continue;
+      paymentsAllTimeBySub.set(p.subSupplierId, (paymentsAllTimeBySub.get(p.subSupplierId) || 0) + p.amountPaid);
+      if (p.date >= startDate && p.date <= endDate) {
+        paymentsInPeriodBySub.set(p.subSupplierId, (paymentsInPeriodBySub.get(p.subSupplierId) || 0) + p.amountPaid);
+      }
+    }
+
+    return subSuppliers.filter(s => !s.isDeleted).map(sub => {
+      const subEntries = inwardBySub.get(sub.id) || [];
+      const totalPaidAllTime = paymentsAllTimeBySub.get(sub.id) || 0;
+      const totalPaid = paymentsInPeriodBySub.get(sub.id) || 0;
+
+      let totalLitresCow = 0;
+      let totalLitresBuffalo = 0;
+      let totalBilled = 0;
+      let unpaidCount = 0;
+      const deliveredDays = new Set<string>();
+
+      for (let i = 0; i < subEntries.length; i++) {
+        const entry = subEntries[i];
+        if (entry.milkType === 'cow') totalLitresCow += entry.quantityLitres;
+        if (entry.milkType === 'buffalo') totalLitresBuffalo += entry.quantityLitres;
+        totalBilled += entry.amount;
+        if (!entry.isPaid) unpaidCount++;
+        deliveredDays.add(entry.date);
+      }
+
+      let netPayable = 0;
+      if (reportMode === 'all') {
+        let allTimeBilled = 0;
+        for (let i = 0; i < milkInwardEntries.length; i++) {
+          const e = milkInwardEntries[i];
+          if (!e.isDeleted && e.subSupplierId === sub.id) {
+            allTimeBilled += e.amount;
+          }
+        }
+        netPayable = Math.max(0, allTimeBilled - totalPaidAllTime);
+      } else {
+        netPayable = Math.max(0, totalBilled - totalPaid);
+      }
+
+      return {
+        subSupplier: sub,
+        totalLitres: totalLitresCow + totalLitresBuffalo,
+        totalLitresCow,
+        totalLitresBuffalo,
+        totalPurchaseAmount: totalBilled,
+        totalAmountBilled: totalBilled,
+        totalPaid: reportMode === 'all' ? totalPaidAllTime : totalPaid,
+        netPayable,
+        unpaidEntriesCount: unpaidCount,
+        suppliedDaysCount: deliveredDays.size,
+        deliveredDaysCount: deliveredDays.size,
+        totalRangeDays: totalDays
+      };
+    });
+  }, [subSuppliers, milkInwardEntries, subSupplierPayments, dateRange, reportMode]);
+
+  const filteredSubSummaries = useMemo(() => {
+    return allSubDueSummaries.filter(item => {
+      const query = searchQuery.trim().toLowerCase();
+      if (query) {
+        const matchName = item.subSupplier.name.toLowerCase().includes(query);
+        const matchPhone = item.subSupplier.phone.includes(query);
+        const matchAddress = item.subSupplier.address ? item.subSupplier.address.toLowerCase().includes(query) : false;
+        if (!matchName && !matchPhone && !matchAddress) return false;
+      }
+
+      if (dueFilter === 'dueOnly' && item.netPayable <= 0) return false;
+      if (dueFilter === 'paidOnly' && item.netPayable > 0) return false;
+
+      return true;
+    });
+  }, [allSubDueSummaries, searchQuery, dueFilter]);
+
+  const totalPeriodSubPayable = useMemo(() => {
+    return allSubDueSummaries.reduce((sum, item) => sum + item.netPayable, 0);
+  }, [allSubDueSummaries]);
+
+  const totalPeriodSubBilled = useMemo(() => {
+    return allSubDueSummaries.reduce((sum, item) => sum + item.totalAmountBilled, 0);
+  }, [allSubDueSummaries]);
+
+  const totalPeriodSubPaid = useMemo(() => {
+    return allSubDueSummaries.reduce((sum, item) => sum + item.totalPaid, 0);
+  }, [allSubDueSummaries]);
+
   // Active customer selected for the Date-wise Detail Modal
   const activeDetailSummary = useMemo(() => {
     if (!selectedDetailCustomerId) return null;
@@ -526,6 +671,72 @@ export const DueReportsScreen = () => {
     }
   };
 
+  const openSubPayModal = (sub: SubSupplier) => {
+    Keyboard.dismiss();
+    requireAuth(() => {
+      setPaymentSubSupplier(sub);
+      setSubPayDate(getTodayDisplayDate());
+      setSubPayAmount('');
+      setSubPayNotes('Milk supply payment / दूध भुगतान');
+      setSubPaymentModalVisible(true);
+    });
+  };
+
+  const handleSaveSubPayment = async () => {
+    Keyboard.dismiss();
+    requireAuth(async () => {
+      if (!paymentSubSupplier) return;
+      const amountVal = parseFloat(subPayAmount);
+      if (isNaN(amountVal) || amountVal <= 0) {
+        showAlert(
+          lang === 'hi' ? 'अमान्य राशि' : 'Invalid Amount',
+          lang === 'hi' ? 'कृपया एक मान्य भुगतान राशि दर्ज करें।' : 'Please enter a valid payment amount.'
+        );
+        return;
+      }
+
+      const paymentIsoDate = parseToIsoDate(subPayDate) || toLocalIso(new Date());
+
+      const newPayment: SubSupplierPayment = {
+        id: 'sub_pay_' + Date.now(),
+        supplierId: supplier?.id || 'supp_default',
+        subSupplierId: paymentSubSupplier.id,
+        subSupplierName: paymentSubSupplier.name,
+        amountPaid: amountVal,
+        date: paymentIsoDate,
+        paymentMode: 'cash',
+        notes: subPayNotes.trim(),
+        createdAt: Date.now()
+      };
+
+      await StorageService.saveSubSupplierPayment(newPayment);
+      await refreshSubSupplierPayments();
+      setSubPaymentModalVisible(false);
+      showAlert(
+        lang === 'hi' ? '✓ भुगतान दर्ज हुआ' : '✓ Payment Recorded',
+        lang === 'hi'
+          ? `₹${amountVal} का भुगतान (${formatToDisplayDate(paymentIsoDate)}) ${paymentSubSupplier.name} को सफलतापूर्वक दर्ज किया गया।`
+          : `Payment of ₹${amountVal} (${formatToDisplayDate(paymentIsoDate)}) recorded for ${paymentSubSupplier.name}.`
+      );
+    });
+  };
+
+  const handleShareSubWhatsAppSummary = async (summary: SubSupplierDueSummary) => {
+    Keyboard.dismiss();
+    const periodName = dateRange.label;
+
+    try {
+      await WhatsAppService.sendSubSupplierStatementViaWhatsApp(
+        summary.subSupplier.phone,
+        summary,
+        supplier?.businessName || 'Dairy Farm',
+        periodName
+      );
+    } catch {
+      showAlert('त्रुटि (Error)', 'Could not launch WhatsApp.');
+    }
+  };
+
   const handleShareItemizedWhatsApp = async () => {
     if (!activeDetailSummary) return;
     const periodName = dateRange.label;
@@ -630,6 +841,29 @@ export const DueReportsScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <View style={styles.container}>
+        {/* Party Switcher: Customer Receivables vs Sub-Supplier Payables */}
+        <View style={styles.partyToggleRow}>
+          <TouchableOpacity
+            style={[styles.partyToggleBtn, partyMode === 'customers' && styles.partyToggleBtnActive]}
+            onPress={() => { setPartyMode('customers'); setSearchQuery(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.partyToggleText, partyMode === 'customers' && styles.partyToggleTextActive]}>
+              💰 {lang === 'hi' ? 'ग्राहक बकाया (लेना)' : 'Customer Receivables'} ({allDueSummaries.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.partyToggleBtn, partyMode === 'subSuppliers' && styles.partyToggleBtnActive]}
+            onPress={() => { setPartyMode('subSuppliers'); setSearchQuery(''); }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.partyToggleText, partyMode === 'subSuppliers' && styles.partyToggleTextActive]}>
+              💳 {lang === 'hi' ? 'सप्लायर देय (देना)' : 'Vendor Payables'} ({allSubDueSummaries.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Mode Selector Tabs: Month-wise / Custom Range / All Dues */}
         <View style={styles.modeTabs}>
           <TouchableOpacity
@@ -706,115 +940,152 @@ export const DueReportsScreen = () => {
           </View>
         )}
 
-        {/* When in Custom Mode: Date Inputs, Calendar Buttons, Presets & Search Button */}
+        {/* When in Custom Range Mode: From & To Date Pickers and Search Button */}
         {reportMode === 'custom' && (
           <View style={styles.customDateBox}>
-            {/* Single Row: From Date, Arrow, To Date, and Search Dues Button */}
+            {/* Single Horizontal Row: From Date Card + To Date Card + Search Button */}
             <View style={styles.singleRowDateBar}>
-              {/* From Date Box */}
+              {/* From Date Card */}
               <TouchableOpacity
                 style={styles.compactDateCard}
                 onPress={() => openCalendarPicker('start')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.compactDateLabel}>{t.fromDate || 'से'} (DD-MMM-YYYY)</Text>
+                <Text style={styles.compactDateLabel}>{t.fromDate || 'से तारीख'}</Text>
                 <View style={styles.compactDateValueRow}>
-                  <Text style={styles.compactDateValueText} numberOfLines={1}>
-                    {customStartDate}
-                  </Text>
-                  <Text style={styles.compactCalIcon}>📅</Text>
+                  <Text style={styles.compactDateValueText}>{customStartDate}</Text>
+                  <Text style={styles.calendarMiniIcon}>📅</Text>
                 </View>
               </TouchableOpacity>
 
-              <Text style={styles.compactDateArrow}>→</Text>
-
-              {/* To Date Box */}
+              {/* To Date Card */}
               <TouchableOpacity
                 style={styles.compactDateCard}
                 onPress={() => openCalendarPicker('end')}
                 activeOpacity={0.7}
               >
-                <Text style={styles.compactDateLabel}>{t.toDate || 'तक'} (DD-MMM-YYYY)</Text>
+                <Text style={styles.compactDateLabel}>{t.toDate || 'तक तारीख'}</Text>
                 <View style={styles.compactDateValueRow}>
-                  <Text style={styles.compactDateValueText} numberOfLines={1}>
-                    {customEndDate}
-                  </Text>
-                  <Text style={styles.compactCalIcon}>📅</Text>
+                  <Text style={styles.compactDateValueText}>{customEndDate}</Text>
+                  <Text style={styles.calendarMiniIcon}>📅</Text>
                 </View>
               </TouchableOpacity>
 
-              {/* Search Dues Button in Same Row */}
+              {/* Search Button */}
               <TouchableOpacity
                 style={styles.compactSearchBtn}
                 onPress={handleApplyCustomSearch}
                 activeOpacity={0.8}
                 hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               >
-                <Text style={styles.compactSearchBtnText}>
-                  🔍 {t.searchDuesBtn || (lang === 'hi' ? 'खोजें' : 'Search')}
-                </Text>
+                <Text style={styles.compactSearchBtnText}>🔍 {t.applyFilter || 'खोजें'}</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Quick Presets Row Below */}
-            <View style={styles.compactPresetRow}>
-              <Text style={styles.presetLabel}>{t.quickPresets || 'त्वरित'}:</Text>
-              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('firstHalf')}>
+            {/* Quick Presets: 1-15, 16-End, Full Month */}
+            <View style={styles.presetRow}>
+              <Text style={styles.presetLabel}>{t.quickPresets || 'त्वरित:'}</Text>
+              <TouchableOpacity
+                style={styles.presetBtn}
+                onPress={() => handleApplyPreset('firstHalf')}
+                activeOpacity={0.7}
+              >
                 <Text style={styles.presetBtnText}>{t.preset1_15 || '1-15'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('secondHalf')}>
-                <Text style={styles.presetBtnText}>{t.preset16_End || '16-अंतिम'}</Text>
+              <TouchableOpacity
+                style={styles.presetBtn}
+                onPress={() => handleApplyPreset('secondHalf')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.presetBtnText}>{t.preset16_End || '16-End'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.presetBtn} onPress={() => handleApplyPreset('fullMonth')}>
-                <Text style={styles.presetBtnText}>{t.presetFullMonth || 'महीना'}</Text>
+              <TouchableOpacity
+                style={styles.presetBtn}
+                onPress={() => handleApplyPreset('fullMonth')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.presetBtnText}>{t.presetFullMonth || 'Full Month'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
 
-        {/* Total Summary Banner with Billed, Received and Net Due */}
-        <View style={styles.summaryBanner}>
-          <View style={styles.bannerPeriodInfoRow}>
-            <Text style={styles.bannerPeriodInfoText}>
-              📅 {dateRange.label}
-              {dateRange.totalDays > 0 ? ` • ${dateRange.totalDays} ${lang === 'hi' ? 'दिन का रिपोर्ट' : 'Days Report'}` : ''}
-            </Text>
+        {/* Total Summary Banner with Billed, Received/Paid and Net Due/Payable */}
+        {partyMode === 'customers' ? (
+          <View style={styles.summaryBanner}>
+            <View style={styles.bannerPeriodInfoRow}>
+              <Text style={styles.bannerPeriodInfoText}>
+                📅 {dateRange.label}
+                {dateRange.totalDays > 0 ? ` • ${dateRange.totalDays} ${lang === 'hi' ? 'दिन का रिपोर्ट' : 'Days Report'}` : ''}
+              </Text>
+            </View>
+            <View style={styles.bannerRow}>
+              <View style={styles.bannerItem}>
+                <Text style={styles.bannerSubLabel}>{t.totalBilled}</Text>
+                <Text style={styles.bannerSubAmount}>₹{totalPeriodBilled.toFixed(0)}</Text>
+              </View>
+              <View style={styles.bannerItemDivider} />
+              <View style={styles.bannerItem}>
+                <Text style={styles.bannerSubLabel}>{t.totalReceived}</Text>
+                <Text style={styles.bannerSubAmount}>₹{totalPeriodPaid.toFixed(0)}</Text>
+              </View>
+              <View style={styles.bannerItemDivider} />
+              <View style={styles.bannerItem}>
+                <Text style={styles.bannerSubLabel}>{t.netDue}</Text>
+                <Text style={[styles.bannerSubAmount, { color: '#fef08a' }]}>₹{totalPeriodDue.toFixed(0)}</Text>
+              </View>
+            </View>
           </View>
-          <View style={styles.bannerRow}>
-            <View style={styles.bannerItem}>
-              <Text style={styles.bannerSubLabel}>{t.totalBilled}</Text>
-              <Text style={styles.bannerSubAmount}>₹{totalPeriodBilled.toFixed(0)}</Text>
+        ) : (
+          <View style={[styles.summaryBanner, { backgroundColor: '#ea580c' }]}>
+            <View style={[styles.bannerPeriodInfoRow, { backgroundColor: 'rgba(0,0,0,0.18)' }]}>
+              <Text style={styles.bannerPeriodInfoText}>
+                🌾 {dateRange.label}
+                {dateRange.totalDays > 0 ? ` • ${dateRange.totalDays} ${lang === 'hi' ? 'दिन का खरीद हिसाब' : 'Days Purchase'}` : ''}
+              </Text>
             </View>
-            <View style={styles.bannerItemDivider} />
-            <View style={styles.bannerItem}>
-              <Text style={styles.bannerSubLabel}>{t.totalReceived}</Text>
-              <Text style={styles.bannerSubAmount}>₹{totalPeriodPaid.toFixed(0)}</Text>
-            </View>
-            <View style={styles.bannerItemDivider} />
-            <View style={styles.bannerItem}>
-              <Text style={styles.bannerSubLabel}>{t.netDue}</Text>
-              <Text style={[styles.bannerSubAmount, { color: '#fef08a' }]}>₹{totalPeriodDue.toFixed(0)}</Text>
+            <View style={styles.bannerRow}>
+              <View style={styles.bannerItem}>
+                <Text style={styles.bannerSubLabel}>{lang === 'hi' ? 'कुल खरीद' : 'Total Purchased'}</Text>
+                <Text style={styles.bannerSubAmount}>₹{totalPeriodSubBilled.toFixed(0)}</Text>
+              </View>
+              <View style={styles.bannerItemDivider} />
+              <View style={styles.bannerItem}>
+                <Text style={styles.bannerSubLabel}>{lang === 'hi' ? 'सप्लायर को दिया' : 'Total Paid'}</Text>
+                <Text style={styles.bannerSubAmount}>₹{totalPeriodSubPaid.toFixed(0)}</Text>
+              </View>
+              <View style={styles.bannerItemDivider} />
+              <View style={styles.bannerItem}>
+                <Text style={styles.bannerSubLabel}>{lang === 'hi' ? 'कुल देय राशि' : 'Net Payable'}</Text>
+                <Text style={[styles.bannerSubAmount, { color: '#fef08a' }]}>₹{totalPeriodSubPayable.toFixed(0)}</Text>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* All Payments History Button */}
-        <TouchableOpacity
-          style={styles.allPaymentsBtn}
-          onPress={() => { setPayHistoryCustomer(null); setPayHistoryVisible(true); }}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.allPaymentsBtnText}>
-            💰 {t.allPayments} ({payments.length})
-          </Text>
-        </TouchableOpacity>
+        {partyMode === 'customers' && (
+          <TouchableOpacity
+            style={styles.allPaymentsBtn}
+            onPress={() => { setPayHistoryCustomer(null); setPayHistoryVisible(true); }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.allPaymentsBtnText}>
+              💰 {t.allPayments} ({payments.length})
+            </Text>
+          </TouchableOpacity>
+        )}
 
-        {/* Search Bar with Clear Button to find any customer easily */}
+        {/* Search Bar with Clear Button */}
         <View style={styles.searchRow}>
           <TextInput
             style={styles.searchInput}
-            placeholder={`🔍 ${t.searchCustomers}`}
+            placeholder={
+              partyMode === 'customers'
+                ? `🔍 ${t.searchCustomers}`
+                : `🔍 ${lang === 'hi' ? 'विक्रेता / किसान खोजें...' : 'Search vendors / farmers...'}`
+            }
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -839,7 +1110,7 @@ export const DueReportsScreen = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, dueFilter === 'all' && styles.filterChipTextActive]}>
-              {t.all} ({allDueSummaries.length})
+              {t.all} ({partyMode === 'customers' ? allDueSummaries.length : allSubDueSummaries.length})
             </Text>
           </TouchableOpacity>
 
@@ -849,7 +1120,11 @@ export const DueReportsScreen = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, dueFilter === 'dueOnly' && styles.filterChipTextActiveDue]}>
-              🔴 {t.pendingDue} ({allDueSummaries.filter(d => d.netDue > 0).length})
+              🔴 {partyMode === 'customers' ? t.pendingDue : (lang === 'hi' ? 'देय बाकी' : 'Payable')} (
+              {partyMode === 'customers'
+                ? allDueSummaries.filter(d => d.netDue > 0).length
+                : allSubDueSummaries.filter(d => d.netPayable > 0).length}
+              )
             </Text>
           </TouchableOpacity>
 
@@ -859,138 +1134,246 @@ export const DueReportsScreen = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, dueFilter === 'paidOnly' && styles.filterChipTextActivePaid]}>
-              ✓ {t.settled} ({allDueSummaries.filter(d => d.netDue <= 0).length})
+              ✓ {t.settled} (
+              {partyMode === 'customers'
+                ? allDueSummaries.filter(d => d.netDue <= 0).length
+                : allSubDueSummaries.filter(d => d.netPayable <= 0).length}
+              )
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Helper Hint: Tap customer for date-wise report */}
+        {/* Helper Hint */}
         <View style={styles.tapHintBox}>
           <Text style={styles.tapHintText}>
-            {t.tapHint}
+            {partyMode === 'customers'
+              ? t.tapHint
+              : (lang === 'hi'
+                ? '💡 दूध विक्रेता / किसान को किए गए भुगतान और बकाया का विस्तृत हिसाब'
+                : '💡 Detailed record of milk purchased from vendors and payments made')}
           </Text>
         </View>
 
 
-        {/* List of Customer Due Summaries */}
-        <FlatList
-          data={filteredSummaries}
-          keyExtractor={item => item.customer.id}
-          contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="on-drag"
-          initialNumToRender={15}
-          maxToRenderPerBatch={20}
-          windowSize={10}
-          removeClippedSubviews={true}
-          renderItem={({ item, index }) => (
-            <TouchableOpacity
-              style={styles.dueCard}
-              activeOpacity={0.88}
-              onPress={() => setSelectedDetailCustomerId(item.customer.id)}
-            >
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                    <Text style={styles.custIndex}>{index + 1}.</Text>
-                    <Text style={styles.custName} numberOfLines={1}>{item.customer.name}</Text>
-                    <View style={styles.viewReportBadge}>
-                      <Text style={styles.viewReportBadgeText}>
-                        📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'} ›
-                      </Text>
+        {/* List of Customer Due Summaries OR Sub-Supplier Payables */}
+        {partyMode === 'customers' ? (
+          <FlatList
+            data={filteredSummaries}
+            keyExtractor={item => item.customer.id}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            initialNumToRender={15}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                style={styles.dueCard}
+                activeOpacity={0.88}
+                onPress={() => setSelectedDetailCustomerId(item.customer.id)}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={styles.custIndex}>{index + 1}.</Text>
+                      <Text style={styles.custName} numberOfLines={1}>{item.customer.name}</Text>
+                      <View style={styles.viewReportBadge}>
+                        <Text style={styles.viewReportBadgeText}>
+                          📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'} ›
+                        </Text>
+                      </View>
                     </View>
+                    <Text style={styles.custPhone}>📞 {item.customer.phone}</Text>
+                    {item.customer.address ? (
+                      <Text style={styles.custAddress} numberOfLines={1}>📍 {item.customer.address}</Text>
+                    ) : null}
                   </View>
-                  <Text style={styles.custPhone}>📞 {item.customer.phone}</Text>
-                  {item.customer.address ? (
-                    <Text style={styles.custAddress} numberOfLines={1}>📍 {item.customer.address}</Text>
-                  ) : null}
+
+                  <View style={styles.netDueBox}>
+                    <Text style={styles.netDueLabel}>Net Due</Text>
+                    <Text style={[styles.netDueAmount, item.netDue > 0 ? styles.dueRed : styles.dueGreen]}>
+                      ₹{item.netDue.toFixed(2)}
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={styles.netDueBox}>
-                  <Text style={styles.netDueLabel}>Net Due</Text>
-                  <Text style={[styles.netDueAmount, item.netDue > 0 ? styles.dueRed : styles.dueGreen]}>
-                    ₹{item.netDue.toFixed(2)}
+                {/* Quantities delivered & Days count */}
+                <View style={styles.qtyRow}>
+                  {item.totalLitresCow > 0 && (
+                    <Text style={styles.qtyTag}>🐄 Cow: {item.totalLitresCow.toFixed(1)} L</Text>
+                  )}
+                  {item.totalLitresBuffalo > 0 && (
+                    <Text style={styles.qtyTag}>🐃 Buffalo: {item.totalLitresBuffalo.toFixed(1)} L</Text>
+                  )}
+                  <Text style={styles.qtyTagTotal}>Total: {item.totalLitres.toFixed(1)} L</Text>
+                  <Text style={styles.qtyTagDays}>
+                    📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'}
                   </Text>
                 </View>
-              </View>
 
-              {/* Quantities delivered & Days count */}
-              <View style={styles.qtyRow}>
-                {item.totalLitresCow > 0 && (
-                  <Text style={styles.qtyTag}>🐄 Cow: {item.totalLitresCow.toFixed(1)} L</Text>
-                )}
-                {item.totalLitresBuffalo > 0 && (
-                  <Text style={styles.qtyTag}>🐃 Buffalo: {item.totalLitresBuffalo.toFixed(1)} L</Text>
-                )}
-                <Text style={styles.qtyTagTotal}>Total: {item.totalLitres.toFixed(1)} L</Text>
-                <Text style={styles.qtyTagDays}>
-                  📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'}
+                {/* Billed vs Paid */}
+                <View style={styles.finRow}>
+                  <Text style={styles.finText}>Billed: ₹{item.totalAmountBilled.toFixed(0)}</Text>
+                  <Text style={styles.finText}>Paid: ₹{item.totalPaid.toFixed(0)}</Text>
+                  <Text style={styles.cardTapPromptText}>Tap for full report ›</Text>
+                </View>
+
+                {/* Action Buttons: Record Payment, Live Card & WhatsApp Summary */}
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={styles.payBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      openPayModal(item.customer);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={styles.payBtnText}>💵 {lang === 'hi' ? 'भुगतान दर्ज' : 'Record Pay'}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.liveCardBtn}
+                    onPress={async (e) => {
+                      e.stopPropagation();
+                      await CardSyncService.syncCustomerCard(item.customer.id, supplier, customers, milkEntries, payments);
+                      await CardSyncService.shareCardViaWhatsApp(item.customer, supplier, lang);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={styles.liveCardBtnText}>🔗 {lang === 'hi' ? 'लाइव कार्ड' : 'Live Card'}</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.whatsappBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleShareWhatsAppSummary(item);
+                    }}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={styles.whatsappBtnText}>💬 {lang === 'hi' ? 'व्हाट्सएप' : 'WhatsApp'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>🔍</Text>
+                <Text style={styles.emptyText}>
+                  No customers found matching "{searchQuery}".
+                </Text>
+                <TouchableOpacity
+                  style={styles.resetSearchBtn}
+                  onPress={() => { setSearchQuery(''); setDueFilter('all'); }}
+                >
+                  <Text style={styles.resetSearchText}>Show All Customers</Text>
+                </TouchableOpacity>
+              </View>
+            }
+          />
+        ) : (
+          <FlatList
+            data={filteredSubSummaries}
+            keyExtractor={item => item.subSupplier.id}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="always"
+            keyboardDismissMode="on-drag"
+            initialNumToRender={15}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            renderItem={({ item, index }) => (
+              <View style={styles.dueCard}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={styles.custIndex}>{index + 1}.</Text>
+                      <Text style={styles.custName} numberOfLines={1}>{item.subSupplier.name}</Text>
+                      <View style={[styles.viewReportBadge, { backgroundColor: '#ffedd5', borderColor: '#fed7aa' }]}>
+                        <Text style={[styles.viewReportBadgeText, { color: '#c2410c' }]}>
+                          📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.custPhone}>📞 {item.subSupplier.phone}</Text>
+                    {item.subSupplier.address ? (
+                      <Text style={styles.custAddress} numberOfLines={1}>📍 {item.subSupplier.address}</Text>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.netDueBox}>
+                    <Text style={styles.netDueLabel}>{lang === 'hi' ? 'देय बाकी' : 'Net Payable'}</Text>
+                    <Text style={[styles.netDueAmount, item.netPayable > 0 ? { color: '#ea580c' } : styles.dueGreen]}>
+                      ₹{item.netPayable.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Quantities delivered & Days count */}
+                <View style={styles.qtyRow}>
+                  {item.totalLitresCow > 0 && (
+                    <Text style={styles.qtyTag}>🐄 Cow: {item.totalLitresCow.toFixed(1)} L</Text>
+                  )}
+                  {item.totalLitresBuffalo > 0 && (
+                    <Text style={styles.qtyTag}>🐃 Buffalo: {item.totalLitresBuffalo.toFixed(1)} L</Text>
+                  )}
+                  <Text style={[styles.qtyTagTotal, { color: '#ea580c', backgroundColor: '#ffedd5' }]}>
+                    Total: {item.totalLitres.toFixed(1)} L
+                  </Text>
+                  <Text style={styles.qtyTagDays}>
+                    📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'}
+                  </Text>
+                </View>
+
+                {/* Billed vs Paid */}
+                <View style={styles.finRow}>
+                  <Text style={styles.finText}>{lang === 'hi' ? 'कुल खरीद' : 'Purchased'}: ₹{item.totalAmountBilled.toFixed(0)}</Text>
+                  <Text style={styles.finText}>{lang === 'hi' ? 'भुगतान किया' : 'Paid'}: ₹{item.totalPaid.toFixed(0)}</Text>
+                  <Text style={[styles.cardTapPromptText, { color: '#ea580c' }]}>
+                    ₹{item.subSupplier.ratePerLitre}/L
+                  </Text>
+                </View>
+
+                {/* Action Buttons: Record Payment & WhatsApp Statement */}
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={[styles.payBtn, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}
+                    onPress={() => openSubPayModal(item.subSupplier)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={[styles.payBtnText, { color: '#c2410c' }]}>
+                      💳 {lang === 'hi' ? 'भुगतान दर्ज' : 'Record Pay'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.whatsappBtn}
+                    onPress={() => handleShareSubWhatsAppSummary(item)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  >
+                    <Text style={styles.whatsappBtnText}>
+                      💬 {lang === 'hi' ? 'व्हाट्सएप' : 'WhatsApp'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyEmoji}>🚜</Text>
+                <Text style={styles.emptyText}>
+                  {lang === 'hi' ? 'कोई विक्रेता / किसान नहीं मिला।' : 'No matching vendors / farmers found.'}
                 </Text>
               </View>
-
-              {/* Billed vs Paid */}
-              <View style={styles.finRow}>
-                <Text style={styles.finText}>Billed: ₹{item.totalAmountBilled.toFixed(0)}</Text>
-                <Text style={styles.finText}>Paid: ₹{item.totalPaid.toFixed(0)}</Text>
-                <Text style={styles.cardTapPromptText}>Tap for full report ›</Text>
-              </View>
-
-              {/* Action Buttons: Record Payment, Live Card & WhatsApp Summary */}
-              <View style={styles.cardActions}>
-                <TouchableOpacity
-                  style={styles.payBtn}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    openPayModal(item.customer);
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text style={styles.payBtnText}>💵 {lang === 'hi' ? 'भुगतान दर्ज' : 'Record Pay'}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.liveCardBtn}
-                  onPress={async (e) => {
-                    e.stopPropagation();
-                    await CardSyncService.syncCustomerCard(item.customer.id, supplier, customers, milkEntries, payments);
-                    await CardSyncService.shareCardViaWhatsApp(item.customer, supplier, lang);
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text style={styles.liveCardBtnText}>🔗 {lang === 'hi' ? 'लाइव कार्ड' : 'Live Card'}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.whatsappBtn}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleShareWhatsAppSummary(item);
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                >
-                  <Text style={styles.whatsappBtnText}>💬 {lang === 'hi' ? 'व्हाट्सएप' : 'WhatsApp'}</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>🔍</Text>
-              <Text style={styles.emptyText}>
-                No customers found matching "{searchQuery}".
-              </Text>
-              <TouchableOpacity
-                style={styles.resetSearchBtn}
-                onPress={() => { setSearchQuery(''); setDueFilter('all'); }}
-              >
-                <Text style={styles.resetSearchText}>Show All Customers</Text>
-              </TouchableOpacity>
-            </View>
-          }
-        />
+            }
+          />
+        )}
 
         {/* ------------------------------------------------------------- */}
         {/* DETAILED DATE-WISE CUSTOMER DELIVERY & MISSING REPORT MODAL */}
@@ -1510,6 +1893,158 @@ export const DueReportsScreen = () => {
         </Modal>
 
         {/* ------------------------------------------------------------- */}
+        {/* RECORD SUB-SUPPLIER PAYMENT MODAL (OUTWARD PAYMENT) */}
+        {/* ------------------------------------------------------------- */}
+        <Modal visible={subPaymentModalVisible} animationType="slide" transparent onRequestClose={() => setSubPaymentModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                💳 {lang === 'hi' ? 'सप्लायर को भुगतान करें' : 'Pay Vendor / Farmer'}
+              </Text>
+              <Text style={[styles.payModalCustomerName, { color: '#ea580c' }]}>
+                {paymentSubSupplier?.name}
+              </Text>
+
+              {/* Sub-Supplier total due summary */}
+              {paymentSubSupplier && (() => {
+                const summary = allSubDueSummaries.find(s => s.subSupplier.id === paymentSubSupplier.id);
+                return (
+                  <View style={styles.payModalInfoRow}>
+                    <View style={styles.payModalInfoBox}>
+                      <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'कुल खरीद' : 'Purchased'}</Text>
+                      <Text style={styles.payModalInfoValue}>₹{(summary?.totalAmountBilled || 0).toFixed(0)}</Text>
+                    </View>
+                    <View style={styles.payModalInfoBox}>
+                      <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'दिया गया' : 'Paid'}</Text>
+                      <Text style={[styles.payModalInfoValue, { color: '#16a34a' }]}>₹{(summary?.totalPaid || 0).toFixed(0)}</Text>
+                    </View>
+                    <View style={styles.payModalInfoBox}>
+                      <Text style={styles.payModalInfoLabel}>{lang === 'hi' ? 'देना बाकी' : 'Payable'}</Text>
+                      <Text style={[styles.payModalInfoValue, { color: '#ea580c' }]}>₹{(summary?.netPayable || 0).toFixed(0)}</Text>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* Payment Date Selector */}
+              <Text style={styles.label}>{lang === 'hi' ? 'भुगतान तारीख *' : 'Payment Date *'}</Text>
+              <View style={styles.payDateContainer}>
+                <TouchableOpacity
+                  style={styles.payDateStepperBtn}
+                  onPress={() => setSubPayDate(prev => shiftDisplayDate(prev, -1))}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.payDateStepperBtnText}>◀</Text>
+                </TouchableOpacity>
+
+                <View style={styles.payDateCard}>
+                  <View style={styles.payDateCardContent}>
+                    <Text style={styles.payDateValueText}>{subPayDate}</Text>
+                    {subPayDate === todayDisplayStr && (
+                      <View style={styles.payTodayTag}>
+                        <Text style={styles.payTodayTagText}>{lang === 'hi' ? 'आज' : 'Today'}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.payDateStepperBtn}
+                  onPress={() => setSubPayDate(prev => shiftDisplayDate(prev, 1))}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.payDateStepperBtnText}>▶</Text>
+                </TouchableOpacity>
+
+                {subPayDate !== todayDisplayStr && (
+                  <TouchableOpacity
+                    style={styles.payTodayResetBtn}
+                    onPress={() => setSubPayDate(todayDisplayStr)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.payTodayResetText}>{lang === 'hi' ? 'आज' : 'Today'}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <Text style={styles.label}>{lang === 'hi' ? 'भुगतान राशि (₹) *' : 'Amount Paid (₹) *'}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={lang === 'hi' ? 'उदा. 1000' : 'e.g. 1000'}
+                placeholderTextColor="#94a3b8"
+                keyboardType="numeric"
+                value={subPayAmount}
+                onChangeText={setSubPayAmount}
+              />
+
+              {/* Quick Amount Suggestion Pills */}
+              {paymentSubSupplier && (() => {
+                const summary = allSubDueSummaries.find(s => s.subSupplier.id === paymentSubSupplier.id);
+                const payableAmt = summary ? summary.netPayable : 0;
+                if (payableAmt <= 0) return null;
+                return (
+                  <View style={styles.quickPayRow}>
+                    <TouchableOpacity
+                      style={styles.quickPayPill}
+                      onPress={() => setSubPayAmount(payableAmt.toFixed(0))}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.quickPayPillText}>
+                        {lang === 'hi' ? 'पूरा हिसाब' : 'Full'}: ₹{payableAmt.toFixed(0)}
+                      </Text>
+                    </TouchableOpacity>
+                    {payableAmt >= 1000 && (
+                      <TouchableOpacity
+                        style={styles.quickPayPill}
+                        onPress={() => setSubPayAmount(Math.round(payableAmt / 2).toString())}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.quickPayPillText}>
+                          {lang === 'hi' ? 'आधा' : 'Half'}: ₹{Math.round(payableAmt / 2)}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })()}
+
+              <Text style={styles.label}>{lang === 'hi' ? 'टिप्पणी / विवरण' : 'Notes'}</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={lang === 'hi' ? 'उदा. नकद दिया / UPI ट्रांसफर' : 'e.g. Cash / Bank Transfer'}
+                placeholderTextColor="#94a3b8"
+                value={subPayNotes}
+                onChangeText={setSubPayNotes}
+              />
+
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setSubPaymentModalVisible(false)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalCancelBtnText}>{t.cancel}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { backgroundColor: '#ea580c' }]}
+                  onPress={handleSaveSubPayment}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalSaveBtnText}>
+                    {lang === 'hi' ? 'भुगतान सहेजें' : 'Save Payment'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ------------------------------------------------------------- */}
         {/* PAYMENT HISTORY MODAL */}
         {/* ------------------------------------------------------------- */}
         <Modal
@@ -1849,6 +2384,36 @@ export const DueReportsScreen = () => {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, padding: 14 },
+  partyToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 8
+  },
+  partyToggleBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8
+  },
+  partyToggleBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2
+  },
+  partyToggleText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  partyToggleTextActive: {
+    color: '#0f172a',
+    fontWeight: '700'
+  },
   modeTabs: {
     flexDirection: 'row',
     backgroundColor: '#e2e8f0',
@@ -2772,5 +3337,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#0284c7'
+  },
+  calendarMiniIcon: {
+    fontSize: 13,
+    marginLeft: 4
+  },
+  quickPayRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 8
+  },
+  quickPayPill: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16
+  },
+  quickPayPillText: {
+    fontSize: 12,
+    color: '#0284c7',
+    fontWeight: '700'
   }
 });

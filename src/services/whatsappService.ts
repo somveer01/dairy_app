@@ -1,5 +1,5 @@
 import * as Linking from 'expo-linking';
-import { CustomerDueSummary } from '../types';
+import { CustomerDueSummary, SubSupplierDueSummary } from '../types';
 import { formatToDisplayDate } from '../utils/dateUtils';
 
 export interface CustomerDateAuditItem {
@@ -128,6 +128,47 @@ Please review and clear the pending balance. Thank you!`;
     auditItems: CustomerDateAuditItem[]
   ): Promise<void> {
     const message = this.formatItemizedDatewiseBill(summary, supplierBusinessName, periodLabel, auditItems);
+    await this.openWhatsAppWithText(phone, message);
+  },
+
+  formatSubSupplierStatement(
+    summary: SubSupplierDueSummary,
+    supplierBusinessName: string,
+    periodLabel: string
+  ): string {
+    const { subSupplier, totalLitresCow, totalLitresBuffalo, totalLitres, totalAmountBilled, totalPaid, netPayable } = summary;
+
+    let itemsText = '';
+    if (summary.deliveredDaysCount !== undefined && summary.totalRangeDays !== undefined && summary.totalRangeDays > 0) {
+      itemsText += `\n📅 Milk Inward Days: ${summary.deliveredDaysCount} / ${summary.totalRangeDays} Days`;
+    } else if (summary.deliveredDaysCount !== undefined && summary.deliveredDaysCount > 0) {
+      itemsText += `\n📅 Milk Inward Days: ${summary.deliveredDaysCount} Days`;
+    }
+
+    if (totalLitresCow > 0) itemsText += `\n🐄 Cow Milk: ${totalLitresCow.toFixed(1)} L`;
+    if (totalLitresBuffalo > 0) itemsText += `\n🐃 Buffalo Milk: ${totalLitresBuffalo.toFixed(1)} L`;
+    if (totalLitresCow > 0 && totalLitresBuffalo > 0) itemsText += `\n🥛 Total Milk: ${totalLitres.toFixed(1)} L`;
+
+    return `🌾 *दूध खरीद हिसाब / Milk Purchase Statement*
+🥛 *${supplierBusinessName}*
+-----------------------------
+👤 Vendor/Farmer: *${subSupplier.name}*
+📅 Period: ${periodLabel}${itemsText}
+💰 Total Milk Amount: ₹${totalAmountBilled.toFixed(2)}
+💵 Payment Made: ₹${totalPaid.toFixed(2)}
+-----------------------------
+⚖️ *Pending Balance Payable: ₹${netPayable.toFixed(2)}*
+-----------------------------
+Thank you for your milk supply! 🙏`;
+  },
+
+  async sendSubSupplierStatementViaWhatsApp(
+    phone: string,
+    summary: SubSupplierDueSummary,
+    supplierBusinessName: string,
+    periodLabel: string
+  ): Promise<void> {
+    const message = this.formatSubSupplierStatement(summary, supplierBusinessName, periodLabel);
     await this.openWhatsAppWithText(phone, message);
   },
 
