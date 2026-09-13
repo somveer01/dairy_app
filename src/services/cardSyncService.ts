@@ -38,7 +38,13 @@ export interface CustomerCardData {
 export const CardSyncService = {
   getCardUrl(supplierId: string, customerId: string, isSupplierView = false): string {
     const cleanSuppId = supplierId || 'supp_1';
-    const base = `https://somveer01.github.io/dairy_app/card.html?s=${encodeURIComponent(cleanSuppId)}&c=${encodeURIComponent(customerId)}`;
+    let baseOrigin = 'https://somveer01.github.io/dairy_app';
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+      if (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) {
+        baseOrigin = window.location.origin;
+      }
+    }
+    const base = `${baseOrigin}/card.html?s=${encodeURIComponent(cleanSuppId)}&c=${encodeURIComponent(customerId)}`;
     return isSupplierView ? `${base}&role=supplier` : base;
   },
 

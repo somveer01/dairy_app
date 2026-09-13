@@ -1078,11 +1078,19 @@ export const CustomerListScreen = () => {
 
                 <TouchableOpacity
                   style={styles.viewCardBtn}
-                  onPress={async () => {
-                    await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                  onPress={() => {
+                    // Sync customer card in background
+                    CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
                     const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true);
                     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                      window.location.href = url;
+                      try {
+                        const win = window.open(url, '_blank');
+                        if (!win || win.closed || typeof win.closed === 'undefined') {
+                          window.location.href = url;
+                        }
+                      } catch (e) {
+                        window.location.href = url;
+                      }
                     } else {
                       Linking.openURL(url);
                     }

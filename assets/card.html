@@ -703,9 +703,10 @@
 
     <!-- Loading Skeleton Screen -->
     <div id="loadingOverlay" class="loading-overlay">
-      <div class="spinner"></div>
+      <div class="spinner" id="loadingSpinner"></div>
       <div style="font-weight: 700; color: #475569;" id="loadingText">दूध कार्ड लोड हो रहा है...</div>
-      <div style="font-size: 12px; color: #94a3b8;">Loading Live Milk Card...</div>
+      <div style="font-size: 12px; color: #94a3b8;" id="loadingSubText">Loading Live Milk Card...</div>
+      <button id="retryBtn" onclick="fetchCardData()" style="display:none; margin-top:14px; background:#0284c7; color:#fff; border:none; padding:8px 18px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:13px;">🔄 पुनः प्रयास करें / Retry</button>
     </div>
 
     <!-- Top Brand Header -->
@@ -987,15 +988,48 @@
       const savedS = localStorage.getItem('dairy_card_s');
       const savedC = localStorage.getItem('dairy_card_c');
       if (savedS && savedC) {
-        window.location.replace(`card.html?s=${encodeURIComponent(savedS)}&c=${encodeURIComponent(savedC)}`);
+        supplierId = savedS;
+        customerId = savedC;
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', `card.html?s=${encodeURIComponent(savedS)}&c=${encodeURIComponent(savedC)}`);
+        }
+      }
+    }
+
+    // Instant offline cache restore for 0-delay display
+    const cacheKey = `dairy_card_cache_${supplierId}_${customerId}`;
+    if (supplierId && customerId) {
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const parsed = JSON.parse(cachedRaw);
+          if (parsed && !parsed.isDeleted) {
+            cardData = parsed;
+            const overlay = document.getElementById('loadingOverlay');
+            if (overlay) overlay.style.display = 'none';
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading card cache:', e);
       }
     }
 
     // Register Service Worker for PWA Add to Home Screen support
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').then((reg) => {
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
           console.log('SW registered for Milk Card PWA:', reg.scope);
+          reg.update();
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  newWorker.postMessage({ action: 'skipWaiting' });
+                }
+              });
+            }
+          });
         }).catch((err) => {
           console.warn('SW registration error:', err);
         });
@@ -1184,29 +1218,47 @@
 
     async function fetchCardData() {
       if (!supplierId || !customerId) {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) spinner.style.display = 'none';
         document.getElementById('loadingText').innerText = 'कार्ड लिंक अमान्य है / Invalid Card Link';
         return;
       }
 
+      const retryBtn = document.getElementById('retryBtn');
+      if (retryBtn) retryBtn.style.display = 'none';
+
       try {
         const url = `${FIREBASE_RTDB_BASE}/cards/${encodeURIComponent(supplierId)}/${encodeURIComponent(customerId)}.json`;
         const res = await fetch(url);
-        if (!res.ok) throw new Error('Network error');
+        if (!res.ok) throw new Error('Network error ' + res.status);
         const data = await res.json();
 
         if (!data || data.isDeleted) {
-          const spinner = document.getElementById('loadingSpinner');
-          if (spinner) spinner.style.display = 'none';
-          document.getElementById('loadingText').innerText = 'यह डिजिटल दूध कार्ड हटा दिया गया है या निष्क्रिय है।\nThis milk card has been deleted or deactivated.';
+          if (!cardData) {
+            const spinner = document.getElementById('loadingSpinner');
+            if (spinner) spinner.style.display = 'none';
+            document.getElementById('loadingText').innerText = 'यह डिजिटल दूध कार्ड हटा दिया गया है या निष्क्रिय है।\nThis milk card has been deleted or deactivated.';
+          }
           return;
         }
 
         cardData = data;
-        document.getElementById('loadingOverlay').style.display = 'none';
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.style.display = 'none';
         renderAll();
       } catch (err) {
         console.warn('Fetch card error:', err);
-        document.getElementById('loadingText').innerText = 'कनेक्शन त्रुटि। कृपया पुनः प्रयास करें।';
+        if (cardData) {
+          // If we already have card data from cache, don't show the error overlay!
+          const syncTxt = document.getElementById('lastSyncText');
+          if (syncTxt) syncTxt.innerText = (currentLang === 'hi' ? 'ऑफलाइन सुरक्षित' : 'Offline Saved');
+          return;
+        }
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) spinner.style.display = 'none';
+        document.getElementById('loadingText').innerText = 'कनेक्शन त्रुटि। कृपया इंटरनेट चालू रखें या पुनः प्रयास करें।\nConnection error. Please check network.';
+        if (retryBtn) retryBtn.style.display = 'inline-block';
       }
     }
 

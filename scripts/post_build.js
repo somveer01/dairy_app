@@ -167,6 +167,36 @@ self.addEventListener('fetch', (e) => {
 
   // For HTML navigation requests: Cache-first with background network revalidation (Stale-While-Revalidate)
   if (e.request.mode === 'navigate' || e.request.headers.get('accept')?.includes('text/html')) {
+    // STANDALONE PAGE 1: card.html (Digital Milk Card for Customers & Suppliers)
+    if (url.pathname.includes('card.html')) {
+      e.respondWith(
+        caches.match('/dairy_app/card.html').then((cached) => {
+          const networkFetch = fetch(e.request)
+            .then((res) => {
+              if (res && res.status === 200) {
+                const clone = res.clone();
+                caches.open(CACHE_NAME).then(c => c.put('/dairy_app/card.html', clone));
+              }
+              return res;
+            })
+            .catch(() => cached);
+          return cached || networkFetch;
+        })
+      );
+      return;
+    }
+
+    // STANDALONE PAGE 2: training.html (Interactive Dairy Guide)
+    if (url.pathname.includes('training.html')) {
+      e.respondWith(
+        caches.match('/dairy_app/training.html').then((cached) => {
+          return cached || fetch(e.request);
+        })
+      );
+      return;
+    }
+
+    // MAIN APP NAVIGATION: Fallback to /dairy_app/index.html
     e.respondWith(
       caches.match('/dairy_app/index.html').then((cached) => {
         const networkFetch = fetch(e.request)
