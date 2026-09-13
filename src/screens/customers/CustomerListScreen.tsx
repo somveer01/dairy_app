@@ -1354,7 +1354,7 @@ export const CustomerListScreen = () => {
                     style={styles.viewCardBtn}
                     onPress={() => {
                       CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
-                      const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true);
+                      const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true, 'customer');
                       if (Platform.OS === 'web' && typeof window !== 'undefined') {
                         try {
                           const win = window.open(url, '_blank');
@@ -1470,7 +1470,7 @@ export const CustomerListScreen = () => {
                     style={styles.viewCardBtn}
                     onPress={async () => {
                       await CardSyncService.syncSubSupplierCard(sub.id, supplier, subSuppliers, milkInwardEntries, subSupplierPayments);
-                      const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', sub.id, true);
+                      const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', sub.id, true, 'vendor');
                       if (Platform.OS === 'web' && typeof window !== 'undefined') {
                         try {
                           const win = window.open(url, '_blank');

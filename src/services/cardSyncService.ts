@@ -30,13 +30,19 @@ export interface CustomerCardData {
   milkType: string;
   ratePerLitre: number;
   defaultLitres: number;
+  partyType?: 'customer' | 'vendor';
   entries: Record<string, CardEntryItem[]>;
   payments: CardPaymentItem[];
   lastUpdated: number;
 }
 
 export const CardSyncService = {
-  getCardUrl(supplierId: string, customerId: string, isSupplierView = false): string {
+  getCardUrl(
+    supplierId: string,
+    customerId: string,
+    isSupplierView = false,
+    partyType: 'customer' | 'vendor' = 'customer'
+  ): string {
     const cleanSuppId = supplierId || 'supp_1';
     let baseOrigin = 'https://somveer01.github.io/dairy_app';
     if (typeof window !== 'undefined' && window.location && window.location.origin) {
@@ -44,19 +50,20 @@ export const CardSyncService = {
         baseOrigin = window.location.origin;
       }
     }
-    const base = `${baseOrigin}/card.html?s=${encodeURIComponent(cleanSuppId)}&c=${encodeURIComponent(customerId)}`;
-    return isSupplierView ? `${base}&role=supplier` : base;
+    let base = `${baseOrigin}/card.html?s=${encodeURIComponent(cleanSuppId)}&c=${encodeURIComponent(customerId)}&type=${partyType}`;
+    if (isSupplierView) base += '&role=supplier';
+    return base;
   },
 
   async shareCardViaWhatsApp(customer: Customer, supplier: Supplier | null, lang: 'hi' | 'en' = 'hi'): Promise<void> {
     const suppId = supplier?.id || 'supp_1';
     const dairyName = supplier?.businessName || 'डेयरी फ़ार्म';
-    const cardUrl = this.getCardUrl(suppId, customer.id);
+    const cardUrl = this.getCardUrl(suppId, customer.id, false, 'customer');
 
     let cleanPhone = customer.phone.replace(/\D/g, '');
     if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
 
-    const msgHi = `🥛 *${dairyName}*
+    const msgHi = `🥛 *${dairyName}* — 👤 *ग्राहक डिजिटल दूध कार्ड (Customer Card)*
 
 नमस्ते ${customer.name} जी! 🙏
 
@@ -69,7 +76,7 @@ export const CardSyncService = {
 
 धन्यवाद! — ${dairyName}`;
 
-    const msgEn = `🥛 *${dairyName}*
+    const msgEn = `🥛 *${dairyName}* — 👤 *Customer Digital Milk Card*
 
 Hello ${customer.name}! 🙏
 
@@ -92,12 +99,12 @@ Thank you! — ${dairyName}`;
   async shareSubSupplierCardViaWhatsApp(subSupplier: SubSupplier, supplier: Supplier | null, lang: 'hi' | 'en' = 'hi'): Promise<void> {
     const suppId = supplier?.id || 'supp_1';
     const dairyName = supplier?.businessName || 'डेयरी फ़ार्म';
-    const cardUrl = this.getCardUrl(suppId, subSupplier.id);
+    const cardUrl = this.getCardUrl(suppId, subSupplier.id, false, 'vendor');
 
     let cleanPhone = subSupplier.phone.replace(/\D/g, '');
     if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
 
-    const msgHi = `🥛 *${dairyName}*
+    const msgHi = `🥛 *${dairyName}* — 🌾 *दूध विक्रेता / किसान ऑनलाइन कार्ड (Vendor Card)*
 
 नमस्ते ${subSupplier.name} जी! 🙏
 
@@ -106,11 +113,11 @@ Thank you! — ${dairyName}`;
 
 👉 ${cardUrl}
 
-• आप जब चाहें इस लिंक को खोलकर रोज़ का दिया गया दूध, भाव, भुगतान और अपना बकाया हिसाब देख सकते हैं।
+• आप जब चाहें इस लिंक को खोलकर रोज़ का दिया गया दूध, भाव, प्राप्त भुगतान और अपना बकाया हिसाब देख सकते हैं।
 
 धन्यवाद! — ${dairyName}`;
 
-    const msgEn = `🥛 *${dairyName}*
+    const msgEn = `🥛 *${dairyName}* — 🌾 *Vendor / Farmer Digital Milk Card*
 
 Hello ${subSupplier.name}! 🙏
 
@@ -199,6 +206,7 @@ Thank you! — ${dairyName}`;
         milkType: customer.milkType,
         ratePerLitre: customer.ratePerLitre,
         defaultLitres: customer.defaultLitres,
+        partyType: 'customer',
         entries: entriesMap,
         payments: paymentsList,
         lastUpdated: Date.now()
@@ -269,6 +277,7 @@ Thank you! — ${dairyName}`;
         milkType: sub.milkType,
         ratePerLitre: sub.ratePerLitre,
         defaultLitres: sub.defaultLitres,
+        partyType: 'vendor',
         entries: entriesMap,
         payments: paymentsList,
         lastUpdated: Date.now()
