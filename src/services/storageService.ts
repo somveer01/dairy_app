@@ -621,6 +621,40 @@ export const StorageService = {
     this.triggerAutoSync();
   },
 
+  async saveSubSuppliersBatch(newSubSuppliers: SubSupplier[]): Promise<void> {
+    if (newSubSuppliers.length === 0) return;
+    const targetSupplierId = newSubSuppliers[0].supplierId;
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, targetSupplierId);
+    const raw = await this.getRawSubSuppliers(targetSupplierId);
+    const map = new Map<string, SubSupplier>();
+
+    raw.forEach(s => map.set(s.id, s));
+    newSubSuppliers.forEach(s => {
+      map.set(s.id, {
+        ...s,
+        updatedAt: Date.now(),
+        isDeleted: false
+      });
+    });
+
+    const merged = Array.from(map.values());
+    await AsyncStorage.setItem(key, JSON.stringify(merged));
+    this.triggerAutoSync();
+  },
+
+  async updateSubSupplierName(id: string, newName: string, supplierId?: string): Promise<void> {
+    const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
+    const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, sId);
+    const raw = await this.getRawSubSuppliers(sId);
+    const existing = raw.find(s => s.id === id);
+    if (existing) {
+      existing.name = newName.trim();
+      existing.updatedAt = Date.now();
+      await AsyncStorage.setItem(key, JSON.stringify(raw));
+      this.triggerAutoSync();
+    }
+  },
+
   async deleteSubSupplier(id: string, supplierId?: string): Promise<void> {
     const sId = supplierId || currentSupplierId || (await this.getSupplier())?.id;
     const key = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, sId);

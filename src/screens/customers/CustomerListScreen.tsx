@@ -527,6 +527,16 @@ export const CustomerListScreen = () => {
       setContactModalVisible(true);
       setContactSearch('');
 
+      if (directoryMode === 'subSuppliers') {
+        setImportMilkType('cow');
+        setImportLitres('5.0');
+        setImportRate('45');
+      } else {
+        setImportMilkType('cow');
+        setImportLitres('2.0');
+        setImportRate('55');
+      }
+
       if (Platform.OS === 'web') {
         // On Web/PWA, browser security does not allow silent background contact reading.
         // Instead, we let the user trigger the Android/browser contact picker or upload a VCF file.
@@ -548,11 +558,18 @@ export const CustomerListScreen = () => {
           return;
         }
 
-        const existingPhoneMap = new Map<string, Customer>();
-        customers.forEach(c => {
-          const norm = normalizePhoneDigits(c.phone);
-          if (norm) existingPhoneMap.set(norm, c);
-        });
+        const existingPhoneMap = new Map<string, { id: string; name: string }>();
+        if (directoryMode === 'subSuppliers') {
+          subSuppliers.forEach(s => {
+            const norm = normalizePhoneDigits(s.phone);
+            if (norm) existingPhoneMap.set(norm, { id: s.id, name: s.name });
+          });
+        } else {
+          customers.forEach(c => {
+            const norm = normalizePhoneDigits(c.phone);
+            if (norm) existingPhoneMap.set(norm, { id: c.id, name: c.name });
+          });
+        }
         const validList: PhoneContactItem[] = [];
 
         // 2. Fetch contacts across all accounts (Device, SIM, Google, Outlook)
@@ -676,7 +693,7 @@ export const CustomerListScreen = () => {
 
   // Helper to process single picked contact (from Web or Native)
   const handleSinglePickedContact = async (rawName: string, rawPhone: string) => {
-    const pName = (rawName || 'New Customer').trim();
+    const pName = (rawName || (directoryMode === 'subSuppliers' ? 'New Vendor' : 'New Customer')).trim();
     const pPhone = normalizePhoneDigits(rawPhone);
 
     if (!pPhone || pPhone.length < 10) {
@@ -684,6 +701,57 @@ export const CustomerListScreen = () => {
         lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
         lang === 'hi' ? 'इस संपर्क में कोई 10 अंकों का मान्य मोबाइल नंबर नहीं मिला।' : 'No valid 10-digit mobile number found in this contact.'
       );
+      return;
+    }
+
+    if (directoryMode === 'subSuppliers') {
+      const existingMatch = subSuppliers.find(sub => normalizePhoneDigits(sub.phone) === pPhone);
+      if (existingMatch) {
+        if (existingMatch.name.trim().toLowerCase() !== pName.toLowerCase()) {
+          // Phone number exists, but name is different! Prompt to update name
+          confirmAction(
+            lang === 'hi' ? 'विक्रेता का नाम अपडेट करें?' : 'Update Vendor Name?',
+            lang === 'hi'
+              ? `यह मोबाइल नंबर (${pPhone}) पहले से विक्रेता "${existingMatch.name}" के नाम पर दर्ज है।\n\nक्या आप फोनबुक अनुसार नाम बदलकर "${pName}" करना चाहते हैं?`
+              : `This phone number (${pPhone}) is already registered under vendor "${existingMatch.name}".\n\nDo you want to update the vendor's name to "${pName}" as saved in your phonebook?`,
+            async () => {
+              await StorageService.updateSubSupplierName(existingMatch.id, pName);
+              await refreshSubSuppliers();
+              setContactModalVisible(false);
+              showAlert(
+                lang === 'hi' ? '✓ नाम अपडेट हुआ' : '✓ Name Updated',
+                lang === 'hi'
+                  ? `विक्रेता का नाम बदलकर "${pName}" कर दिया गया है।`
+                  : `Vendor name updated to "${pName}".`
+              );
+            },
+            lang === 'hi' ? 'नाम अपडेट करें' : 'Update Name',
+            lang === 'hi' ? 'रद्द करें' : 'Cancel',
+            false
+          );
+          return;
+        } else {
+          showAlert(
+            lang === 'hi' ? 'विक्रेता पहले से मौजूद है' : 'Vendor Already Exists',
+            lang === 'hi'
+              ? `विक्रेता "${existingMatch.name}" (${pPhone}) पहले से आपकी विक्रेता लिस्ट में दर्ज है।`
+              : `Vendor "${existingMatch.name}" (${pPhone}) is already present in your vendor list.`
+          );
+          return;
+        }
+      }
+
+      // Phone number is new vendor - open sub-supplier modal pre-filled
+      setContactModalVisible(false);
+      setEditingSubSupplier(null);
+      setSubName(pName);
+      setSubPhone(pPhone);
+      setSubAddress('');
+      setSubMilkType(importMilkType);
+      setSubDefaultLitres(importLitres || '5.0');
+      setSubRatePerLitre(importRate || (importMilkType === 'cow' ? '45' : '60'));
+      setSubNotes('Picked from phone contacts');
+      setSubModalVisible(true);
       return;
     }
 
@@ -732,9 +800,9 @@ export const CustomerListScreen = () => {
     setName(pName);
     setPhone(pPhone);
     setAddress('');
-    setMilkType('cow');
-    setDefaultLitres('2.0');
-    setRatePerLitre('55');
+    setMilkType(importMilkType);
+    setDefaultLitres(importLitres || '2.0');
+    setRatePerLitre(importRate || (importMilkType === 'cow' ? '55' : '70'));
     setNotes('Picked from phone contacts');
     setModalVisible(true);
   };
@@ -804,11 +872,18 @@ export const CustomerListScreen = () => {
         setIsLoadingContacts(true);
         const selected = await (navigator as any).contacts.select(['name', 'tel', 'email'], { multiple: true });
         if (selected && selected.length > 0) {
-          const existingCustMap = new Map<string, Customer>();
-          customers.forEach(c => {
-            const norm = normalizePhoneDigits(c.phone);
-            if (norm) existingCustMap.set(norm, c);
-          });
+          const existingCustMap = new Map<string, { id: string; name: string }>();
+          if (directoryMode === 'subSuppliers') {
+            subSuppliers.forEach(s => {
+              const norm = normalizePhoneDigits(s.phone);
+              if (norm) existingCustMap.set(norm, { id: s.id, name: s.name });
+            });
+          } else {
+            customers.forEach(c => {
+              const norm = normalizePhoneDigits(c.phone);
+              if (norm) existingCustMap.set(norm, { id: c.id, name: c.name });
+            });
+          }
           const newItems: PhoneContactItem[] = [];
 
           selected.forEach((c: any, index: number) => {
@@ -890,11 +965,18 @@ export const CustomerListScreen = () => {
           setIsLoadingContacts(true);
           const text = await file.text();
           const parsedContacts: PhoneContactItem[] = [];
-          const existingCustMap = new Map<string, Customer>();
-          customers.forEach(c => {
-            const norm = normalizePhoneDigits(c.phone);
-            if (norm) existingCustMap.set(norm, c);
-          });
+          const existingCustMap = new Map<string, { id: string; name: string }>();
+          if (directoryMode === 'subSuppliers') {
+            subSuppliers.forEach(s => {
+              const norm = normalizePhoneDigits(s.phone);
+              if (norm) existingCustMap.set(norm, { id: s.id, name: s.name });
+            });
+          } else {
+            customers.forEach(c => {
+              const norm = normalizePhoneDigits(c.phone);
+              if (norm) existingCustMap.set(norm, { id: c.id, name: c.name });
+            });
+          }
           const cards = text.split(/BEGIN:VCARD/i);
 
           cards.forEach((card: string, idx: number) => {
@@ -1005,12 +1087,61 @@ export const CustomerListScreen = () => {
       return;
     }
 
-    const litres = parseFloat(importLitres) || 2.0;
-    const rate = parseFloat(importRate) || (importMilkType === 'cow' ? 55 : 70);
+    const defaultRate = directoryMode === 'subSuppliers'
+      ? (importMilkType === 'cow' ? 45 : 60)
+      : (importMilkType === 'cow' ? 55 : 70);
+    const litres = parseFloat(importLitres) || (directoryMode === 'subSuppliers' ? 5.0 : 2.0);
+    const rate = parseFloat(importRate) || defaultRate;
 
     const nameUpdates = selected.filter(c => c.isNameUpdate && c.existingCustomerId);
     const newContacts = selected.filter(c => !c.isNameUpdate);
 
+    if (directoryMode === 'subSuppliers') {
+      // 1. Process Name Updates for Sub-Suppliers
+      for (const updateItem of nameUpdates) {
+        if (updateItem.existingCustomerId && updateItem.name.trim()) {
+          await StorageService.updateSubSupplierName(updateItem.existingCustomerId, updateItem.name.trim(), supplier?.id);
+        }
+      }
+
+      // 2. Process New Vendors / Sub-Suppliers
+      if (newContacts.length > 0) {
+        const newVendors: SubSupplier[] = newContacts.map((c, idx) => ({
+          id: `sub_contact_${Date.now()}_${idx}`,
+          supplierId: supplier?.id || 'supp_default',
+          name: c.name.trim(),
+          phone: c.phone || '9876500000',
+          address: c.email ? `Email: ${c.email}` : '',
+          milkType: importMilkType,
+          defaultLitres: litres,
+          ratePerLitre: rate,
+          notes: c.email ? `Google contact: ${c.email}` : 'Imported from phone contacts',
+          createdAt: Date.now()
+        }));
+        await StorageService.saveSubSuppliersBatch(newVendors);
+      }
+
+      await refreshSubSuppliers();
+      setContactModalVisible(false);
+
+      let msgHi = '';
+      let msgEn = '';
+      if (newContacts.length > 0 && nameUpdates.length > 0) {
+        msgHi = `✓ ${newContacts.length} नए विक्रेता / किसान जोड़े गए और ${nameUpdates.length} विक्रेताओं के नाम अपडेट किए गए!`;
+        msgEn = `✓ Added ${newContacts.length} new vendor(s) and updated ${nameUpdates.length} vendor name(s)!`;
+      } else if (nameUpdates.length > 0) {
+        msgHi = `✓ ${nameUpdates.length} विक्रेताओं के नाम फोनबुक अनुसार सफलतापूर्वक अपडेट किए गए!`;
+        msgEn = `✓ Successfully updated ${nameUpdates.length} vendor name(s) from phonebook!`;
+      } else {
+        msgHi = `✓ ${newContacts.length} नए विक्रेता / किसान सफलतापूर्वक जोड़े गए!`;
+        msgEn = `✓ Successfully imported ${newContacts.length} new vendor(s) from contacts!`;
+      }
+
+      showAlert(lang === 'hi' ? 'सफलता (Success)' : 'Success', lang === 'hi' ? msgHi : msgEn);
+      return;
+    }
+
+    // Customer Mode:
     // 1. Process Name Updates
     for (const updateItem of nameUpdates) {
       if (updateItem.existingCustomerId && updateItem.name.trim()) {
@@ -1396,9 +1527,15 @@ export const CustomerListScreen = () => {
             <View style={styles.contactModalContent}>
               <View style={styles.contactModalHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.contactModalTitle}>Import Contacts</Text>
+                  <Text style={styles.contactModalTitle}>
+                    {directoryMode === 'subSuppliers'
+                      ? (lang === 'hi' ? '🚜 विक्रेता / किसान संपर्क आयात' : '🚜 Import Vendor Contacts')
+                      : (lang === 'hi' ? '👥 ग्राहक संपर्क आयात' : '👥 Import Customer Contacts')}
+                  </Text>
                   <Text style={styles.contactModalSubtitle}>
-                    Select from Phone, Google & SIM contacts
+                    {directoryMode === 'subSuppliers'
+                      ? (lang === 'hi' ? 'फोन, गूगल और सिम से दूध विक्रेता / किसान चुनें' : 'Select milk vendors / farmers from Phone, Google & SIM')
+                      : (lang === 'hi' ? 'फोन, गूगल और सिम से ग्राहक चुनें' : 'Select customers from Phone, Google & SIM contacts')}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -1419,7 +1556,9 @@ export const CustomerListScreen = () => {
                     activeOpacity={0.8}
                   >
                     <Text style={styles.webBatchPickerBtnText}>
-                      📱 Select from Phone Contacts (Pick Multiple)
+                      📱 {directoryMode === 'subSuppliers'
+                        ? (lang === 'hi' ? 'फोन से विक्रेता चुनें (Pick Multiple)' : 'Select Vendors from Contacts (Multiple)')
+                        : (lang === 'hi' ? 'फोन से ग्राहक चुनें (Pick Multiple)' : 'Select from Phone Contacts (Pick Multiple)')}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1431,7 +1570,7 @@ export const CustomerListScreen = () => {
                     activeOpacity={0.8}
                   >
                     <Text style={styles.nativePickerBtnText}>
-                      👤 Pick Single Contact
+                      👤 {lang === 'hi' ? '1 संपर्क चुनें' : 'Pick Single Contact'}
                     </Text>
                   </TouchableOpacity>
 
@@ -1453,30 +1592,46 @@ export const CustomerListScreen = () => {
               <View style={styles.tipBanner}>
                 <Text style={styles.tipText}>
                   {Platform.OS === 'web'
-                    ? '💡 Android Permission Note: Browser/PWA apps ask for contact permission when you tap "Select from Phone Contacts" above. Tap the button to select contacts from your phone!'
+                    ? (lang === 'hi'
+                      ? '💡 सुझाव: ऊपर "फोन से संपर्क चुनें" दबाकर अपने फोन के संपर्क खोलें और चुनकर सीधा आयात करें।'
+                      : '💡 Android Permission Note: Browser/PWA apps ask for contact permission when you tap "Select from Phone Contacts" above. Tap the button to select contacts from your phone!')
                     : '💡 Tip: To show Google/Gmail contacts, ensure "Contacts Sync" is toggled ON in Android Settings → Accounts → Google.'}
                 </Text>
               </View>
 
               {/* Default settings for imported contacts */}
               <View style={styles.importPresetBox}>
-                <Text style={styles.presetHeading}>Set Default Milk for Selected:</Text>
+                <Text style={styles.presetHeading}>
+                  {directoryMode === 'subSuppliers'
+                    ? (lang === 'hi' ? 'चुने हुए विक्रेताओं के लिए डिफ़ॉल्ट खरीद सेट करें:' : 'Set Default Purchase for Selected:')
+                    : (lang === 'hi' ? 'चुने हुए ग्राहकों के लिए डिफ़ॉल्ट बिक्री सेट करें:' : 'Set Default Milk for Selected:')}
+                </Text>
                 <View style={styles.presetRow}>
                   <TouchableOpacity
                     style={[styles.presetTypeBtn, importMilkType === 'cow' && styles.presetCowActive]}
-                    onPress={() => { setImportMilkType('cow'); setImportRate('55'); }}
+                    onPress={() => {
+                      setImportMilkType('cow');
+                      setImportRate(directoryMode === 'subSuppliers' ? '45' : '55');
+                    }}
                   >
-                    <Text style={styles.presetTypeText}>🐄 Cow (₹55)</Text>
+                    <Text style={styles.presetTypeText}>
+                      🐄 Cow (₹{directoryMode === 'subSuppliers' ? '45' : '55'})
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.presetTypeBtn, importMilkType === 'buffalo' && styles.presetBuffaloActive]}
-                    onPress={() => { setImportMilkType('buffalo'); setImportRate('70'); }}
+                    onPress={() => {
+                      setImportMilkType('buffalo');
+                      setImportRate(directoryMode === 'subSuppliers' ? '60' : '70');
+                    }}
                   >
-                    <Text style={styles.presetTypeText}>🐃 Buffalo (₹70)</Text>
+                    <Text style={styles.presetTypeText}>
+                      🐃 Buffalo (₹{directoryMode === 'subSuppliers' ? '60' : '70'})
+                    </Text>
                   </TouchableOpacity>
                   <TextInput
                     style={styles.presetQtyInput}
-                    placeholder="2.0L"
+                    placeholder={directoryMode === 'subSuppliers' ? "5.0L" : "2.0L"}
                     placeholderTextColor="#94a3b8"
                     keyboardType="decimal-pad"
                     value={importLitres}
@@ -1840,7 +1995,18 @@ export const CustomerListScreen = () => {
                 onChangeText={setName}
               />
 
-              <Text style={styles.label}>{t.phoneNumberReq || 'Phone Number (+91) *'}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 4 }}>
+                <Text style={styles.label}>{t.phoneNumberReq || 'Phone Number (+91) *'}</Text>
+                <TouchableOpacity
+                  onPress={handlePickFromNativeContacts}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3, paddingHorizontal: 8, backgroundColor: '#e0f2fe', borderWidth: 1, borderColor: '#bae6fd', borderRadius: 6 }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 11, color: '#0284c7', fontWeight: 'bold' }}>
+                    📱 {lang === 'hi' ? 'फोन से चुनें' : 'Pick Contact'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={styles.modalInput}
                 placeholder="10-digit mobile"
@@ -1961,9 +2127,20 @@ export const CustomerListScreen = () => {
                 onChangeText={setSubName}
               />
 
-              <Text style={styles.label}>
-                {lang === 'hi' ? 'मोबाइल नंबर (+91) *' : 'Phone Number (+91) *'}
-              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 4 }}>
+                <Text style={styles.label}>
+                  {lang === 'hi' ? 'मोबाइल नंबर (+91) *' : 'Phone Number (+91) *'}
+                </Text>
+                <TouchableOpacity
+                  onPress={handlePickFromNativeContacts}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3, paddingHorizontal: 8, backgroundColor: '#ffedd5', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 6 }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 11, color: '#ea580c', fontWeight: 'bold' }}>
+                    📱 {lang === 'hi' ? 'फोन से चुनें' : 'Pick Contact'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={styles.modalInput}
                 placeholder="10-digit mobile"
