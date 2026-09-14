@@ -11,8 +11,11 @@
 - **Live Deployment**: Hosted on GitHub Pages at `https://somveer01.github.io/dairy_app`.
 - **Database & Sync**:
   - **Local Persistence**: Permanent SQLite / HTML5 LocalStorage via `StorageService`.
-  - **Cloud Sync**: Firebase Realtime Database / Cloud Firestore (`firebaseService.ts`).
+  - **Cloud Sync**: Firebase Realtime Database / Cloud Firestore (`firebaseService.ts`, `cardSyncService.ts`).
   - **Offline First**: Works 100% offline without internet connection.
+- **Dual Business Operations**:
+  1. **Outward Distribution**: Delivering milk to retail customers and collecting receivables.
+  2. **Inward Procurement**: Procuring raw milk from dairy farmers/vendors and paying payables.
 
 ---
 
@@ -20,35 +23,44 @@
 
 ### Screens (`src/screens/`):
 - `register/DailyRegisterScreen.tsx`:
-  - Daily milk delivery register.
+  - Daily milk delivery and inward procurement register.
   - Sessions: `Morning (सुबह)`, `Evening (शाम)`, `Custom (अन्य समय)`.
-  - Date Navigator in `DD-MMM-YYYY` format with day-stepper.
+  - Date Navigator in `DD-MMM-YYYY` format with day-stepper and tap-to-pick calendar modal.
+  - Dual Party Mode: Outward customer delivery vs Inward vendor procurement.
   - Quick action: `+ Mark All (सभी का मार्क करें)`.
-  - Direct 1-tap delete (`🗑️`) and edit (`✏️`) on recorded customer rows.
+  - Direct 1-tap delete (`🗑️`) and edit (`✏️`) on recorded rows.
   - Quick payment status toggling (`✓ Paid` / `₹ Unpaid`).
 - `reports/DueReportsScreen.tsx`:
   - Due & billing report with 3 filter modes:
     1. `📅 Month-wise (मासिक)`: Calendar month picker with year switcher and bilingual month tiles.
     2. `🗓️ Custom Range (कस्टम तारीख)`: Single horizontal row with From Date card, To Date card, and Search button (`singleRowDateBar`), plus presets (`1-15`, `16-End`, `Full Month`).
     3. `♾️ All Dues (कुल बकाया)`: Lifetime outstanding due summary.
-  - Interactive Tap-To-Pick Calendar Modal for selecting From Date & To Date.
-  - Displays **Delivered Days vs Total Range Days** (e.g. `📅 8/30 Days` / `8/30 दिन`) on both summary banner and individual customer cards.
+  - Dual Party Switcher: `💰 ग्राहक बकाया (Customer Receivables)` vs `🌾 विक्रेता देय (Vendor Payables)`.
+  - Displays **Delivered/Supplied Days vs Total Range Days** (e.g. `📅 8/30 Days` / `8/30 दिन`) on both summary banner and individual party cards.
   - **Date-Wise Customer Delivery Report Modal**: Sequential day-by-day audit (delivers, missing days, Cow/Buffalo breakdowns, and quick "+ Log Milk" button).
-  - One-tap WhatsApp billing and payment recording modal.
+  - **Date-Wise Vendor Inward Report Modal**: Sequential day-by-day inward audit (supplied vs missing days, litres, rates, and quick "+ Log Milk" button).
+  - One-tap WhatsApp billing and payment recording modals for both Customers and Vendors.
 - `customers/CustomerListScreen.tsx`:
-  - Customer directory.
-  - Top layout: Dedicated Search bar on row 1; `📱 Contacts` and `+ Add Customer` action buttons on row 2.
-  - Add / Edit / Delete customer modal with bilingual labels.
+  - Customer & Vendor directory.
+  - Switcher: `👤 ग्राहक (Customers)` vs `🚜 विक्रेता / किसान (Vendors/Farmers)`.
+  - Top layout: Dedicated Search bar on row 1; `📱 Contacts` and `+ Add Customer/Vendor` action buttons on row 2.
+  - Add / Edit / Delete modals with bilingual labels.
+  - 1-tap action buttons on each party card:
+    - `🔗 कार्ड शेयर (Share Card)`: Generates online card URL and shares via WhatsApp.
+    - `👁️ देखें (View Card)`: Opens live digital card in browser in 0ms with correct `partyType`.
+    - `✏️ संपादन (Edit)`: Profile and rate management.
 - `dashboard/DashboardScreen.tsx`:
-  - Home dashboard with real-time KPI metrics (Today's milk volume, Today's billed ₹, Total outstanding dues).
+  - Home dashboard with real-time KPI metrics:
+    - Today's milk sold (Outward L & ₹) vs Today's milk purchased (Inward L & ₹).
+    - Net stock volume (Surplus / Deficit).
+    - Total customer dues (Receivables) vs Total vendor payables (Payables).
   - PWA Install card for mobile browser visitors.
   - Quick action shortcuts.
 - `settings/SettingsScreen.tsx`:
-  - Dairy farm profile setup (Business name, owner name).
-  - Database management (Data reset, remove customers, inspect stored entries).
-  - Share backup (JSON export) and Cloud sync.
+  - Dairy farm profile setup (Business name, owner name, phone, PIN).
+  - Database management (JSON export backup, JSON restore backup, inspect stored entries).
+  - Cloud Sync (Firebase status and manual trigger).
   - Language toggle: `English (EN)` vs `हिंदी (Hindi)` with instant re-render.
-  *(Note: Staff training video has been removed to prevent mobile browser crashes).*
 - `auth/LoginScreen.tsx`:
   - Supplier login and account authentication with password visibility toggle.
 
@@ -57,11 +69,21 @@
 - `InstallAppModal.tsx`: Step-by-step visual installation instructions for Android (Chrome) and iOS (Safari).
 
 ### Services (`src/services/`):
-- `storageService.ts`: Local permanent data layer (Customers, MilkEntries, Payments, Settings).
+- `storageService.ts`: Local permanent data layer (Customers, SubSuppliers, MilkEntries, MilkInwardEntries, Payments, SubSupplierPayments, Settings).
+- `cardSyncService.ts`: Realtime Database payload packaging, URL generation with `partyType` parameter, and card synchronization (`cards/${supplierId}/${partyId}`).
 - `whatsappService.ts`: Formats and triggers WhatsApp messages:
-  - `sendBillViaWhatsApp`: Summary due bill with customer name, period, delivered days, cow/buffalo volume, billed amount, and net due.
-  - `sendItemizedDatewiseBillViaWhatsApp`: Detailed day-by-day delivery log with delivery checkmarks, missing day alerts, and rate breakdown.
+  - `sendBillViaWhatsApp`: Summary due bill for customers.
+  - `sendItemizedDatewiseBillViaWhatsApp`: Detailed day-by-day delivery log for customers.
+  - `sendSubSupplierStatementViaWhatsApp`: Summary payable statement for vendors.
+  - `sendItemizedDatewiseSubSupplierBillViaWhatsApp`: Detailed day-by-day inward log for vendors.
 - `firebaseService.ts`: Firebase cloud sync for multi-device backup and restore.
+
+### Standalone Online Digital Milk Card (`assets/card.html`):
+- Hosted at `https://somveer01.github.io/dairy_app/card.html?s=...&c=...&type=...`.
+- 2-Tier Party Detection: URL parameter `&type=vendor` / `&type=customer` (0ms instantaneous) + RTDB payload field `partyType`.
+- Visual Differentiator:
+  - **Customer**: `👤 ग्राहक डिजिटल दूध कार्ड (Retail Milk Buyer)`, Blue theme, selling rate, net due.
+  - **Vendor**: `🚜 दूध विक्रेता / किसान कार्ड (Milk Seller to Dairy)`, Amber/Harvest theme, purchase rate, net payable.
 
 ### Core Utilities & Context:
 - `utils/dateUtils.ts`:

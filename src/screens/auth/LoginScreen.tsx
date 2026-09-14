@@ -22,7 +22,10 @@ import { auth } from '../../config/firebase';
 import {
   RecaptchaVerifier,
   signInWithPhoneNumber,
-  ConfirmationResult
+  ConfirmationResult,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 
 interface LoginScreenProps {
@@ -149,6 +152,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
     return null;
   };
 
+  // Helper: Synchronize Supplier account into Firebase Authentication (so phone appears in Firebase Console -> Auth -> Users)
+  const syncWithFirebaseAuthUser = async (phone: string, rawPassword?: string, displayName?: string) => {
+    try {
+      const authEmail = `${phone}@dairyapp.local`;
+      const authPass = rawPassword && rawPassword.length >= 6 ? rawPassword : `dairy_${phone}#`;
+
+      try {
+        // Try sign-in first
+        await signInWithEmailAndPassword(auth, authEmail, authPass);
+      } catch (signInErr: any) {
+        if (signInErr?.code === 'auth/user-not-found' || signInErr?.code === 'auth/invalid-credential') {
+          // If user does not exist in Firebase Auth, create the user record
+          const credential = await createUserWithEmailAndPassword(auth, authEmail, authPass);
+          if (displayName && credential?.user) {
+            try {
+              await updateProfile(credential.user, { displayName });
+            } catch {}
+          }
+        }
+      }
+    } catch (e) {
+      // Non-blocking: background attempt so app flow never breaks
+      console.warn('Firebase Auth user registration note:', e);
+    }
+  };
+
   // --- METHOD 1: Password Login ---
   const handlePasswordLogin = async () => {
     Keyboard.dismiss();
@@ -191,6 +220,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
         }
 
         // If no password was ever set, or password matched, proceed
+        syncWithFirebaseAuthUser(cleanPhone, passwordInput, checkRes.profile.name);
         await processSupplierAuth(cleanPhone, passwordInput);
         return;
       }
@@ -360,6 +390,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
       const migrationRes = await StorageService.migrateLegacyDataToSupplier(newSupplier);
       await AutoSyncService.runSync(newSupplier);
 
+      // Register / update user in Firebase Auth so phone is visible in Firebase Console -> Auth -> Users
+      syncWithFirebaseAuthUser(cleanPhone, password, `${owner} (${business})`);
+
       setIsCheckingCloud(false);
       setSupplier(newSupplier);
 
@@ -461,6 +494,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
       await StorageService.saveSupplier(newSupplier);
       await StorageService.migrateLegacyDataToSupplier(newSupplier);
       await AutoSyncService.runSync(newSupplier);
+
+      syncWithFirebaseAuthUser(cleanPhone, finalPassword, `${finalOwner} (${finalBusiness})`);
 
       setIsCheckingCloud(false);
       setDairySetupVisible(false);
