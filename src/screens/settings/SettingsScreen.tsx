@@ -34,6 +34,9 @@ export const SettingsScreen = () => {
     refreshMilkEntries,
     payments,
     refreshPayments,
+    refreshSubSuppliers,
+    refreshMilkInwardEntries,
+    refreshSubSupplierPayments,
     openAuthModal,
     requireAuth
   } = useApp();
@@ -157,6 +160,9 @@ export const SettingsScreen = () => {
           await refreshCustomers();
           await refreshMilkEntries();
           await refreshPayments();
+          await refreshSubSuppliers();
+          await refreshMilkInwardEntries();
+          await refreshSubSupplierPayments();
           setIsSyncingCloud(false);
           showAlert(res.success ? 'रिस्टोर सफल (Restored)' : 'त्रुटि (Error)', res.message);
         },

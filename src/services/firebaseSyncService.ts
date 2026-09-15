@@ -1,6 +1,6 @@
 import { ref, set, get, update } from 'firebase/database';
 import { rtdb } from '../config/firebase';
-import { Customer, MilkEntry, Payment, Supplier } from '../types';
+import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
 import { StorageService } from './storageService';
 
 // Helper to prevent infinite spinner with a timeout
@@ -65,7 +65,14 @@ export const FirebaseSyncService = {
     exists: boolean;
     supplierId?: string;
     profile?: Supplier;
-    dataCounts?: { customers: number; entries: number; payments: number };
+    dataCounts?: {
+      customers: number;
+      entries: number;
+      payments: number;
+      subSuppliers?: number;
+      milkInwardEntries?: number;
+      subSupplierPayments?: number;
+    };
     cloudData?: any;
   }> {
     const cleanPhone = normalizePhoneDigits(phone);
@@ -85,12 +92,22 @@ export const FirebaseSyncService = {
         const custCount = data.customers ? Object.keys(data.customers).length : 0;
         const entryCount = data.milkEntries ? Object.keys(data.milkEntries).length : 0;
         const payCount = data.payments ? Object.keys(data.payments).length : 0;
+        const subSuppCount = data.subSuppliers ? Object.keys(data.subSuppliers).length : 0;
+        const inwardCount = data.milkInwardEntries ? Object.keys(data.milkInwardEntries).length : 0;
+        const subPayCount = data.subSupplierPayments ? Object.keys(data.subSupplierPayments).length : 0;
 
         return {
           exists: true,
           supplierId: standardId,
           profile,
-          dataCounts: { customers: custCount, entries: entryCount, payments: payCount },
+          dataCounts: {
+            customers: custCount,
+            entries: entryCount,
+            payments: payCount,
+            subSuppliers: subSuppCount,
+            milkInwardEntries: inwardCount,
+            subSupplierPayments: subPayCount
+          },
           cloudData: data
         };
       }
@@ -108,12 +125,22 @@ export const FirebaseSyncService = {
             const custCount = sData.customers ? Object.keys(sData.customers).length : 0;
             const entryCount = sData.milkEntries ? Object.keys(sData.milkEntries).length : 0;
             const payCount = sData.payments ? Object.keys(sData.payments).length : 0;
+            const subSuppCount = sData.subSuppliers ? Object.keys(sData.subSuppliers).length : 0;
+            const inwardCount = sData.milkInwardEntries ? Object.keys(sData.milkInwardEntries).length : 0;
+            const subPayCount = sData.subSupplierPayments ? Object.keys(sData.subSupplierPayments).length : 0;
 
             return {
               exists: true,
               supplierId: sId,
               profile,
-              dataCounts: { customers: custCount, entries: entryCount, payments: payCount },
+              dataCounts: {
+                customers: custCount,
+                entries: entryCount,
+                payments: payCount,
+                subSuppliers: subSuppCount,
+                milkInwardEntries: inwardCount,
+                subSupplierPayments: subPayCount
+              },
               cloudData: sData
             };
           }
@@ -131,7 +158,14 @@ export const FirebaseSyncService = {
   async twoWaySync(supplier: Supplier): Promise<{
     success: boolean;
     message: string;
-    counts?: { customers: number; entries: number; payments: number };
+    counts?: {
+      customers: number;
+      entries: number;
+      payments: number;
+      subSuppliers: number;
+      milkInwardEntries: number;
+      subSupplierPayments: number;
+    };
   }> {
     try {
       if (!supplier || !supplier.id) {
@@ -148,11 +182,26 @@ export const FirebaseSyncService = {
       const cloudCustMap: Record<string, Customer> = cloudData.customers || {};
       const cloudEntryMap: Record<string, MilkEntry> = cloudData.milkEntries || {};
       const cloudPayMap: Record<string, Payment> = cloudData.payments || {};
+      const cloudSubSuppMap: Record<string, SubSupplier> = cloudData.subSuppliers || {};
+      const cloudInwardMap: Record<string, MilkInwardEntry> = cloudData.milkInwardEntries || {};
+      const cloudSubPayMap: Record<string, SubSupplierPayment> = cloudData.subSupplierPayments || {};
 
       // 2. Fetch Local Data
-      const localCusts = await StorageService.getRawCustomers(supplierId);
-      const localEntries = await StorageService.getRawMilkEntries(supplierId);
-      const localPays = await StorageService.getRawPayments(supplierId);
+      const [
+        localCusts,
+        localEntries,
+        localPays,
+        localSubSupps,
+        localInward,
+        localSubPays
+      ] = await Promise.all([
+        StorageService.getRawCustomers(supplierId),
+        StorageService.getRawMilkEntries(supplierId),
+        StorageService.getRawPayments(supplierId),
+        StorageService.getRawSubSuppliers(supplierId),
+        StorageService.getRawMilkInwardEntries(supplierId),
+        StorageService.getRawSubSupplierPayments(supplierId)
+      ]);
 
       // 3. Merge Customers (Union by ID, newer updatedAt wins, propagate isDeleted)
       const mergedCustMap: Record<string, Customer> = { ...cloudCustMap };
@@ -193,14 +242,64 @@ export const FirebaseSyncService = {
         }
       });
 
-      // 6. Save Merged Data Locally
+      // 6. Merge Sub-Suppliers (Vendors/Farmers)
+      const mergedSubSuppMap: Record<string, SubSupplier> = { ...cloudSubSuppMap };
+      localSubSupps.forEach(ls => {
+        const cs = mergedSubSuppMap[ls.id];
+        if (!cs) {
+          mergedSubSuppMap[ls.id] = ls;
+        } else {
+          const localTime = ls.updatedAt || ls.createdAt || 0;
+          const cloudTime = cs.updatedAt || cs.createdAt || 0;
+          mergedSubSuppMap[ls.id] = localTime >= cloudTime ? ls : cs;
+        }
+      });
+
+      // 7. Merge Milk Inward Entries (Procurement from Sub-Suppliers)
+      const mergedInwardMap: Record<string, MilkInwardEntry> = { ...cloudInwardMap };
+      localInward.forEach(li => {
+        const ci = mergedInwardMap[li.id];
+        if (!ci) {
+          mergedInwardMap[li.id] = li;
+        } else {
+          const localTime = li.updatedAt || li.createdAt || 0;
+          const cloudTime = ci.updatedAt || ci.createdAt || 0;
+          mergedInwardMap[li.id] = localTime >= cloudTime ? li : ci;
+        }
+      });
+
+      // 8. Merge Sub-Supplier Payments (Outward Payments to Vendors)
+      const mergedSubPayMap: Record<string, SubSupplierPayment> = { ...cloudSubPayMap };
+      localSubPays.forEach(lsp => {
+        const csp = mergedSubPayMap[lsp.id];
+        if (!csp) {
+          mergedSubPayMap[lsp.id] = lsp;
+        } else {
+          const localTime = lsp.updatedAt || lsp.createdAt || 0;
+          const cloudTime = csp.updatedAt || csp.createdAt || 0;
+          mergedSubPayMap[lsp.id] = localTime >= cloudTime ? lsp : csp;
+        }
+      });
+
+      // 9. Save Merged Data Locally (both customers and sub-suppliers)
       const mergedCustList = Object.values(mergedCustMap);
       const mergedEntryList = Object.values(mergedEntryMap);
       const mergedPayList = Object.values(mergedPayMap);
+      const mergedSubSuppList = Object.values(mergedSubSuppMap);
+      const mergedInwardList = Object.values(mergedInwardMap);
+      const mergedSubPayList = Object.values(mergedSubPayMap);
 
-      await StorageService.setAllDataForSupplier(supplierId, mergedCustList, mergedEntryList, mergedPayList);
+      await StorageService.setAllDataForSupplier(
+        supplierId,
+        mergedCustList,
+        mergedEntryList,
+        mergedPayList,
+        mergedSubSuppList,
+        mergedInwardList,
+        mergedSubPayList
+      );
 
-      // 7. Push Merged Data to Firebase Cloud
+      // 10. Push Complete Merged Bundle to Firebase Cloud
       const uploadBundle = {
         profile: {
           ...supplier,
@@ -208,7 +307,10 @@ export const FirebaseSyncService = {
         },
         customers: mergedCustMap,
         milkEntries: mergedEntryMap,
-        payments: mergedPayMap
+        payments: mergedPayMap,
+        subSuppliers: mergedSubSuppMap,
+        milkInwardEntries: mergedInwardMap,
+        subSupplierPayments: mergedSubPayMap
       };
 
       await withTimeout(set(supplierRef, uploadBundle), 15000, 'Cloud write timed out');
@@ -216,11 +318,21 @@ export const FirebaseSyncService = {
       const activeCusts = mergedCustList.filter(c => !c.isDeleted).length;
       const activeEntries = mergedEntryList.filter(e => !e.isDeleted).length;
       const activePays = mergedPayList.filter(p => !p.isDeleted).length;
+      const activeSubSupps = mergedSubSuppList.filter(s => !s.isDeleted).length;
+      const activeInward = mergedInwardList.filter(i => !i.isDeleted).length;
+      const activeSubPays = mergedSubPayList.filter(sp => !sp.isDeleted).length;
 
       return {
         success: true,
-        message: `Synced successfully! (${activeCusts} customers, ${activeEntries} entries, ${activePays} payments)`,
-        counts: { customers: activeCusts, entries: activeEntries, payments: activePays }
+        message: `Synced successfully! (${activeCusts} customers, ${activeEntries} entries, ${activePays} payments, ${activeSubSupps} vendors, ${activeInward} inwards, ${activeSubPays} vendor payments)`,
+        counts: {
+          customers: activeCusts,
+          entries: activeEntries,
+          payments: activePays,
+          subSuppliers: activeSubSupps,
+          milkInwardEntries: activeInward,
+          subSupplierPayments: activeSubPays
+        }
       };
     } catch (error: any) {
       console.warn('Two-way sync error:', error);
@@ -240,7 +352,14 @@ export const FirebaseSyncService = {
   async downloadFromCloud(supplierId?: string): Promise<{
     success: boolean;
     message: string;
-    counts?: { customers: number; entries: number; payments: number };
+    counts?: {
+      customers: number;
+      entries: number;
+      payments: number;
+      subSuppliers: number;
+      milkInwardEntries: number;
+      subSupplierPayments: number;
+    };
   }> {
     try {
       if (!supplierId) {
@@ -265,24 +384,44 @@ export const FirebaseSyncService = {
       const cloudCustMap = cloudData.customers || {};
       const cloudEntryMap = cloudData.milkEntries || {};
       const cloudPayMap = cloudData.payments || {};
+      const cloudSubSuppMap = cloudData.subSuppliers || {};
+      const cloudInwardMap = cloudData.milkInwardEntries || {};
+      const cloudSubPayMap = cloudData.subSupplierPayments || {};
 
       const cloudCustomers: Customer[] = Array.isArray(cloudCustMap) ? cloudCustMap : Object.values(cloudCustMap);
       const cloudEntries: MilkEntry[] = Array.isArray(cloudEntryMap) ? cloudEntryMap : Object.values(cloudEntryMap);
       const cloudPayments: Payment[] = Array.isArray(cloudPayMap) ? cloudPayMap : Object.values(cloudPayMap);
+      const cloudSubSuppliers: SubSupplier[] = Array.isArray(cloudSubSuppMap) ? cloudSubSuppMap : Object.values(cloudSubSuppMap);
+      const cloudInwardEntries: MilkInwardEntry[] = Array.isArray(cloudInwardMap) ? cloudInwardMap : Object.values(cloudInwardMap);
+      const cloudSubPayments: SubSupplierPayment[] = Array.isArray(cloudSubPayMap) ? cloudSubPayMap : Object.values(cloudSubPayMap);
 
-      await StorageService.setAllDataForSupplier(supplierId, cloudCustomers, cloudEntries, cloudPayments);
+      await StorageService.setAllDataForSupplier(
+        supplierId,
+        cloudCustomers,
+        cloudEntries,
+        cloudPayments,
+        cloudSubSuppliers,
+        cloudInwardEntries,
+        cloudSubPayments
+      );
 
       const activeCustCount = cloudCustomers.filter(c => !c.isDeleted).length;
       const activeEntryCount = cloudEntries.filter(e => !e.isDeleted).length;
       const activePayCount = cloudPayments.filter(p => !p.isDeleted).length;
+      const activeSubSuppCount = cloudSubSuppliers.filter(s => !s.isDeleted).length;
+      const activeInwardCount = cloudInwardEntries.filter(i => !i.isDeleted).length;
+      const activeSubPayCount = cloudSubPayments.filter(p => !p.isDeleted).length;
 
       return {
         success: true,
-        message: `Restored successfully from Firebase Cloud!\n\n• ${activeCustCount} Customers\n• ${activeEntryCount} Milk Entries\n• ${activePayCount} Payments`,
+        message: `Restored successfully from Firebase Cloud!\n\n• ${activeCustCount} Customers\n• ${activeEntryCount} Milk Entries\n• ${activePayCount} Payments\n• ${activeSubSuppCount} Vendors / Farmers\n• ${activeInwardCount} Milk Inward Records\n• ${activeSubPayCount} Vendor Payments`,
         counts: {
           customers: activeCustCount,
           entries: activeEntryCount,
-          payments: activePayCount
+          payments: activePayCount,
+          subSuppliers: activeSubSuppCount,
+          milkInwardEntries: activeInwardCount,
+          subSupplierPayments: activeSubPayCount
         }
       };
     } catch (error: any) {

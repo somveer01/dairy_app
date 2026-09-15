@@ -169,6 +169,78 @@ export const StorageService = {
           await AsyncStorage.setItem(scopedKey, JSON.stringify(targetList));
         }
       }
+
+      // 4. Check legacy sub-suppliers (vendors/farmers)
+      const legacySubData = await AsyncStorage.getItem(STORAGE_KEYS.SUB_SUPPLIERS);
+      if (legacySubData) {
+        const parsedSubs: SubSupplier[] = JSON.parse(legacySubData);
+        if (Array.isArray(parsedSubs) && parsedSubs.length > 0) {
+          const scopedKey = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, targetSupplierId);
+          const existingScoped = await AsyncStorage.getItem(scopedKey);
+          let targetList: SubSupplier[] = existingScoped ? JSON.parse(existingScoped) : [];
+
+          parsedSubs.forEach(s => {
+            if (!targetList.some(ts => ts.id === s.id)) {
+              targetList.push({
+                ...s,
+                supplierId: targetSupplierId,
+                updatedAt: s.updatedAt || Date.now()
+              });
+              totalMigrated++;
+            }
+          });
+
+          await AsyncStorage.setItem(scopedKey, JSON.stringify(targetList));
+        }
+      }
+
+      // 5. Check legacy milk inward entries
+      const legacyInwardData = await AsyncStorage.getItem(STORAGE_KEYS.MILK_INWARD_ENTRIES);
+      if (legacyInwardData) {
+        const parsedInward: MilkInwardEntry[] = JSON.parse(legacyInwardData);
+        if (Array.isArray(parsedInward) && parsedInward.length > 0) {
+          const scopedKey = getScopedKey(STORAGE_KEYS.MILK_INWARD_ENTRIES, targetSupplierId);
+          const existingScoped = await AsyncStorage.getItem(scopedKey);
+          let targetList: MilkInwardEntry[] = existingScoped ? JSON.parse(existingScoped) : [];
+
+          parsedInward.forEach(i => {
+            if (!targetList.some(ti => ti.id === i.id)) {
+              targetList.push({
+                ...i,
+                supplierId: targetSupplierId,
+                updatedAt: i.updatedAt || Date.now()
+              });
+              totalMigrated++;
+            }
+          });
+
+          await AsyncStorage.setItem(scopedKey, JSON.stringify(targetList));
+        }
+      }
+
+      // 6. Check legacy sub-supplier payments
+      const legacySubPayData = await AsyncStorage.getItem(STORAGE_KEYS.SUB_SUPPLIER_PAYMENTS);
+      if (legacySubPayData) {
+        const parsedSubPays: SubSupplierPayment[] = JSON.parse(legacySubPayData);
+        if (Array.isArray(parsedSubPays) && parsedSubPays.length > 0) {
+          const scopedKey = getScopedKey(STORAGE_KEYS.SUB_SUPPLIER_PAYMENTS, targetSupplierId);
+          const existingScoped = await AsyncStorage.getItem(scopedKey);
+          let targetList: SubSupplierPayment[] = existingScoped ? JSON.parse(existingScoped) : [];
+
+          parsedSubPays.forEach(sp => {
+            if (!targetList.some(tsp => tsp.id === sp.id)) {
+              targetList.push({
+                ...sp,
+                supplierId: targetSupplierId,
+                updatedAt: sp.updatedAt || Date.now()
+              });
+              totalMigrated++;
+            }
+          });
+
+          await AsyncStorage.setItem(scopedKey, JSON.stringify(targetList));
+        }
+      }
     } catch (e) {
       console.warn('Legacy data migration notice:', e);
     }
@@ -181,18 +253,36 @@ export const StorageService = {
     supplierId: string,
     customers: Customer[],
     entries: MilkEntry[],
-    payments: Payment[]
+    payments: Payment[],
+    subSuppliers?: SubSupplier[],
+    inwardEntries?: MilkInwardEntry[],
+    subPayments?: SubSupplierPayment[]
   ): Promise<void> {
     currentSupplierId = supplierId;
     const custKey = getScopedKey(STORAGE_KEYS.CUSTOMERS, supplierId);
     const entryKey = getScopedKey(STORAGE_KEYS.MILK_ENTRIES, supplierId);
     const payKey = getScopedKey(STORAGE_KEYS.PAYMENTS, supplierId);
 
-    await Promise.all([
+    const promises: Promise<any>[] = [
       AsyncStorage.setItem(custKey, JSON.stringify(customers)),
       AsyncStorage.setItem(entryKey, JSON.stringify(entries)),
       AsyncStorage.setItem(payKey, JSON.stringify(payments))
-    ]);
+    ];
+
+    if (subSuppliers !== undefined) {
+      const subKey = getScopedKey(STORAGE_KEYS.SUB_SUPPLIERS, supplierId);
+      promises.push(AsyncStorage.setItem(subKey, JSON.stringify(subSuppliers)));
+    }
+    if (inwardEntries !== undefined) {
+      const inKey = getScopedKey(STORAGE_KEYS.MILK_INWARD_ENTRIES, supplierId);
+      promises.push(AsyncStorage.setItem(inKey, JSON.stringify(inwardEntries)));
+    }
+    if (subPayments !== undefined) {
+      const subPayKey = getScopedKey(STORAGE_KEYS.SUB_SUPPLIER_PAYMENTS, supplierId);
+      promises.push(AsyncStorage.setItem(subPayKey, JSON.stringify(subPayments)));
+    }
+
+    await Promise.all(promises);
   },
 
   // Raw data access for sync engine (includes tombstones where isDeleted is true)

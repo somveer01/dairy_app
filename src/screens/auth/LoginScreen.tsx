@@ -441,11 +441,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
         setIsCheckingCloud(false);
         setSupplier(existingProfile);
 
+        const custsCount = syncRes.counts?.customers ?? checkRes.dataCounts?.customers ?? 0;
+        const vendorsCount = syncRes.counts?.subSuppliers ?? checkRes.dataCounts?.subSuppliers ?? 0;
+        const vendorTextHi = vendorsCount > 0 ? `, ${vendorsCount} विक्रेता/किसान` : '';
+        const vendorTextEn = vendorsCount > 0 ? `, ${vendorsCount} vendors` : '';
+
         showAlert(
           lang === 'hi' ? '✓ खाता सुरक्षित रूप से रिस्टोर हुआ' : '✓ Account Restored',
           lang === 'hi'
-            ? `स्वागत है ${existingProfile.name}! आपका डेटा (${syncRes.counts?.customers || checkRes.dataCounts?.customers || 0} ग्राहक) सुरक्षित रूप से रिस्टोर हो गया है।`
-            : `Welcome back ${existingProfile.name}! Your data (${syncRes.counts?.customers || checkRes.dataCounts?.customers || 0} customers) has been securely restored.`
+            ? `स्वागत है ${existingProfile.name}! आपका डेटा (${custsCount} ग्राहक${vendorTextHi}) सुरक्षित रूप से रिस्टोर हो गया है।`
+            : `Welcome back ${existingProfile.name}! Your data (${custsCount} customers${vendorTextEn}) has been securely restored.`
         );
         return;
       }
