@@ -2,6 +2,7 @@ import { ref, set, get, update } from 'firebase/database';
 import { rtdb } from '../config/firebase';
 import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
 import { StorageService } from './storageService';
+import { CardSyncService } from './cardSyncService';
 
 // Helper to prevent infinite spinner with a timeout
 const withTimeout = <T>(promise: Promise<T>, timeoutMs = 15000, errorMsg = 'Firebase request timed out'): Promise<T> => {
@@ -314,6 +315,11 @@ export const FirebaseSyncService = {
       };
 
       await withTimeout(set(supplierRef, uploadBundle), 15000, 'Cloud write timed out');
+      
+      // Asynchronously update all digital milk cards in RTDB (cards/${supplierId})
+      CardSyncService.syncAllCards(supplier, mergedCustList, mergedEntryList, mergedPayList).catch(err => {
+        console.warn('Post-sync card update notice:', err);
+      });
 
       const activeCusts = mergedCustList.filter(c => !c.isDeleted).length;
       const activeEntries = mergedEntryList.filter(e => !e.isDeleted).length;

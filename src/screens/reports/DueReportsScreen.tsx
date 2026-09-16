@@ -1025,6 +1025,11 @@ export const DueReportsScreen = () => {
         return;
       }
 
+      const isCustPacket = Boolean(
+        activeDetailSummary.customer.isPacketMilk ||
+        (activeDetailSummary.customer.milkType && activeDetailSummary.customer.milkType.startsWith('packet'))
+      );
+
       const newEntry: MilkEntry = {
         id: `entry_${quickEntryDate}_${quickEntrySession}_${activeDetailSummary.customer.id}_${Date.now()}`,
         supplierId: supplier?.id || 'supp_default',
@@ -1032,10 +1037,14 @@ export const DueReportsScreen = () => {
         customerName: activeDetailSummary.customer.name,
         date: quickEntryDate,
         session: quickEntrySession,
-        milkType: quickEntryMilkType,
+        milkType: isCustPacket ? activeDetailSummary.customer.milkType : quickEntryMilkType,
         quantityLitres: qty,
         ratePerLitre: r,
         amount: qty * r,
+        totalDayAmount: qty * r,
+        isPacketMilk: isCustPacket,
+        packetBrand: isCustPacket ? activeDetailSummary.customer.packetBrand : undefined,
+        packetVariant: isCustPacket ? activeDetailSummary.customer.packetVariant : undefined,
         isPaid: false,
         createdAt: Date.now(),
         updatedAt: Date.now()

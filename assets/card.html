@@ -1607,8 +1607,11 @@
 
       for (let day = 1; day <= daysInMonth; day++) {
         const dateKey = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const rawDayEntries = entriesMap[dateKey] || [];
-        const dayEntries = rawDayEntries.filter(e => !e.isDeleted);
+        let rawDayEntries = entriesMap[dateKey] || [];
+        if (rawDayEntries && typeof rawDayEntries === 'object' && !Array.isArray(rawDayEntries)) {
+          rawDayEntries = Object.values(rawDayEntries);
+        }
+        const dayEntries = Array.isArray(rawDayEntries) ? rawDayEntries.filter(e => e && !e.isDeleted) : [];
 
         let totalDayLitres = 0;
         let dayAmount = 0;
@@ -1676,7 +1679,11 @@
 
     function renderSummaryAndPayments(t, isCustomerPacket) {
       const entriesMap = cardData.entries || {};
-      const payments = (cardData.payments || []).filter(p => !p.isDeleted);
+      let rawPayments = cardData.payments || [];
+      if (rawPayments && typeof rawPayments === 'object' && !Array.isArray(rawPayments)) {
+        rawPayments = Object.values(rawPayments);
+      }
+      const payments = Array.isArray(rawPayments) ? rawPayments.filter(p => p && !p.isDeleted) : [];
 
       // Calculate totals for selected month & previous months
       let totalMonthLitres = 0;
@@ -1691,7 +1698,11 @@
       let allTimeDeliveries = 0;
 
       Object.keys(entriesMap).forEach(d => {
-        const dayEntries = (entriesMap[d] || []).filter(e => !e.isDeleted);
+        let rawDayEntries = entriesMap[d] || [];
+        if (rawDayEntries && typeof rawDayEntries === 'object' && !Array.isArray(rawDayEntries)) {
+          rawDayEntries = Object.values(rawDayEntries);
+        }
+        const dayEntries = Array.isArray(rawDayEntries) ? rawDayEntries.filter(e => e && !e.isDeleted) : [];
         dayEntries.forEach(e => {
           let addonTotal = 0;
           if (e.addons && Array.isArray(e.addons)) {
@@ -1848,7 +1859,11 @@
       document.getElementById('modalDayTitle').innerText = `📅 ${dateStr}`;
       const content = document.getElementById('modalDayContent');
 
-      if (!entries || entries.length === 0) {
+      if (entries && typeof entries === 'object' && !Array.isArray(entries)) {
+        entries = Object.values(entries);
+      }
+
+      if (!entries || !Array.isArray(entries) || entries.length === 0) {
         content.innerHTML = `
           <div style="text-align: center; padding: 16px 0;">
             <div style="font-size: 32px; margin-bottom: 6px;">⚪</div>
@@ -1878,10 +1893,14 @@
 
           let addonHtml = '';
           let entryAddonTotal = 0;
-          if (e.addons && Array.isArray(e.addons) && e.addons.length > 0) {
+          let rawAddons = e.addons;
+          if (rawAddons && typeof rawAddons === 'object' && !Array.isArray(rawAddons)) {
+            rawAddons = Object.values(rawAddons);
+          }
+          if (rawAddons && Array.isArray(rawAddons) && rawAddons.length > 0) {
             addonHtml = `<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
               <div style="font-size: 11px; font-weight: 700; color: #b45309; margin-bottom: 3px;">${t.extraProducts || 'अतिरिक्त डेयरी उत्पाद:'}</div>`;
-            e.addons.forEach(a => {
+            rawAddons.forEach(a => {
               const amt = Number(a.totalAmount) || 0;
               entryAddonTotal += amt;
               dayTotalAddonsAmt += amt;
