@@ -3,7 +3,7 @@ import { rtdb } from '../config/firebase';
 import { Supplier, SubscriptionInfo, SubscriptionPlanType, SubscriptionStatus } from '../types';
 import { formatToDisplayDate } from '../utils/dateUtils';
 
-export const ADMIN_PHONES = ['8721873433', '8840850515'];
+export const ADMIN_PHONES = ['8721873433'];
 export const DEFAULT_UPI_ID = '8721873433@upi';
 
 export interface PlanPricingItem {
