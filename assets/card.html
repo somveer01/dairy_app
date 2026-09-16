@@ -927,6 +927,10 @@
           <span id="labelPrevDue">पिछला बकाया:</span>
           <span class="summary-val" style="color: #ea580c;" id="valPrevDue">₹0.00</span>
         </div>
+        <div class="summary-row" id="rowDairyProducts" style="display: none;">
+          <span id="labelDairyProducts">🧀 डेयरी उत्पाद (पनीर/दही/घी):</span>
+          <span class="summary-val" style="color: #b45309;" id="valDairyProducts">₹0.00</span>
+        </div>
         <div class="summary-row">
           <span id="labelTotalBill">इस महीने का बिल:</span>
           <span class="summary-val" id="valTotalBill">₹0.00</span>
@@ -1012,6 +1016,14 @@
         summaryTitle: '📊 इस महीने का हिसाब',
         summaryRange: '01 से अंत तक',
         totalDelivered: 'कुल डिलीवर दूध:',
+        packetDelivered: 'कुल पैकेट दूध:',
+        dairyProductsBill: '🧀 डेयरी उत्पाद (पनीर/दही/घी/छाछ):',
+        packetRateLabel: 'पैकेट का भाव',
+        perPacket: '/ पैकेट',
+        packetUnit: 'Pkt',
+        productsOnly: 'डेयरी उत्पाद (केवल उत्पाद)',
+        extraProducts: 'अतिरिक्त डेयरी उत्पाद:',
+        totalProductsAmount: 'डेयरी उत्पाद राशि:',
         deliveredDays: 'दूध लिए गए दिन:',
         daysUnit: 'दिन',
         prevDue: 'पिछला बकाया:',
@@ -1072,6 +1084,14 @@
         summaryTitle: '📊 Month Billing Summary',
         summaryRange: '01 to Month End',
         totalDelivered: 'Total Milk Delivered:',
+        packetDelivered: 'Total Packet Milk:',
+        dairyProductsBill: '🧀 Dairy Products (Paneer/Curd/Ghee):',
+        packetRateLabel: 'Packet Rate',
+        perPacket: '/ Pkt',
+        packetUnit: 'Pkt',
+        productsOnly: 'Dairy Products (Products Only)',
+        extraProducts: 'Additional Dairy Products:',
+        totalProductsAmount: 'Dairy Products Amount:',
         deliveredDays: 'Delivered Days:',
         daysUnit: 'Days',
         prevDue: 'Previous Due:',
@@ -1512,18 +1532,24 @@
       document.getElementById('customerPhone').innerText = cardData.customerPhone ? '📞 ' + cardData.customerPhone : '';
 
       // Rate & Milk Type
+      const isCustomerPacket = Boolean(!isVendor && (cardData.isPacketMilk || (cardData.milkType && cardData.milkType.startsWith('packet'))));
       const rate = cardData.ratePerLitre || 60;
-      document.getElementById('rateValue').innerText = `₹${rate} ${t.perLitre}`;
 
-      if (cardData.isPacketMilk) {
+      if (isCustomerPacket) {
+        if (!isVendor) {
+          document.getElementById('rateLabel').innerText = t.packetRateLabel || 'पैकेट का भाव';
+        }
+        document.getElementById('rateValue').innerText = `₹${rate} ${t.perPacket || '/ Pkt'}`;
         document.getElementById('milkTypeBadge').innerText = `📦 ${cardData.packetBrand || 'Packet'} (${cardData.packetVariant || 'Milk'})`;
         document.getElementById('milkTypeBadge').className = 'pill-badge pill-buf';
+        document.getElementById('defaultQtyBadge').innerText = `${t.dailyQty} ${cardData.defaultLitres || 1} ${t.packetUnit || 'Pkt'}`;
       } else {
+        document.getElementById('rateValue').innerText = `₹${rate} ${t.perLitre}`;
         const milkType = (cardData.milkType || 'buffalo').toLowerCase();
         document.getElementById('milkTypeBadge').innerText = milkType === 'cow' ? t.cowMilk : t.bufMilk;
         document.getElementById('milkTypeBadge').className = 'pill-badge ' + (milkType === 'cow' ? 'pill-cow' : 'pill-buf');
+        document.getElementById('defaultQtyBadge').innerText = `${t.dailyQty} ${cardData.defaultLitres || 1} L`;
       }
-      document.getElementById('defaultQtyBadge').innerText = `${t.dailyQty} ${cardData.defaultLitres || 1} L`;
 
       // Month Title
       document.getElementById('prevBtnText').innerText = t.prev;
@@ -1551,13 +1577,13 @@
       });
 
       // Render Calendar Grid
-      renderCalendarGrid(t);
+      renderCalendarGrid(t, isCustomerPacket);
 
       // Render Billing Summary & Payments
-      renderSummaryAndPayments(t);
+      renderSummaryAndPayments(t, isCustomerPacket);
     }
 
-    function renderCalendarGrid(t) {
+    function renderCalendarGrid(t, isCustomerPacket) {
       const grid = document.getElementById('calendarGrid');
       grid.innerHTML = '';
 
@@ -1586,10 +1612,17 @@
 
         let totalDayLitres = 0;
         let dayAmount = 0;
+        let dayHasAddons = false;
+        let dayIsPacket = Boolean(isCustomerPacket);
+
         dayEntries.forEach(e => {
           totalDayLitres += Number(e.quantityLitres) || 0;
+          if (e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet'))) {
+            dayIsPacket = true;
+          }
           let addonTotal = 0;
-          if (e.addons && Array.isArray(e.addons)) {
+          if (e.addons && Array.isArray(e.addons) && e.addons.length > 0) {
+            dayHasAddons = true;
             e.addons.forEach(a => addonTotal += (Number(a.totalAmount) || 0));
           }
           dayAmount += (e.totalDayAmount != null ? Number(e.totalDayAmount) : ((Number(e.amount) || 0) + addonTotal));
@@ -1600,7 +1633,7 @@
 
         const box = document.createElement('div');
         box.className = `day-box ${isDelivered ? 'delivered' : 'skipped'} ${isToday ? 'today' : ''}`;
-        box.onclick = () => openDayModal(day, dateKey, dayEntries, totalDayLitres, dayAmount);
+        box.onclick = () => openDayModal(day, dateKey, dayEntries, totalDayLitres, dayAmount, isCustomerPacket);
 
         // Date Number
         const numDiv = document.createElement('div');
@@ -1611,14 +1644,22 @@
         // Quantity
         const qtyDiv = document.createElement('div');
         qtyDiv.className = 'day-qty';
-        qtyDiv.innerText = totalDayLitres > 0 ? `${totalDayLitres.toFixed(1)}L` : (dayAmount > 0 ? '🧀' : '—');
+        if (totalDayLitres > 0) {
+          const uStr = dayIsPacket ? (t.packetUnit || 'Pkt') : 'L';
+          const qStr = dayIsPacket ? totalDayLitres.toString() : totalDayLitres.toFixed(1);
+          qtyDiv.innerText = `${qStr}${uStr}${dayHasAddons ? ' 🧀' : ''}`;
+        } else if (dayAmount > 0) {
+          qtyDiv.innerText = '🧀';
+        } else {
+          qtyDiv.innerText = '—';
+        }
         box.appendChild(qtyDiv);
 
         // Subtag
         if (isDelivered) {
           const subtag = document.createElement('div');
           subtag.className = 'day-subtag';
-          subtag.innerText = `₹${dayAmount.toFixed(0)}`;
+          subtag.innerText = `₹${Math.round(dayAmount)}`;
           box.appendChild(subtag);
         } else if (isToday) {
           const subtag = document.createElement('div');
@@ -1633,7 +1674,7 @@
       }
     }
 
-    function renderSummaryAndPayments(t) {
+    function renderSummaryAndPayments(t, isCustomerPacket) {
       const entriesMap = cardData.entries || {};
       const payments = (cardData.payments || []).filter(p => !p.isDeleted);
 
@@ -1641,6 +1682,7 @@
       let totalMonthLitres = 0;
       let deliveredDaysCount = 0;
       let totalMonthBilled = 0;
+      let totalMonthProductsAmount = 0;
 
       const prefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
       const startOfMonthStr = `${prefix}-01`;
@@ -1665,16 +1707,19 @@
         if (d.startsWith(prefix)) {
           let dayLitres = 0;
           let dayAmt = 0;
+          let dayAddonsAmt = 0;
           dayEntries.forEach(e => {
             dayLitres += Number(e.quantityLitres) || 0;
             let addonTotal = 0;
             if (e.addons && Array.isArray(e.addons)) {
               e.addons.forEach(a => addonTotal += (Number(a.totalAmount) || 0));
             }
+            dayAddonsAmt += addonTotal;
             const amt = e.totalDayAmount != null ? Number(e.totalDayAmount) : ((Number(e.amount) || 0) + addonTotal);
             dayAmt += amt;
             totalMonthBilled += amt;
           });
+          totalMonthProductsAmount += dayAddonsAmt;
           if (dayLitres > 0 || dayAmt > 0) {
             deliveredDaysCount++;
             totalMonthLitres += dayLitres;
@@ -1720,14 +1765,33 @@
       document.getElementById('summaryCardTitle').innerText = t.summaryTitle;
       document.getElementById('summaryRangeLabel').innerText = t.summaryRange;
 
-      document.getElementById('labelTotalDelivered').innerText = isVendor ? t.vendorTotalDelivered : t.totalDelivered;
-      document.getElementById('valTotalLitres').innerText = `${totalMonthLitres.toFixed(1)} L`;
+      if (isVendor) {
+        document.getElementById('labelTotalDelivered').innerText = t.vendorTotalDelivered;
+        document.getElementById('valTotalLitres').innerText = `${totalMonthLitres.toFixed(1)} L`;
+      } else if (isCustomerPacket) {
+        document.getElementById('labelTotalDelivered').innerText = t.packetDelivered || 'कुल पैकेट दूध:';
+        document.getElementById('valTotalLitres').innerText = `${totalMonthLitres} ${t.packetUnit || 'Pkt'}`;
+      } else {
+        document.getElementById('labelTotalDelivered').innerText = t.totalDelivered;
+        document.getElementById('valTotalLitres').innerText = `${totalMonthLitres.toFixed(1)} L`;
+      }
 
       document.getElementById('labelDeliveredDays').innerText = isVendor ? t.vendorDeliveredDays : t.deliveredDays;
       document.getElementById('valDeliveredDays').innerText = `${deliveredDaysCount} ${t.daysUnit}`;
 
       document.getElementById('labelPrevDue').innerText = isVendor ? (currentLang === 'hi' ? 'पिछला देय बाकी:' : 'Previous Payable:') : t.prevDue;
       document.getElementById('valPrevDue').innerText = `₹${prevDue.toFixed(2)}`;
+
+      const rowDairyProducts = document.getElementById('rowDairyProducts');
+      if (rowDairyProducts) {
+        if (totalMonthProductsAmount > 0) {
+          rowDairyProducts.style.display = 'flex';
+          document.getElementById('labelDairyProducts').innerText = t.dairyProductsBill || '🧀 डेयरी उत्पाद (पनीर/दही/घी/छाछ):';
+          document.getElementById('valDairyProducts').innerText = `₹${totalMonthProductsAmount.toFixed(2)}`;
+        } else {
+          rowDairyProducts.style.display = 'none';
+        }
+      }
 
       document.getElementById('labelTotalBill').innerText = isVendor ? t.vendorTotalBill : t.totalBill;
       document.getElementById('valTotalBill').innerText = `₹${totalMonthBilled.toFixed(2)}`;
@@ -1777,7 +1841,7 @@
       }
     }
 
-    function openDayModal(dayNum, dateStr, entries, litres, amount) {
+    function openDayModal(dayNum, dateStr, entries, litres, amount, isCustomerPacket) {
       const t = I18N[currentLang];
       const paramType = (urlParams.get('type') || '').toLowerCase();
       const isVendor = (paramType === 'vendor' || (cardData && cardData.partyType === 'vendor'));
@@ -1793,47 +1857,79 @@
         `;
       } else {
         let html = '';
+        let dayTotalAddonsAmt = 0;
+        let dayTotalMilkAmt = 0;
+
         entries.forEach((e, idx) => {
+          const isPacket = Boolean(e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet')) || isCustomerPacket);
           const sessLabel = e.session === 'Morning' ? t.sessionMorning : e.session === 'Evening' ? t.sessionEvening : t.sessionCustom;
-          let milkTitle = `🥛 ${sessLabel} (${e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buf'})`;
-          if (e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet'))) {
-            milkTitle = `📦 ${sessLabel} [${e.packetBrand || 'Packet'} ${e.packetVariant || ''}]`;
+          const milkQty = Number(e.quantityLitres) || 0;
+          const milkAmt = Number(e.amount) || (milkQty * (Number(e.ratePerLitre) || 0));
+          dayTotalMilkAmt += milkAmt;
+
+          let milkTitle = '';
+          if (isPacket) {
+            milkTitle = `📦 ${sessLabel} [${e.packetBrand || cardData.packetBrand || 'Packet'} ${e.packetVariant || cardData.packetVariant || ''}]`;
+          } else if (milkQty > 0) {
+            milkTitle = `🥛 ${sessLabel} (${e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buf'})`;
+          } else {
+            milkTitle = `🧀 ${sessLabel} — ${t.productsOnly || 'डेयरी उत्पाद (केवल उत्पाद)'}`;
           }
 
           let addonHtml = '';
+          let entryAddonTotal = 0;
           if (e.addons && Array.isArray(e.addons) && e.addons.length > 0) {
-            addonHtml = '<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">';
+            addonHtml = `<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">
+              <div style="font-size: 11px; font-weight: 700; color: #b45309; margin-bottom: 3px;">${t.extraProducts || 'अतिरिक्त डेयरी उत्पाद:'}</div>`;
             e.addons.forEach(a => {
+              const amt = Number(a.totalAmount) || 0;
+              entryAddonTotal += amt;
+              dayTotalAddonsAmt += amt;
               addonHtml += `
-                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #b45309; font-weight: 700; margin-bottom: 2px;">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 2px;">
                   <span>🧀 ${a.productName || a.id} (${a.quantity} ${a.unit})</span>
-                  <span>₹${a.totalAmount}</span>
+                  <span>₹${amt.toFixed(0)}</span>
                 </div>
               `;
             });
             addonHtml += '</div>';
           }
 
-          const entryDayTotal = e.totalDayAmount != null ? e.totalDayAmount : e.amount;
+          const entryDayTotal = e.totalDayAmount != null ? Number(e.totalDayAmount) : (milkAmt + entryAddonTotal);
 
           html += `
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px;">
               <div style="display: flex; justify-content: space-between; font-weight: 800; color: #0f172a; margin-bottom: 4px;">
                 <span>${milkTitle}</span>
-                <span style="color: #059669;">${e.quantityLitres > 0 ? e.quantityLitres + ' L' : ''}</span>
+                <span style="color: #059669;">${milkQty > 0 ? (milkQty + (isPacket ? (' ' + (t.packetUnit || 'Pkt')) : ' L')) : ''}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
-                <span>${e.quantityLitres > 0 ? `@ ₹${e.ratePerLitre} /L` : ''}</span>
-                <span style="font-weight: 700; color: #0284c7;">= ₹${entryDayTotal}</span>
-              </div>
+              ${milkQty > 0 ? `
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
+                  <span>@ ₹${e.ratePerLitre} ${isPacket ? (t.perPacket || '/ Pkt') : '/L'}</span>
+                  <span style="font-weight: 700; color: #0284c7;">दूध: ₹${milkAmt.toFixed(0)}</span>
+                </div>
+              ` : ''}
               ${addonHtml}
+              <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 800; color: #0f172a; margin-top: 6px; padding-top: 4px; border-top: 1px solid #f1f5f9;">
+                <span>सत्र कुल (Session Total):</span>
+                <span style="color: #0284c7;">₹${entryDayTotal.toFixed(0)}</span>
+              </div>
             </div>
           `;
         });
+
         html += `
-          <div style="border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 4px; display: flex; justify-content: space-between; font-weight: 800;">
-            <span>कुल (Total):</span>
-            <span style="color: #059669;">${litres > 0 ? litres.toFixed(1) + ' L = ' : ''}₹${amount.toFixed(0)}</span>
+          <div style="border-top: 2px dashed #cbd5e1; padding-top: 8px; margin-top: 4px; font-size: 13px;">
+            ${dayTotalAddonsAmt > 0 ? `
+              <div style="display: flex; justify-content: space-between; color: #b45309; font-weight: 700; margin-bottom: 4px;">
+                <span>${t.totalProductsAmount || 'डेयरी उत्पाद राशि:'}</span>
+                <span>₹${dayTotalAddonsAmt.toFixed(0)}</span>
+              </div>
+            ` : ''}
+            <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 14px; color: #0f172a;">
+              <span>दिन का कुल (Day Total):</span>
+              <span style="color: #059669;">${litres > 0 ? (litres.toFixed(1) + (isCustomerPacket ? (' ' + (t.packetUnit || 'Pkt')) : ' L') + ' = ') : ''}₹${amount.toFixed(0)}</span>
+            </div>
           </div>
         `;
         content.innerHTML = html;

@@ -44,6 +44,10 @@ export interface CustomerCardData {
   lastUpdated: number;
 }
 
+function cleanForFirebase<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+
 export const CardSyncService = {
   getCardUrl(
     supplierId: string,
@@ -187,27 +191,46 @@ Thank you! — ${dairyName}`;
         if (!entriesMap[e.date]) {
           entriesMap[e.date] = [];
         }
+
+        let addonSum = 0;
+        if (e.addons && Array.isArray(e.addons)) {
+          e.addons.forEach(a => {
+            addonSum += (Number(a.totalAmount) || 0);
+          });
+        }
+        const finalDayTotal = e.totalDayAmount != null ? Number(e.totalDayAmount) : ((Number(e.amount) || 0) + addonSum);
+        const isPacket = Boolean(e.isPacketMilk || customer.isPacketMilk || (e.milkType && e.milkType.startsWith('packet')) || (customer.milkType && customer.milkType.startsWith('packet')));
+
         entriesMap[e.date].push({
           id: e.id,
           session: e.session,
           milkType: e.milkType,
-          quantityLitres: e.quantityLitres,
-          ratePerLitre: e.ratePerLitre,
-          amount: e.amount,
-          totalDayAmount: e.totalDayAmount,
-          isPacketMilk: e.isPacketMilk,
-          packetBrand: e.packetBrand,
-          packetVariant: e.packetVariant,
-          addons: e.addons
+          quantityLitres: Number(e.quantityLitres) || 0,
+          ratePerLitre: Number(e.ratePerLitre) || 0,
+          amount: Number(e.amount) || 0,
+          totalDayAmount: finalDayTotal,
+          isPacketMilk: isPacket,
+          packetBrand: e.packetBrand || customer.packetBrand || (isPacket ? 'Packet Milk' : undefined),
+          packetVariant: e.packetVariant || customer.packetVariant || undefined,
+          addons: (e.addons && Array.isArray(e.addons) && e.addons.length > 0) ? e.addons.map(a => ({
+            productId: a.productId || '',
+            productName: a.productName || '',
+            quantity: Number(a.quantity) || 0,
+            unit: a.unit || 'unit',
+            rate: Number(a.rate) || 0,
+            totalAmount: Number(a.totalAmount) || 0
+          })) : undefined
         });
       });
 
       const paymentsList: CardPaymentItem[] = custPayments.map(p => ({
         id: p.id,
         date: p.date,
-        amountPaid: p.amountPaid,
-        notes: p.notes
+        amountPaid: Number(p.amountPaid) || 0,
+        notes: p.notes || undefined
       }));
+
+      const isCustomerPacket = Boolean(customer.isPacketMilk || (customer.milkType && customer.milkType.startsWith('packet')));
 
       const cardPayload: CustomerCardData = {
         supplierBusinessName: supplier?.businessName || 'डेयरी फ़ार्म',
@@ -217,19 +240,19 @@ Thank you! — ${dairyName}`;
         customerName: customer.name,
         customerPhone: customer.phone,
         milkType: customer.milkType,
-        ratePerLitre: customer.ratePerLitre,
-        defaultLitres: customer.defaultLitres,
+        ratePerLitre: Number(customer.ratePerLitre) || 0,
+        defaultLitres: Number(customer.defaultLitres) || 0,
         partyType: 'customer',
-        isPacketMilk: customer.isPacketMilk,
-        packetBrand: customer.packetBrand,
-        packetVariant: customer.packetVariant,
+        isPacketMilk: isCustomerPacket,
+        packetBrand: customer.packetBrand || (isCustomerPacket ? 'Packet Milk' : undefined),
+        packetVariant: customer.packetVariant || undefined,
         entries: entriesMap,
         payments: paymentsList,
         lastUpdated: Date.now()
       };
 
       const cardRef = ref(rtdb, `cards/${suppId}/${customerId}`);
-      await set(cardRef, cardPayload);
+      await set(cardRef, cleanForFirebase(cardPayload));
     } catch (err) {
       console.warn('Silent card sync error (safe to ignore if offline):', err);
     }
@@ -270,17 +293,17 @@ Thank you! — ${dairyName}`;
           id: e.id,
           session: e.session,
           milkType: e.milkType,
-          quantityLitres: e.quantityLitres,
-          ratePerLitre: e.ratePerLitre,
-          amount: e.amount
+          quantityLitres: Number(e.quantityLitres) || 0,
+          ratePerLitre: Number(e.ratePerLitre) || 0,
+          amount: Number(e.amount) || 0
         });
       });
 
       const paymentsList: CardPaymentItem[] = subPayments.map(p => ({
         id: p.id,
         date: p.date,
-        amountPaid: p.amountPaid,
-        notes: p.notes
+        amountPaid: Number(p.amountPaid) || 0,
+        notes: p.notes || undefined
       }));
 
       const cardPayload: CustomerCardData = {
@@ -291,8 +314,8 @@ Thank you! — ${dairyName}`;
         customerName: sub.name,
         customerPhone: sub.phone,
         milkType: sub.milkType,
-        ratePerLitre: sub.ratePerLitre,
-        defaultLitres: sub.defaultLitres,
+        ratePerLitre: Number(sub.ratePerLitre) || 0,
+        defaultLitres: Number(sub.defaultLitres) || 0,
         partyType: 'vendor',
         entries: entriesMap,
         payments: paymentsList,
@@ -300,7 +323,7 @@ Thank you! — ${dairyName}`;
       };
 
       const cardRef = ref(rtdb, `cards/${suppId}/${subSupplierId}`);
-      await set(cardRef, cardPayload);
+      await set(cardRef, cleanForFirebase(cardPayload));
     } catch (err) {
       console.warn('Silent vendor card sync error (safe to ignore if offline):', err);
     }
@@ -319,6 +342,9 @@ Thank you! — ${dairyName}`;
       const customers = allCustomers.filter(c => !c.isDeleted);
       if (!customers || customers.length === 0) return;
 
+      const custMapById = new Map<string, Customer>();
+      customers.forEach(c => custMapById.set(c.id, c));
+
       const allEntries = (entriesParam || (await StorageService.getMilkEntries(suppId))).filter(e => !e.isDeleted);
       const allPayments = (paymentsParam || (await StorageService.getPayments(suppId))).filter(p => !p.isDeleted);
 
@@ -327,6 +353,7 @@ Thank you! — ${dairyName}`;
       for (let i = 0; i < allEntries.length; i++) {
         const e = allEntries[i];
         if (e.isDeleted) continue;
+        const cust = custMapById.get(e.customerId);
         let custMap = entriesByCust.get(e.customerId);
         if (!custMap) {
           custMap = {};
@@ -335,13 +362,35 @@ Thank you! — ${dairyName}`;
         if (!custMap[e.date]) {
           custMap[e.date] = [];
         }
+
+        let addonSum = 0;
+        if (e.addons && Array.isArray(e.addons)) {
+          e.addons.forEach(a => {
+            addonSum += (Number(a.totalAmount) || 0);
+          });
+        }
+        const finalDayTotal = e.totalDayAmount != null ? Number(e.totalDayAmount) : ((Number(e.amount) || 0) + addonSum);
+        const isPacket = Boolean(e.isPacketMilk || cust?.isPacketMilk || (e.milkType && e.milkType.startsWith('packet')) || (cust?.milkType && cust.milkType.startsWith('packet')));
+
         custMap[e.date].push({
           id: e.id,
           session: e.session,
           milkType: e.milkType,
-          quantityLitres: e.quantityLitres,
-          ratePerLitre: e.ratePerLitre,
-          amount: e.amount
+          quantityLitres: Number(e.quantityLitres) || 0,
+          ratePerLitre: Number(e.ratePerLitre) || 0,
+          amount: Number(e.amount) || 0,
+          totalDayAmount: finalDayTotal,
+          isPacketMilk: isPacket,
+          packetBrand: e.packetBrand || cust?.packetBrand || (isPacket ? 'Packet Milk' : undefined),
+          packetVariant: e.packetVariant || cust?.packetVariant || undefined,
+          addons: (e.addons && Array.isArray(e.addons) && e.addons.length > 0) ? e.addons.map(a => ({
+            productId: a.productId || '',
+            productName: a.productName || '',
+            quantity: Number(a.quantity) || 0,
+            unit: a.unit || 'unit',
+            rate: Number(a.rate) || 0,
+            totalAmount: Number(a.totalAmount) || 0
+          })) : undefined
         });
       }
 
@@ -358,8 +407,8 @@ Thank you! — ${dairyName}`;
         list.push({
           id: p.id,
           date: p.date,
-          amountPaid: p.amountPaid,
-          notes: p.notes
+          amountPaid: Number(p.amountPaid) || 0,
+          notes: p.notes || undefined
         });
       }
 
@@ -369,6 +418,7 @@ Thank you! — ${dairyName}`;
       for (let i = 0; i < customers.length; i++) {
         const customer = customers[i];
         if (customer.isDeleted) continue;
+        const isCustomerPacket = Boolean(customer.isPacketMilk || (customer.milkType && customer.milkType.startsWith('packet')));
         cardsBatch[customer.id] = {
           supplierBusinessName: supplier?.businessName || 'डेयरी फ़ार्म',
           supplierName: supplier?.name || 'सप्लायर',
@@ -377,8 +427,12 @@ Thank you! — ${dairyName}`;
           customerName: customer.name,
           customerPhone: customer.phone,
           milkType: customer.milkType,
-          ratePerLitre: customer.ratePerLitre,
-          defaultLitres: customer.defaultLitres,
+          ratePerLitre: Number(customer.ratePerLitre) || 0,
+          defaultLitres: Number(customer.defaultLitres) || 0,
+          partyType: 'customer',
+          isPacketMilk: isCustomerPacket,
+          packetBrand: customer.packetBrand || (isCustomerPacket ? 'Packet Milk' : undefined),
+          packetVariant: customer.packetVariant || undefined,
           entries: entriesByCust.get(customer.id) || {},
           payments: paymentsByCust.get(customer.id) || [],
           lastUpdated: now
@@ -387,7 +441,7 @@ Thank you! — ${dairyName}`;
 
       // 1 single atomic batch write to Firebase Realtime Database
       const cardsRef = ref(rtdb, `cards/${suppId}`);
-      await set(cardsRef, cardsBatch);
+      await set(cardsRef, cleanForFirebase(cardsBatch));
     } catch (err) {
       console.warn('Sync all cards error:', err);
     }

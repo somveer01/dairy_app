@@ -1423,8 +1423,8 @@ export const CustomerListScreen = () => {
 
                   <TouchableOpacity
                     style={styles.viewCardBtn}
-                    onPress={() => {
-                      CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                    onPress={async () => {
+                      await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
                       const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true, 'customer');
                       if (Platform.OS === 'web' && typeof window !== 'undefined') {
                         try {
