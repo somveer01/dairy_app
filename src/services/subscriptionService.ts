@@ -6,6 +6,14 @@ import { formatToDisplayDate } from '../utils/dateUtils';
 export const ADMIN_PHONES = ['8721873433'];
 export const DEFAULT_UPI_ID = '8721873433@upi';
 
+let activeAdminUpiId = DEFAULT_UPI_ID;
+if (typeof window !== 'undefined' && window.localStorage) {
+  try {
+    const saved = window.localStorage.getItem('@dairy_admin_upi_id');
+    if (saved && saved.includes('@')) activeAdminUpiId = saved.trim();
+  } catch {}
+}
+
 export interface PlanPricingItem {
   plan: SubscriptionPlanType;
   titleHi: string;
@@ -74,6 +82,47 @@ export const SubscriptionService = {
     if (!phone) return false;
     const clean = phone.replace(/\D/g, '').slice(-10);
     return ADMIN_PHONES.includes(clean);
+  },
+
+  getAdminUpiId(): string {
+    return activeAdminUpiId;
+  },
+
+  async setAdminUpiId(newUpiId: string): Promise<void> {
+    const clean = newUpiId.trim();
+    if (!clean || !clean.includes('@')) {
+      throw new Error('Invalid UPI ID. Must contain @ (e.g. 8721873433@ybl)');
+    }
+    activeAdminUpiId = clean;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('@dairy_admin_upi_id', clean);
+      } catch {}
+    }
+    try {
+      const upiRef = ref(rtdb, 'system/settings/adminUpiId');
+      await set(upiRef, clean);
+    } catch (e) {
+      console.warn('Could not save upiId to cloud:', e);
+    }
+  },
+
+  async fetchAdminUpiIdFromCloud(): Promise<string> {
+    try {
+      const upiRef = ref(rtdb, 'system/settings/adminUpiId');
+      const snap = await get(upiRef);
+      if (snap.exists() && typeof snap.val() === 'string' && snap.val().includes('@')) {
+        activeAdminUpiId = snap.val().trim();
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem('@dairy_admin_upi_id', activeAdminUpiId);
+          } catch {}
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch upiId from cloud:', e);
+    }
+    return activeAdminUpiId;
   },
 
   /**
@@ -203,21 +252,22 @@ export const SubscriptionService = {
   },
 
   /**
-   * Generates standard Indian UPI Intent URL
+   * Generates standard Indian UPI Intent URL (NPCI Spec compliant)
    */
   generateUpiUrl(plan: SubscriptionPlanType, supplier: Supplier, customUpiId?: string): string {
     const p = SUBSCRIPTION_PLANS.find(item => item.plan === plan) || SUBSCRIPTION_PLANS[2];
-    const upiId = customUpiId || DEFAULT_UPI_ID;
+    const upiId = (customUpiId || this.getAdminUpiId()).trim();
     const cleanPhone = supplier.phone ? supplier.phone.replace(/\D/g, '').slice(-10) : 'dairy';
-    const note = `DairyApp_${cleanPhone}_${plan}`;
-    return `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('Dairy App Subscription')}&am=${p.price}&cu=INR&tn=${encodeURIComponent(note)}`;
+    const note = `DairyApp_${cleanPhone}`;
+    // NPCI standard: pa parameter must NOT have @ encoded as %40
+    return `upi://pay?pa=${upiId}&pn=DairyApp&am=${p.price}&cu=INR&tn=${note}`;
   },
 
   /**
    * Generates a QR code image URL for scanning
    */
   generateQrCodeUrl(upiUrl: string): string {
-    return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(upiUrl)}`;
+    return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${encodeURIComponent(upiUrl)}`;
   },
 
   /**

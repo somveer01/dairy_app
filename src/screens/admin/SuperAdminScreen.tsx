@@ -44,8 +44,19 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'trial' | 'expired'>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  // Admin UPI ID state
+  const [adminUpiInput, setAdminUpiInput] = useState(SubscriptionService.getAdminUpiId());
+  const [currentSavedUpi, setCurrentSavedUpi] = useState(SubscriptionService.getAdminUpiId());
+  const [isSavingUpi, setIsSavingUpi] = useState(false);
+
   useEffect(() => {
     fetchCloudSuppliers();
+    SubscriptionService.fetchAdminUpiIdFromCloud().then(id => {
+      if (id) {
+        setAdminUpiInput(id);
+        setCurrentSavedUpi(id);
+      }
+    });
   }, []);
 
   const fetchCloudSuppliers = async () => {
@@ -129,6 +140,39 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
     );
   };
 
+  const handleSaveAdminUpi = async () => {
+    const clean = adminUpiInput.trim();
+    if (!clean || !clean.includes('@')) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य UPI ID' : 'Invalid UPI ID',
+        lang === 'hi'
+          ? 'कृपया सही बैंक UPI ID दर्ज करें जिसमें @ हो (उदा. 8721873433@ybl)'
+          : 'Please enter a valid bank UPI ID with @ (e.g. 8721873433@ybl)'
+      );
+      return;
+    }
+    try {
+      setIsSavingUpi(true);
+      await SubscriptionService.setAdminUpiId(clean);
+      setCurrentSavedUpi(clean);
+      showAlert(
+        lang === 'hi' ? '✓ UPI ID सहेजा गया' : '✓ UPI ID Saved',
+        lang === 'hi'
+          ? `सक्रिय बैंक UPI ID अब "${clean}" सेट हो गया है। सभी डेयरियों को QR और पेमेंट के लिए यही दिखेगा।`
+          : `Active Bank UPI ID is now "${clean}". All suppliers will now pay to this handle.`
+      );
+    } catch (err: any) {
+      showAlert('Error', err?.message || 'Failed to save UPI ID');
+    } finally {
+      setIsSavingUpi(false);
+    }
+  };
+
+  const handleSetUpiSuffix = (suffix: string) => {
+    const adminNum = '8721873433';
+    setAdminUpiInput(`${adminNum}@${suffix}`);
+  };
+
   const filteredList = useMemo(() => {
     let list = suppliersList;
     if (searchQuery.trim()) {
@@ -200,6 +244,52 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
         <View style={[styles.kpiCard, { borderColor: '#fecaca', backgroundColor: '#fef2f2' }]}>
           <Text style={[styles.kpiVal, { color: '#dc2626' }]}>{kpis.expired}</Text>
           <Text style={styles.kpiLabel}>समाप्त/लॉक्ड</Text>
+        </View>
+      </View>
+
+      {/* Admin Bank UPI ID Card */}
+      <View style={styles.upiConfigCard}>
+        <View style={styles.upiConfigHeader}>
+          <Text style={styles.upiConfigTitle}>💳 एडमिन बैंक UPI ID (भुगतान प्राप्ति)</Text>
+          <View style={styles.liveUpiBadge}>
+            <Text style={styles.liveUpiBadgeText}>सक्रिय: {currentSavedUpi}</Text>
+          </View>
+        </View>
+        <Text style={styles.upiConfigSubtitle}>
+          यह UPI ID ऐप के QR कोड और UPI पेमेंट लिंक में लाइव उपयोग होगी।
+        </Text>
+        <View style={styles.upiInputRow}>
+          <TextInput
+            style={styles.upiInputField}
+            value={adminUpiInput}
+            onChangeText={setAdminUpiInput}
+            placeholder="उदा. 8721873433@ybl"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+          />
+          <TouchableOpacity
+            style={[styles.upiSaveBtn, isSavingUpi && { opacity: 0.6 }]}
+            onPress={handleSaveAdminUpi}
+            disabled={isSavingUpi}
+          >
+            <Text style={styles.upiSaveBtnText}>{isSavingUpi ? 'सेविंग...' : '💾 सहेजें'}</Text>
+          </TouchableOpacity>
+        </View>
+        {/* Quick Suffix Presets */}
+        <View style={styles.suffixPresetsRow}>
+          <Text style={styles.presetLabel}>त्वरित बैंक:</Text>
+          <TouchableOpacity style={styles.suffixChip} onPress={() => handleSetUpiSuffix('ybl')}>
+            <Text style={styles.suffixChipText}>@ybl</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.suffixChip} onPress={() => handleSetUpiSuffix('paytm')}>
+            <Text style={styles.suffixChipText}>@paytm</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.suffixChip} onPress={() => handleSetUpiSuffix('oksbi')}>
+            <Text style={styles.suffixChipText}>@oksbi</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.suffixChip} onPress={() => handleSetUpiSuffix('ibl')}>
+            <Text style={styles.suffixChipText}>@ibl</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -579,5 +669,102 @@ const styles = StyleSheet.create({
   },
   actBtnLife: {
     backgroundColor: '#7c3aed'
+  },
+  upiConfigCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe',
+    shadowColor: '#0284c7',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  upiConfigHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4
+  },
+  upiConfigTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  liveUpiBadge: {
+    backgroundColor: '#eff6ff',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe'
+  },
+  liveUpiBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284c7'
+  },
+  upiConfigSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 8
+  },
+  upiInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center'
+  },
+  upiInputField: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 13,
+    color: '#0f172a',
+    backgroundColor: '#f8fafc'
+  },
+  upiSaveBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  upiSaveBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  suffixPresetsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8
+  },
+  presetLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  suffixChip: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  suffixChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155'
   }
 });

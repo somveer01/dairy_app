@@ -34,24 +34,59 @@ export const SubscriptionModal: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanType>('annual');
   const [utrNumber, setUtrNumber] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [adminUpi, setAdminUpi] = useState(SubscriptionService.getAdminUpiId());
+  const [copiedToast, setCopiedToast] = useState(false);
+
+  React.useEffect(() => {
+    if (isSubscriptionModalVisible) {
+      SubscriptionService.fetchAdminUpiIdFromCloud().then(id => {
+        if (id) setAdminUpi(id);
+      });
+    }
+  }, [isSubscriptionModalVisible]);
 
   if (!isSubscriptionModalVisible) return null;
 
   const currentPlanObj = SUBSCRIPTION_PLANS.find(p => p.plan === selectedPlan) || SUBSCRIPTION_PLANS[2];
-  const upiUrl = supplier ? SubscriptionService.generateUpiUrl(selectedPlan, supplier) : '';
-  const qrUrl = upiUrl ? SubscriptionService.generateQrCodeUrl(upiUrl) : '';
+  const cleanPhone = supplier?.phone ? supplier.phone.replace(/\D/g, '').slice(-10) : 'dairy';
+  const baseQuery = `pa=${adminUpi}&pn=${encodeURIComponent('DairyApp')}&am=${currentPlanObj.price}&cu=INR&tn=${encodeURIComponent(`DairyApp_${cleanPhone}`)}`;
 
-  const handlePayViaUpiApp = async () => {
+  const upiUrl = `upi://pay?${baseQuery}`;
+  const phonepeUrl = `phonepe://pay?${baseQuery}`;
+  const gpayUrl = `tez://upi/pay?${baseQuery}`;
+  const paytmUrl = `paytmmp://pay?${baseQuery}`;
+  const qrUrl = SubscriptionService.generateQrCodeUrl(upiUrl);
+
+  const handleCopyUpiId = async () => {
     try {
-      if (upiUrl) {
-        await Linking.openURL(upiUrl);
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(adminUpi);
+      } else if (typeof document !== 'undefined') {
+        const el = document.createElement('textarea');
+        el.value = adminUpi;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
       }
+      setCopiedToast(true);
+      setTimeout(() => setCopiedToast(false), 3000);
     } catch {
+      showAlert('UPI ID', adminUpi);
+    }
+  };
+
+  const handlePayViaApp = async (targetUrl: string, appName: string) => {
+    try {
+      await Linking.openURL(targetUrl);
+    } catch {
+      // Fallback: copy UPI ID and show helpful guidance
+      await handleCopyUpiId();
       showAlert(
-        lang === 'hi' ? 'UPI ऐप खोलें' : 'Open UPI App',
+        appName,
         lang === 'hi'
-          ? `सीधे ऐप नहीं खुला। कृपया QR कोड स्कैन करें या UPI ID: ${DEFAULT_UPI_ID} पर ₹${currentPlanObj.price} भेजें।`
-          : `Could not open UPI app directly. Please scan the QR code or pay ₹${currentPlanObj.price} to UPI ID: ${DEFAULT_UPI_ID}.`
+          ? `UPI ID (${adminUpi}) कॉपी कर लिया गया है!\n\nकृपया अपने मोबाइल में ${appName} खोलें और 'Pay to UPI ID' विकल्प चुनकर ₹${currentPlanObj.price} भेजें।`
+          : `UPI ID (${adminUpi}) has been copied!\n\nPlease open ${appName} on your phone and choose 'Pay to UPI ID' to pay ₹${currentPlanObj.price}.`
       );
     }
   };
@@ -205,31 +240,82 @@ export const SubscriptionModal: React.FC = () => {
 
             {/* Payment via UPI Section */}
             <Text style={styles.sectionTitle}>
-              {lang === 'hi' ? '2. UPI QR कोड स्कैन कर भुगतान करें:' : '2. Scan UPI QR to Pay:'}
+              {lang === 'hi' ? '2. UPI QR कोड स्कैन कर या ऐप से भुगतान करें:' : '2. Scan UPI QR or Pay via App:'}
             </Text>
 
             <View style={styles.qrContainer}>
               {qrUrl ? (
-                <Image source={{ uri: qrUrl }} style={styles.qrImage} resizeMode="contain" />
+                <View style={styles.qrWrapper}>
+                  <Image source={{ uri: qrUrl }} style={styles.qrImage} resizeMode="contain" />
+                </View>
               ) : null}
+
               <Text style={styles.amountDueText}>
                 {lang === 'hi' ? 'देय राशि:' : 'Amount to Pay:'}{' '}
                 <Text style={styles.amountDueBold}>₹{currentPlanObj.price}</Text>
               </Text>
-              <Text style={styles.upiIdText}>
-                UPI ID: <Text style={{ fontWeight: '800', color: '#0369a1' }}>{DEFAULT_UPI_ID}</Text>
-              </Text>
 
-              {/* Direct UPI App Button */}
-              <TouchableOpacity
-                style={styles.upiAppBtn}
-                onPress={handlePayViaUpiApp}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.upiAppBtnText}>
-                  {lang === 'hi' ? '📲 सीधे UPI ऐप (GPay/PhonePe) से पे करें' : '📲 Pay via UPI App (GPay/PhonePe)'}
-                </Text>
-              </TouchableOpacity>
+              {/* UPI ID Row with Copy button */}
+              <View style={styles.upiCopyRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.upiLabelText}>
+                    {lang === 'hi' ? 'अधिकृत UPI ID:' : 'Official UPI ID:'}
+                  </Text>
+                  <Text style={styles.upiValText} selectable>{adminUpi}</Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.copyBtn, copiedToast && styles.copyBtnDone]}
+                  onPress={handleCopyUpiId}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.copyBtnText}>
+                    {copiedToast
+                      ? (lang === 'hi' ? '✓ कॉपी हुआ' : '✓ Copied!')
+                      : (lang === 'hi' ? '📋 कॉपी करें' : '📋 Copy')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Direct UPI App Buttons Grid */}
+              <Text style={styles.directPayTitle}>
+                {lang === 'hi' ? '⚡ सीधे ऐप से भुगतान करें:' : '⚡ Pay Directly via App:'}
+              </Text>
+              <View style={styles.directAppGrid}>
+                <TouchableOpacity
+                  style={[styles.appBtn, { backgroundColor: '#5f259f' }]}
+                  onPress={() => handlePayViaApp(phonepeUrl, 'PhonePe')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.appBtnText}>🟣 PhonePe</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.appBtn, { backgroundColor: '#1a73e8' }]}
+                  onPress={() => handlePayViaApp(gpayUrl, 'Google Pay')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.appBtnText}>🔵 Google Pay</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.appBtn, { backgroundColor: '#002e6e' }]}
+                  onPress={() => handlePayViaApp(paytmUrl, 'Paytm')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.appBtnText}>🔷 Paytm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.appBtn, { backgroundColor: '#0284c7' }]}
+                  onPress={() => handlePayViaApp(upiUrl, 'Any UPI')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.appBtnText}>📲 अन्य ऐप</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.helperTip}>
+                {lang === 'hi'
+                  ? '💡 टिप: अगर स्कैन या ऐप लिंक न खुले, तो ऊपर "कॉपी करें" बटन दबाएं और अपने UPI ऐप में "Pay to UPI ID" में पेस्ट कर भुगतान करें।'
+                  : '💡 Tip: If link doesn\'t open, tap "Copy" above and paste into your UPI app under "Pay to UPI ID".'}
+              </Text>
             </View>
 
             {/* Step 3: Confirmation / UTR */}
@@ -464,12 +550,22 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 18
   },
-  qrImage: {
-    width: 180,
-    height: 180,
-    borderRadius: 12,
+  qrWrapper: {
     backgroundColor: '#ffffff',
-    marginBottom: 10
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2
+  },
+  qrImage: {
+    width: 170,
+    height: 170,
+    borderRadius: 8
   },
   amountDueText: {
     fontSize: 14,
@@ -481,24 +577,83 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#059669'
   },
-  upiIdText: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 4
-  },
-  upiAppBtn: {
-    marginTop: 12,
-    backgroundColor: '#0284c7',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+  upiCopyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#bae6fd',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     width: '100%',
-    alignItems: 'center'
+    marginTop: 10
   },
-  upiAppBtnText: {
-    fontSize: 13,
+  upiLabelText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase'
+  },
+  upiValText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0284c7',
+    marginTop: 2
+  },
+  copyBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8
+  },
+  copyBtnDone: {
+    backgroundColor: '#16a34a'
+  },
+  copyBtnText: {
+    fontSize: 12,
     fontWeight: '800',
     color: '#ffffff'
+  },
+  directPayTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+    marginTop: 14,
+    marginBottom: 8,
+    alignSelf: 'flex-start'
+  },
+  directAppGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    width: '100%'
+  },
+  appBtn: {
+    flex: 1,
+    minWidth: '45%',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  appBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  helperTip: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 10,
+    lineHeight: 16,
+    textAlign: 'center'
   },
   confirmBox: {
     backgroundColor: '#ffffff',
