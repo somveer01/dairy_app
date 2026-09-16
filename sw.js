@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dairy-pwa-1789545920210';
+const CACHE_NAME = 'dairy-pwa-1789547728147';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
@@ -9,8 +9,8 @@ const CORE_ASSETS = [
   '/dairy_app/assets/icon-192.png',
   '/dairy_app/assets/icon-512.png',
   '/dairy_app/assets/icon.png',
-  '/dairy_app/_expo/static/js/web/index-bc83f177a70c80cd2ccc2b3b4ef0d643.js',
-  '/dairy_app/_expo/static/js/web/jszip-ac3447fae54a1ec66924227a650eb100.js'
+  '/dairy_app/_expo/static/js/web/index-632ea167eada646135e65525baffddfd.js',
+  '/dairy_app/_expo/static/js/web/jszip-e85ac9ef734bf36ccd3a61aca9464704.js'
 ];
 
 self.addEventListener('install', (e) => {
