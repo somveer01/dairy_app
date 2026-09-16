@@ -22,6 +22,8 @@ import { FirebaseSyncService, normalizePhoneDigits } from '../../services/fireba
 import { AutoSyncService, SyncStatus } from '../../services/autoSyncService';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { InstallAppModal } from '../../components/InstallAppModal';
+import { SubscriptionService } from '../../services/subscriptionService';
+import { SuperAdminScreen } from '../admin/SuperAdminScreen';
 
 export const SettingsScreen = () => {
   const {
@@ -40,8 +42,12 @@ export const SettingsScreen = () => {
     refreshMilkInwardEntries,
     refreshSubSupplierPayments,
     openAuthModal,
-    requireAuth
+    requireAuth,
+    openSubscriptionModal,
+    subscriptionStatus
   } = useApp();
+
+  const [showSuperAdminScreen, setShowSuperAdminScreen] = useState(false);
 
   const [inspectorVisible, setInspectorVisible] = useState(false);
   const [installModalVisible, setInstallModalVisible] = useState(false);
@@ -388,6 +394,10 @@ export const SettingsScreen = () => {
   };
 
 
+  if (showSuperAdminScreen) {
+    return <SuperAdminScreen onBack={() => setShowSuperAdminScreen(false)} />;
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right']}>
       <ScrollView
@@ -431,6 +441,85 @@ export const SettingsScreen = () => {
             >
               <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 13 }}>
                 🔐 {lang === 'hi' ? 'लॉग इन' : 'Login'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Super Admin Portal Shortcut (Only visible for Admin phones) */}
+        {SubscriptionService.isAdmin(supplier?.phone) && (
+          <TouchableOpacity
+            style={styles.superAdminCard}
+            onPress={() => setShowSuperAdminScreen(true)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.superAdminIconBox}>
+              <Text style={{ fontSize: 22 }}>👑</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.superAdminTitle}>
+                {lang === 'hi' ? 'सुपर एडमिन पोर्टल' : 'Super Admin Portal'}
+              </Text>
+              <Text style={styles.superAdminSub}>
+                {lang === 'hi' ? 'सभी डेयरियों के सब्सक्रिप्शन प्लान्स मैनेज करें' : 'Manage subscriptions across all dairies'}
+              </Text>
+            </View>
+            <View style={styles.superAdminArrow}>
+              <Text style={{ fontSize: 16, color: '#b45309', fontWeight: '800' }}>➔</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Subscription Plan Card */}
+        {supplier?.phone && supplier.phone.length >= 10 && (
+          <View style={styles.subPlanCard}>
+            <View style={styles.subPlanHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Text style={{ fontSize: 20 }}>💳</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.subPlanTitle}>
+                    {lang === 'hi' ? 'डेयरी ऐप सदस्यता (Subscription)' : 'Dairy App Subscription'}
+                  </Text>
+                  <Text style={styles.subPlanSub}>
+                    {subscriptionStatus.isLocked
+                      ? (lang === 'hi' ? '⚠️ मुफ़्त ट्रायल समाप्त' : '⚠️ Trial Expired')
+                      : `${subscriptionStatus.planNameHi} • ${subscriptionStatus.daysRemaining} ${lang === 'hi' ? 'दिन शेष' : 'days left'}`}
+                  </Text>
+                </View>
+              </View>
+              <View style={[
+                styles.subStatusBadge,
+                subscriptionStatus.isLocked ? styles.subStatusBadgeLocked : styles.subStatusBadgeActive
+              ]}>
+                <Text style={[
+                  styles.subStatusBadgeText,
+                  subscriptionStatus.isLocked ? styles.subStatusBadgeTextLocked : styles.subStatusBadgeTextActive
+                ]}>
+                  {subscriptionStatus.isLocked ? (lang === 'hi' ? 'लॉक्ड' : 'Locked') : (lang === 'hi' ? 'सक्रिय' : 'Active')}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.subPlanDivider} />
+
+            <View style={styles.subPlanInfoRow}>
+              <Text style={styles.subPlanExpiryLabel}>
+                {lang === 'hi' ? 'समाप्ति तिथि (Valid Until):' : 'Valid Until:'}
+              </Text>
+              <Text style={styles.subPlanExpiryVal}>
+                {subscriptionStatus.expiryDateStr}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.subUpgradeBtn}
+              onPress={openSubscriptionModal}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.subUpgradeBtnText}>
+                {subscriptionStatus.isLocked
+                  ? (lang === 'hi' ? '⚡ अभी सक्रिय करें (Activate Now)' : '⚡ Activate Now')
+                  : (lang === 'hi' ? '🔄 योजनाएं देखें व रिन्यू करें (View Plans)' : '🔄 View Plans & Renew')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1502,5 +1591,125 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0f172a',
     textAlign: 'center'
+  },
+
+  // Super Admin Portal Card
+  superAdminCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1.5,
+    borderColor: '#fde68a',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 12
+  },
+  superAdminIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fde68a'
+  },
+  superAdminTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#92400e'
+  },
+  superAdminSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#b45309',
+    marginTop: 2
+  },
+  superAdminArrow: {
+    paddingHorizontal: 8
+  },
+
+  // Subscription Plan Card
+  subPlanCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16
+  },
+  subPlanHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  subPlanTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  subPlanSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 2
+  },
+  subStatusBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6
+  },
+  subStatusBadgeActive: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0'
+  },
+  subStatusBadgeLocked: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca'
+  },
+  subStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800'
+  },
+  subStatusBadgeTextActive: {
+    color: '#16a34a'
+  },
+  subStatusBadgeTextLocked: {
+    color: '#dc2626'
+  },
+  subPlanDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 10
+  },
+  subPlanInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12
+  },
+  subPlanExpiryLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600'
+  },
+  subPlanExpiryVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  subUpgradeBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center'
+  },
+  subUpgradeBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ffffff'
   }
 });

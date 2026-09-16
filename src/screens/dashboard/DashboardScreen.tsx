@@ -62,7 +62,9 @@ export const DashboardScreen = ({ navigation }: any) => {
     subSuppliers,
     milkInwardEntries,
     subSupplierPayments,
-    refreshSubSupplierPayments
+    refreshSubSupplierPayments,
+    subscriptionStatus,
+    openSubscriptionModal
   } = useApp();
 
   const isHindi = lang === 'hi';
@@ -599,6 +601,53 @@ export const DashboardScreen = ({ navigation }: any) => {
         keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}
       >
+        {/* Subscription / Free Trial Status Banner */}
+        {subscriptionStatus && (
+          <TouchableOpacity
+            style={[
+              styles.trialBanner,
+              subscriptionStatus.isLocked
+                ? styles.trialBannerLocked
+                : subscriptionStatus.status === 'trial_active'
+                ? styles.trialBannerTrial
+                : styles.trialBannerActive
+            ]}
+            onPress={openSubscriptionModal}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.trialBannerTitle}>
+                  {subscriptionStatus.isLocked
+                    ? (isHindi ? '🔒 मुफ़्त ट्रायल समाप्त • नया दूध दर्ज करने के लिए प्लान चुनें' : '🔒 Free Trial Expired • Choose Plan to Continue')
+                    : subscriptionStatus.status === 'trial_active'
+                    ? (isHindi ? `⏳ 30 दिन मुफ़्त ट्रायल: ${subscriptionStatus.daysRemaining} दिन शेष` : `⏳ 30-Day Free Trial: ${subscriptionStatus.daysRemaining} days left`)
+                    : (isHindi ? `✓ सदस्यता सक्रिय: ${subscriptionStatus.planNameHi}` : `✓ Active Plan: ${subscriptionStatus.planNameEn}`)}
+                </Text>
+              </View>
+              <Text style={styles.trialBannerSub}>
+                {subscriptionStatus.isLocked
+                  ? (isHindi ? 'प्लान्स देखने और सक्रिय करने के लिए यहाँ टैप करें' : 'Tap here to view plans and activate')
+                  : subscriptionStatus.status === 'trial_active'
+                  ? (isHindi ? 'सभी सुविधाएँ चालू हैं • कभी भी अपग्रेड करें' : 'All features active • Tap to view plans')
+                  : (isHindi ? `समाप्ति: ${subscriptionStatus.expiryDateStr}` : `Valid until: ${subscriptionStatus.expiryDateStr}`)}
+              </Text>
+            </View>
+            <View style={[
+              styles.trialUpgradeBtn,
+              subscriptionStatus.isLocked && { backgroundColor: '#dc2626' }
+            ]}>
+              <Text style={styles.trialUpgradeBtnText}>
+                {subscriptionStatus.isLocked
+                  ? (isHindi ? 'सक्रिय करें' : 'Renew')
+                  : subscriptionStatus.status === 'trial_active'
+                  ? (isHindi ? 'अपग्रेड' : 'Upgrade')
+                  : (isHindi ? 'विवरण' : 'Details')}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Header greeting */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -2202,5 +2251,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8
   },
-  payHistoryDoneBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 }
+  payHistoryDoneBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+
+  // Subscription / Free Trial Banner Styles
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 12,
+    gap: 10
+  },
+  trialBannerTrial: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe'
+  },
+  trialBannerActive: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0'
+  },
+  trialBannerLocked: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5'
+  },
+  trialBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  trialBannerSub: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 2
+  },
+  trialUpgradeBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  trialUpgradeBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff'
+  }
 });

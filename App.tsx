@@ -6,6 +6,7 @@ import * as ScreenCapture from 'expo-screen-capture';
 import { AppProvider } from './src/context/AppContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { GlobalAlertModal } from './src/components/GlobalAlertModal';
+import { SubscriptionModal } from './src/components/SubscriptionModal';
 
 export default function App() {
   useEffect(() => {
@@ -25,6 +26,7 @@ export default function App() {
         <StatusBar style="auto" />
         <RootNavigator />
         <GlobalAlertModal />
+        <SubscriptionModal />
       </AppProvider>
     </SafeAreaProvider>
   );

@@ -19,6 +19,23 @@ export interface DairyEntryAddon {
   totalAmount: number;
 }
 
+export type SubscriptionPlanType = 'free_trial' | 'monthly' | 'half_yearly' | 'annual' | 'lifetime';
+export type SubscriptionStatus = 'trial_active' | 'active' | 'grace_period' | 'expired';
+
+export interface SubscriptionInfo {
+  plan: SubscriptionPlanType;
+  status: SubscriptionStatus;
+  trialStartDate: number;
+  trialEndDate: number;
+  currentPeriodStart: number;
+  currentPeriodEnd: number;
+  lastPaymentDate?: number;
+  lastPaymentAmount?: number;
+  paymentReference?: string;
+  approvedBy?: string;
+  notes?: string;
+}
+
 export interface SupplierSettings {
   enablePacketMilk?: boolean;
   enableDairyAddons?: boolean;
@@ -34,6 +51,7 @@ export interface Supplier {
   password?: string;
   businessName: string;
   settings?: SupplierSettings;
+  subscription?: SubscriptionInfo;
   createdAt: number;
   updatedAt?: number;
 }

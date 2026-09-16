@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { translations, Language } from '../localization/i18n';
 import { StorageService } from '../services/storageService';
 import { AutoSyncService } from '../services/autoSyncService';
+import { SubscriptionService, SubscriptionStatusResult } from '../services/subscriptionService';
 import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
 
 interface AppContextType {
@@ -26,6 +27,10 @@ interface AppContextType {
   isAuthModalVisible: boolean;
   openAuthModal: () => void;
   closeAuthModal: () => void;
+  isSubscriptionModalVisible: boolean;
+  openSubscriptionModal: () => void;
+  closeSubscriptionModal: () => void;
+  subscriptionStatus: SubscriptionStatusResult;
   requireAuth: (onAuthorized: () => void) => boolean;
 }
 
@@ -80,8 +85,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const savedLang = await StorageService.getLanguage();
       setLangState(savedLang);
 
-      const savedSupplier = await StorageService.getSupplier();
+      let savedSupplier = await StorageService.getSupplier();
       if (savedSupplier && savedSupplier.phone && savedSupplier.phone.length >= 10) {
+        if (!savedSupplier.subscription) {
+          const sub = SubscriptionService.ensureSubscription(savedSupplier);
+          savedSupplier = { ...savedSupplier, subscription: sub };
+          await StorageService.saveSupplier(savedSupplier);
+        }
         StorageService.setActiveSupplierId(savedSupplier.id);
         setSupplierState(savedSupplier);
 
@@ -150,19 +160,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    StorageService.setActiveSupplierId(newSupplier.id);
-    await StorageService.saveSupplier(newSupplier);
-    setSupplierState(newSupplier);
+    let finalSupplier = newSupplier;
+    if (!finalSupplier.subscription) {
+      const sub = SubscriptionService.ensureSubscription(finalSupplier);
+      finalSupplier = { ...finalSupplier, subscription: sub };
+    }
+
+    StorageService.setActiveSupplierId(finalSupplier.id);
+    await StorageService.saveSupplier(finalSupplier);
+    setSupplierState(finalSupplier);
     setIsAuthModalVisible(false);
 
     // Refresh records scoped to the new supplier
     const [custs, entries, pays, subSupps, inward, subPays] = await Promise.all([
-      StorageService.getCustomers(newSupplier.id),
-      StorageService.getMilkEntries(newSupplier.id),
-      StorageService.getPayments(newSupplier.id),
-      StorageService.getSubSuppliers(newSupplier.id),
-      StorageService.getMilkInwardEntries(newSupplier.id),
-      StorageService.getSubSupplierPayments(newSupplier.id)
+      StorageService.getCustomers(finalSupplier.id),
+      StorageService.getMilkEntries(finalSupplier.id),
+      StorageService.getPayments(finalSupplier.id),
+      StorageService.getSubSuppliers(finalSupplier.id),
+      StorageService.getMilkInwardEntries(finalSupplier.id),
+      StorageService.getSubSupplierPayments(finalSupplier.id)
     ]);
 
     setCustomers(custs.filter(c => !c.isDeleted));
@@ -172,8 +188,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setMilkInwardEntries(inward.filter(i => !i.isDeleted));
     setSubSupplierPayments(subPays.filter(sp => !sp.isDeleted));
 
-    AutoSyncService.queueSync(newSupplier, 500);
+    AutoSyncService.queueSync(finalSupplier, 500);
   };
+
+  const [isSubscriptionModalVisible, setIsSubscriptionModalVisible] = useState(false);
+
+  const subscriptionStatus = React.useMemo(() => {
+    return SubscriptionService.getSubscriptionStatus(supplier);
+  }, [supplier]);
+
+  const openSubscriptionModal = () => setIsSubscriptionModalVisible(true);
+  const closeSubscriptionModal = () => setIsSubscriptionModalVisible(false);
 
   const setLanguage = async (newLang: Language) => {
     await StorageService.saveLanguage(newLang);
@@ -228,13 +253,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const isAuthenticated = Boolean(
       supplier && supplier.id && supplier.phone && supplier.phone.length >= 10
     );
-    if (isAuthenticated) {
-      onAuthorized();
-      return true;
+    if (!isAuthenticated) {
+      setIsAuthModalVisible(true);
+      return false;
     }
-    // Prompt login modal
-    setIsAuthModalVisible(true);
-    return false;
+
+    // Check if subscription has expired and locked out
+    if (subscriptionStatus.isLocked) {
+      setIsSubscriptionModalVisible(true);
+      return false;
+    }
+
+    onAuthorized();
+    return true;
   };
 
   return (
@@ -261,6 +292,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAuthModalVisible,
         openAuthModal,
         closeAuthModal,
+        isSubscriptionModalVisible,
+        openSubscriptionModal,
+        closeSubscriptionModal,
+        subscriptionStatus,
         requireAuth
       }}
     >
