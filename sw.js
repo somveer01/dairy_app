@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dairy-pwa-1789553961638';
+const CACHE_NAME = 'dairy-pwa-1789554826345';
 const CORE_ASSETS = [
   '/dairy_app/',
   '/dairy_app/index.html',
@@ -9,7 +9,7 @@ const CORE_ASSETS = [
   '/dairy_app/assets/icon-192.png',
   '/dairy_app/assets/icon-512.png',
   '/dairy_app/assets/icon.png',
-  '/dairy_app/_expo/static/js/web/index-a4145c41b049af7490feafa5d95e2fa7.js',
+  '/dairy_app/_expo/static/js/web/index-2439a941733cc8501aeba7a62fda3555.js',
   '/dairy_app/_expo/static/js/web/jszip-e85ac9ef734bf36ccd3a61aca9464704.js'
 ];
 
