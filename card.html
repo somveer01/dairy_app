@@ -1515,9 +1515,14 @@
       const rate = cardData.ratePerLitre || 60;
       document.getElementById('rateValue').innerText = `₹${rate} ${t.perLitre}`;
 
-      const milkType = (cardData.milkType || 'buffalo').toLowerCase();
-      document.getElementById('milkTypeBadge').innerText = milkType === 'cow' ? t.cowMilk : t.bufMilk;
-      document.getElementById('milkTypeBadge').className = 'pill-badge ' + (milkType === 'cow' ? 'pill-cow' : 'pill-buf');
+      if (cardData.isPacketMilk) {
+        document.getElementById('milkTypeBadge').innerText = `📦 ${cardData.packetBrand || 'Packet'} (${cardData.packetVariant || 'Milk'})`;
+        document.getElementById('milkTypeBadge').className = 'pill-badge pill-buf';
+      } else {
+        const milkType = (cardData.milkType || 'buffalo').toLowerCase();
+        document.getElementById('milkTypeBadge').innerText = milkType === 'cow' ? t.cowMilk : t.bufMilk;
+        document.getElementById('milkTypeBadge').className = 'pill-badge ' + (milkType === 'cow' ? 'pill-cow' : 'pill-buf');
+      }
       document.getElementById('defaultQtyBadge').innerText = `${t.dailyQty} ${cardData.defaultLitres || 1} L`;
 
       // Month Title
@@ -1583,10 +1588,14 @@
         let dayAmount = 0;
         dayEntries.forEach(e => {
           totalDayLitres += Number(e.quantityLitres) || 0;
-          dayAmount += Number(e.amount) || 0;
+          let addonTotal = 0;
+          if (e.addons && Array.isArray(e.addons)) {
+            e.addons.forEach(a => addonTotal += (Number(a.totalAmount) || 0));
+          }
+          dayAmount += (e.totalDayAmount != null ? Number(e.totalDayAmount) : ((Number(e.amount) || 0) + addonTotal));
         });
 
-        const isDelivered = totalDayLitres > 0;
+        const isDelivered = totalDayLitres > 0 || dayAmount > 0;
         const isToday = isCurrentMonth && day === todayDateNum;
 
         const box = document.createElement('div');
@@ -1602,7 +1611,7 @@
         // Quantity
         const qtyDiv = document.createElement('div');
         qtyDiv.className = 'day-qty';
-        qtyDiv.innerText = isDelivered ? `${totalDayLitres.toFixed(1)}L` : '—';
+        qtyDiv.innerText = totalDayLitres > 0 ? `${totalDayLitres.toFixed(1)}L` : (dayAmount > 0 ? '🧀' : '—');
         box.appendChild(qtyDiv);
 
         // Subtag
@@ -1642,7 +1651,11 @@
       Object.keys(entriesMap).forEach(d => {
         const dayEntries = (entriesMap[d] || []).filter(e => !e.isDeleted);
         dayEntries.forEach(e => {
-          const amt = Number(e.amount) || 0;
+          let addonTotal = 0;
+          if (e.addons && Array.isArray(e.addons)) {
+            e.addons.forEach(a => addonTotal += (Number(a.totalAmount) || 0));
+          }
+          const amt = e.totalDayAmount != null ? Number(e.totalDayAmount) : ((Number(e.amount) || 0) + addonTotal);
           allTimeDeliveries += amt;
           if (d < startOfMonthStr) {
             prevDeliveries += amt;
@@ -1651,11 +1664,18 @@
 
         if (d.startsWith(prefix)) {
           let dayLitres = 0;
+          let dayAmt = 0;
           dayEntries.forEach(e => {
             dayLitres += Number(e.quantityLitres) || 0;
-            totalMonthBilled += Number(e.amount) || 0;
+            let addonTotal = 0;
+            if (e.addons && Array.isArray(e.addons)) {
+              e.addons.forEach(a => addonTotal += (Number(a.totalAmount) || 0));
+            }
+            const amt = e.totalDayAmount != null ? Number(e.totalDayAmount) : ((Number(e.amount) || 0) + addonTotal);
+            dayAmt += amt;
+            totalMonthBilled += amt;
           });
-          if (dayLitres > 0) {
+          if (dayLitres > 0 || dayAmt > 0) {
             deliveredDaysCount++;
             totalMonthLitres += dayLitres;
           }
@@ -1775,23 +1795,45 @@
         let html = '';
         entries.forEach((e, idx) => {
           const sessLabel = e.session === 'Morning' ? t.sessionMorning : e.session === 'Evening' ? t.sessionEvening : t.sessionCustom;
+          let milkTitle = `🥛 ${sessLabel} (${e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buf'})`;
+          if (e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet'))) {
+            milkTitle = `📦 ${sessLabel} [${e.packetBrand || 'Packet'} ${e.packetVariant || ''}]`;
+          }
+
+          let addonHtml = '';
+          if (e.addons && Array.isArray(e.addons) && e.addons.length > 0) {
+            addonHtml = '<div style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed #cbd5e1;">';
+            e.addons.forEach(a => {
+              addonHtml += `
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #b45309; font-weight: 700; margin-bottom: 2px;">
+                  <span>🧀 ${a.productName || a.id} (${a.quantity} ${a.unit})</span>
+                  <span>₹${a.totalAmount}</span>
+                </div>
+              `;
+            });
+            addonHtml += '</div>';
+          }
+
+          const entryDayTotal = e.totalDayAmount != null ? e.totalDayAmount : e.amount;
+
           html += `
             <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; margin-bottom: 8px;">
               <div style="display: flex; justify-content: space-between; font-weight: 800; color: #0f172a; margin-bottom: 4px;">
-                <span>🥛 ${sessLabel} (${e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buf'})</span>
-                <span style="color: #059669;">${e.quantityLitres} L</span>
+                <span>${milkTitle}</span>
+                <span style="color: #059669;">${e.quantityLitres > 0 ? e.quantityLitres + ' L' : ''}</span>
               </div>
               <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b;">
-                <span>@ ₹${e.ratePerLitre} /L</span>
-                <span style="font-weight: 700; color: #0284c7;">= ₹${e.amount}</span>
+                <span>${e.quantityLitres > 0 ? `@ ₹${e.ratePerLitre} /L` : ''}</span>
+                <span style="font-weight: 700; color: #0284c7;">= ₹${entryDayTotal}</span>
               </div>
+              ${addonHtml}
             </div>
           `;
         });
         html += `
           <div style="border-top: 1px dashed #cbd5e1; padding-top: 8px; margin-top: 4px; display: flex; justify-content: space-between; font-weight: 800;">
             <span>कुल (Total):</span>
-            <span style="color: #059669;">${litres.toFixed(1)} L = ₹${amount.toFixed(0)}</span>
+            <span style="color: #059669;">${litres > 0 ? litres.toFixed(1) + ' L = ' : ''}₹${amount.toFixed(0)}</span>
           </div>
         `;
         content.innerHTML = html;
