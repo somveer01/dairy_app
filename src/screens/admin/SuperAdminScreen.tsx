@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Linking
+  Linking,
+  Modal,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ref, get } from 'firebase/database';
@@ -17,6 +19,11 @@ import {
   SubscriptionService,
   SubscriptionStatusResult
 } from '../../services/subscriptionService';
+import {
+  GoogleDriveBackupService,
+  DriveSupplierFolderItem,
+  DriveBackupFileItem
+} from '../../services/googleDriveBackupService';
 import { Supplier, SubscriptionPlanType } from '../../types';
 import { formatToDisplayDate } from '../../utils/dateUtils';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
@@ -65,6 +72,21 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
   const [currentSavedUpi, setCurrentSavedUpi] = useState(SubscriptionService.getAdminUpiId());
   const [isSavingUpi, setIsSavingUpi] = useState(false);
 
+  // Google Drive Backup state
+  const [driveWebhookUrl, setDriveWebhookUrl] = useState(GoogleDriveBackupService.getWebhookUrl());
+  const [isSavingDriveUrl, setIsSavingDriveUrl] = useState(false);
+  const [isTestingDrive, setIsTestingDrive] = useState(false);
+  const [isBackingUpAll, setIsBackingUpAll] = useState(false);
+  const [backupProgressText, setBackupProgressText] = useState('');
+  const [singleBackingUpId, setSingleBackingUpId] = useState<string | null>(null);
+
+  // Restore Modal State
+  const [isRestoreModalVisible, setIsRestoreModalVisible] = useState(false);
+  const [driveFolders, setDriveFolders] = useState<DriveSupplierFolderItem[]>([]);
+  const [isLoadingDriveList, setIsLoadingDriveList] = useState(false);
+  const [driveSearchQuery, setDriveSearchQuery] = useState('');
+  const [restoringFileId, setRestoringFileId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchCloudSuppliers();
     SubscriptionService.fetchAdminUpiIdFromCloud().then(id => {
@@ -72,6 +94,9 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
         setAdminUpiInput(id);
         setCurrentSavedUpi(id);
       }
+    });
+    GoogleDriveBackupService.fetchWebhookUrlFromCloud().then(url => {
+      if (url) setDriveWebhookUrl(url);
     });
   }, []);
 
@@ -335,6 +360,152 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
     setAdminUpiInput(`${adminNum}@${suffix}`);
   };
 
+  const handleSaveDriveWebhookUrl = async () => {
+    const clean = driveWebhookUrl.trim();
+    if (!clean || !clean.startsWith('http')) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य URL' : 'Invalid URL',
+        lang === 'hi' ? 'कृपया सही Google Apps Script Webhook URL दर्ज करें।' : 'Please enter a valid Google Apps Script Webhook URL.'
+      );
+      return;
+    }
+    try {
+      setIsSavingDriveUrl(true);
+      await GoogleDriveBackupService.setWebhookUrl(clean);
+      showAlert(
+        lang === 'hi' ? '✓ Webhook सहेजा गया' : '✓ Webhook Saved',
+        lang === 'hi'
+          ? 'Google Drive Webhook URL सफलतापूर्वक क्लाउड पर सेव हो गया है।'
+          : 'Google Drive Webhook URL successfully saved to cloud.'
+      );
+    } catch (err: any) {
+      showAlert('Error', err?.message || 'Failed to save webhook URL');
+    } finally {
+      setIsSavingDriveUrl(false);
+    }
+  };
+
+  const handleTestDriveConnection = async () => {
+    try {
+      setIsTestingDrive(true);
+      const res = await GoogleDriveBackupService.testConnection(driveWebhookUrl);
+      showAlert(res.success ? '✓ Google Drive Connected' : 'Connection Error', res.message);
+    } finally {
+      setIsTestingDrive(false);
+    }
+  };
+
+  const handleBackupSingleSupplier = async (target: SupplierWithSub) => {
+    try {
+      setSingleBackingUpId(target.id);
+      const res = await GoogleDriveBackupService.uploadBackupToDrive(target.id);
+      showAlert(res.success ? '✓ Drive Backup Done' : 'Backup Error', res.message);
+      if (res.success) {
+        await fetchCloudSuppliers();
+      }
+    } finally {
+      setSingleBackingUpId(null);
+    }
+  };
+
+  const handleBackupAllSuppliers = async () => {
+    if (suppliersList.length === 0) {
+      showAlert('Notice', 'बैकअप के लिए कोई डेयरी उपलब्ध नहीं है।');
+      return;
+    }
+
+    confirmAction(
+      lang === 'hi' ? 'Google Drive बैकअप शुरू करें?' : 'Start Google Drive Backup?',
+      lang === 'hi'
+        ? `क्या आप सभी ${suppliersList.length} डेयरियों का पूरा डेटाबेस Google Drive फ़ोल्डर में बैकअप करना चाहते हैं?`
+        : `Backup full database snapshots for all ${suppliersList.length} dairies to Google Drive?`,
+      async () => {
+        try {
+          setIsBackingUpAll(true);
+          const res = await GoogleDriveBackupService.backupAllSuppliers(
+            suppliersList,
+            (cur, total, name) => setBackupProgressText(`अपलोड हो रहा है (${cur}/${total}): ${name}`)
+          );
+
+          if (res.success) {
+            showAlert(
+              lang === 'hi' ? '✓ संपूर्ण बैकअप सफल' : '✓ Full Backup Successful',
+              lang === 'hi'
+                ? `सभी ${res.successCount} डेयरियों का बैकअप आपकी Google Drive में 'DairyApp_Backups' फ़ोल्डर में सुरक्षित रूप से सेव हो गया है!`
+                : `Successfully backed up all ${res.successCount} dairies to your Google Drive 'DairyApp_Backups' folder!`
+            );
+            await fetchCloudSuppliers();
+          } else {
+            showAlert(
+              'Backup Notice',
+              `सफल: ${res.successCount}, असफल: ${res.failCount}\n${res.errors.slice(0, 2).join('\n')}`
+            );
+          }
+        } finally {
+          setIsBackingUpAll(false);
+          setBackupProgressText('');
+        }
+      },
+      lang === 'hi' ? '📦 हाँ, बैकअप लें' : '📦 Yes, Backup',
+      lang === 'hi' ? 'रद्द करें' : 'Cancel',
+      false
+    );
+  };
+
+  const handleOpenRestoreModal = async () => {
+    setIsRestoreModalVisible(true);
+    await loadDriveBackupsList();
+  };
+
+  const loadDriveBackupsList = async (query?: string) => {
+    try {
+      setIsLoadingDriveList(true);
+      const res = await GoogleDriveBackupService.listDriveBackups(query !== undefined ? query : driveSearchQuery);
+      if (res.success) {
+        setDriveFolders(res.folders);
+      } else {
+        showAlert('Google Drive', res.message || 'Could not fetch backups from Drive.');
+      }
+    } finally {
+      setIsLoadingDriveList(false);
+    }
+  };
+
+  const handleConfirmRestoreFile = (fileItem: DriveBackupFileItem, folderName: string) => {
+    confirmAction(
+      lang === 'hi' ? '⚠️ डेटाबेस रीस्टोर की पुष्टि' : '⚠️ Confirm Database Restore',
+      lang === 'hi'
+        ? `क्या आप फ़ाइल "${fileItem.name}" से डेयरी का डेटा रीस्टोर करना चाहते हैं?\n\nयह डेटाबेस में ग्राहक, दूध और भुगतान को इस स्नैपशॉट से अपडेट कर देगा।`
+        : `Restore dairy data from "${fileItem.name}"?\n\nThis will update customers, milk entries and payments with this snapshot.`,
+      async () => {
+        try {
+          setRestoringFileId(fileItem.id);
+          const fileRes = await GoogleDriveBackupService.fetchBackupFile(fileItem.id);
+          if (!fileRes.success || !fileRes.data) {
+            showAlert('Error', fileRes.message || 'Failed to download backup file.');
+            return;
+          }
+
+          const targetSuppId = fileRes.data.supplier?.id || `supp_${folderName.split('_').slice(-1)[0]}`;
+          const restoreRes = await GoogleDriveBackupService.restoreBackupToDatabase(fileRes.data, targetSuppId);
+          
+          if (restoreRes.success) {
+            showAlert('✓ Restore Complete', restoreRes.message);
+            setIsRestoreModalVisible(false);
+            await fetchCloudSuppliers();
+          } else {
+            showAlert('Error', restoreRes.message);
+          }
+        } finally {
+          setRestoringFileId(null);
+        }
+      },
+      lang === 'hi' ? '🔄 हाँ, रीस्टोर करें' : '🔄 Yes, Restore',
+      lang === 'hi' ? 'रद्द करें' : 'Cancel',
+      true
+    );
+  };
+
   const filteredList = useMemo(() => {
     let list = suppliersList;
     if (searchQuery.trim()) {
@@ -465,6 +636,65 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
             <Text style={styles.suffixChipText}>@ibl</Text>
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* Google Drive Automated Backup & Restore Card */}
+      <View style={styles.driveCard}>
+        <View style={styles.driveHeaderRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.driveCardTitle}>📁 Google Drive ऑटो बैकअप एवं रीस्टोर</Text>
+            <Text style={styles.driveCardSubtitle}>
+              {driveWebhookUrl ? '✓ एडमिन Google Drive से कनेक्टेड है' : '⚠️ Google Drive Webhook URL सेटअप करें'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.restoreModalTriggerBtn}
+            onPress={handleOpenRestoreModal}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.restoreModalTriggerText}>🔄 रीस्टोर बैकअप</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Webhook Input Row */}
+        <View style={styles.upiInputRow}>
+          <TextInput
+            style={styles.upiInputField}
+            value={driveWebhookUrl}
+            onChangeText={setDriveWebhookUrl}
+            placeholder="Google Apps Script Webhook URL..."
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+          />
+          <TouchableOpacity
+            style={[styles.upiSaveBtn, isSavingDriveUrl && { opacity: 0.6 }]}
+            onPress={handleSaveDriveWebhookUrl}
+            disabled={isSavingDriveUrl}
+          >
+            <Text style={styles.upiSaveBtnText}>{isSavingDriveUrl ? 'सेविंग...' : '💾 सेव'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.testDriveBtn, isTestingDrive && { opacity: 0.6 }]}
+            onPress={handleTestDriveConnection}
+            disabled={isTestingDrive}
+          >
+            <Text style={styles.testDriveBtnText}>{isTestingDrive ? '...' : '⚡ टेस्ट'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 1-Click Backup All Dairies */}
+        <TouchableOpacity
+          style={[styles.backupAllBtn, isBackingUpAll && { opacity: 0.7 }]}
+          onPress={handleBackupAllSuppliers}
+          disabled={isBackingUpAll}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backupAllBtnText}>
+            {isBackingUpAll
+              ? `⏳ ${backupProgressText || 'बैकअप अपलोड हो रहा है...'}`
+              : `📦 सभी ${suppliersList.length} डेयरियों का Google Drive पर बैकअप लें (1-Click)`}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -672,6 +902,20 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
                     <Text style={styles.actBtnText}>👑 Lifetime</Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Individual Dairy Drive Backup Button */}
+                <View style={styles.singleBackupRow}>
+                  <TouchableOpacity
+                    style={[styles.singleDriveBtn, singleBackingUpId === item.id && { opacity: 0.6 }]}
+                    onPress={() => handleBackupSingleSupplier(item)}
+                    disabled={singleBackingUpId === item.id}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.singleDriveBtnText}>
+                      {singleBackingUpId === item.id ? '⏳ Google Drive पर अपलोड हो रहा है...' : '☁️ इस डेयरी का Google Drive बैकअप लें'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           }}
@@ -682,6 +926,107 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
           }
         />
       )}
+
+      {/* Google Drive Restore Modal */}
+      <Modal
+        visible={isRestoreModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsRestoreModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentCard}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalHeaderTitle}>🔄 Google Drive से बैकअप रीस्टोर करें</Text>
+                <Text style={styles.modalHeaderSubtitle}>
+                  सप्लायर के नाम या फ़ोन से बैकअप स्नैपशॉट चुनें
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsRestoreModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={styles.modalCloseBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View style={styles.modalSearchRow}>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="🔍 डेयरी का नाम या फ़ोन नंबर खोजें..."
+                placeholderTextColor="#94a3b8"
+                value={driveSearchQuery}
+                onChangeText={(text) => {
+                  setDriveSearchQuery(text);
+                  loadDriveBackupsList(text);
+                }}
+              />
+              <TouchableOpacity
+                style={styles.modalRefreshBtn}
+                onPress={() => loadDriveBackupsList(driveSearchQuery)}
+              >
+                <Text style={styles.modalRefreshBtnText}>🔄</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Backup Files List */}
+            {isLoadingDriveList ? (
+              <View style={styles.modalLoadingBox}>
+                <ActivityIndicator size="large" color="#0284c7" />
+                <Text style={styles.modalLoadingText}>Google Drive से बैकअप लोड हो रहे हैं...</Text>
+              </View>
+            ) : driveFolders.length === 0 ? (
+              <View style={styles.modalEmptyBox}>
+                <Text style={styles.modalEmptyText}>Google Drive पर कोई बैकअप फ़ाइल नहीं मिली।</Text>
+                <Text style={styles.modalEmptySubText}>
+                  पहले 'सभी डेयरियों का बैकअप लें' या किसी डेयरी का 'Google Drive बैकअप' बटन दबाएं।
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={styles.modalScrollBody} showsVerticalScrollIndicator={false}>
+                {driveFolders.map((folder, idx) => (
+                  <View key={idx} style={styles.folderCard}>
+                    <View style={styles.folderHeader}>
+                      <Text style={styles.folderTitle}>📁 {folder.folderName}</Text>
+                      <Text style={styles.folderFileCount}>{folder.files.length} बैकअप</Text>
+                    </View>
+
+                    {folder.files.map(file => {
+                      const isRestoringThis = restoringFileId === file.id;
+                      const sizeKb = Math.round(file.size / 1024);
+                      const fileDate = formatToDisplayDate(file.date.split('T')[0]);
+                      const fileTime = file.date.split('T')[1]?.slice(0, 5) || '';
+
+                      return (
+                        <View key={file.id} style={styles.backupFileRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.backupFileName} numberOfLines={1}>{file.name}</Text>
+                            <Text style={styles.backupFileMeta}>
+                              📅 {fileDate} {fileTime} • {sizeKb} KB
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[styles.restoreFileBtn, isRestoringThis && { opacity: 0.6 }]}
+                            onPress={() => handleConfirmRestoreFile(file, folder.folderName)}
+                            disabled={isRestoringThis}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.restoreFileBtnText}>
+                              {isRestoringThis ? 'रीस्टोर...' : '🔄 रीस्टोर'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1139,6 +1484,252 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start'
   },
   openConsoleBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  driveCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#a7f3d0',
+    shadowColor: '#059669',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  driveHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4
+  },
+  driveCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065f46'
+  },
+  driveCardSubtitle: {
+    fontSize: 11,
+    color: '#047857',
+    marginBottom: 6
+  },
+  restoreModalTriggerBtn: {
+    backgroundColor: '#ecfdf5',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#a7f3d0'
+  },
+  restoreModalTriggerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669'
+  },
+  testDriveBtn: {
+    backgroundColor: '#0d9488',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  testDriveBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  backupAllBtn: {
+    marginTop: 10,
+    backgroundColor: '#059669',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  backupAllBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff'
+  },
+  singleBackupRow: {
+    marginTop: 6
+  },
+  singleDriveBtn: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  singleDriveBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#047857'
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end'
+  },
+  modalContentCard: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    maxHeight: '90%',
+    paddingBottom: 24
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  modalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  modalHeaderSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  modalCloseBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#64748b'
+  },
+  modalSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 8,
+    gap: 8
+  },
+  modalSearchInput: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12,
+    color: '#0f172a'
+  },
+  modalRefreshBtn: {
+    padding: 8,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8
+  },
+  modalRefreshBtnText: {
+    fontSize: 14
+  },
+  modalLoadingBox: {
+    alignItems: 'center',
+    paddingVertical: 30
+  },
+  modalLoadingText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  modalEmptyBox: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    paddingHorizontal: 20
+  },
+  modalEmptyText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#64748b'
+  },
+  modalEmptySubText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 4,
+    textAlign: 'center'
+  },
+  modalScrollBody: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    maxHeight: 450
+  },
+  folderCard: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    marginBottom: 10,
+    padding: 10
+  },
+  folderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    marginBottom: 6
+  },
+  folderTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1e293b'
+  },
+  folderFileCount: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  backupFileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f1f5f9'
+  },
+  backupFileName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  backupFileMeta: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 2
+  },
+  restoreFileBtn: {
+    backgroundColor: '#0284c7',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6
+  },
+  restoreFileBtnText: {
     fontSize: 11,
     fontWeight: '800',
     color: '#ffffff'
