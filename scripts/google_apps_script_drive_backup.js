@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Dairy App — Google Apps Script for Automated Admin Google Drive Backups
  * 
  * Instructions:
@@ -133,7 +133,7 @@ function doGet(e) {
       if (!fileId) throw new Error('fileId parameter is required');
       
       const file = DriveApp.getFileById(fileId);
-      const content = file.getBlob().getDataAsString();
+      const content = file.getBlob().getDataAsString('UTF-8');
       
       return ContentService.createTextOutput(JSON.stringify({
         success: true,

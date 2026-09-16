@@ -289,6 +289,79 @@ export const SettingsScreen = () => {
     }
   };
 
+  const handleImportBackup = () => {
+    requireAuth(() => {
+      if (typeof document !== 'undefined') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.onchange = async (e: any) => {
+          const file = e.target?.files?.[0];
+          if (!file) return;
+
+          const reader = new FileReader();
+          reader.onload = async (event: any) => {
+            try {
+              const rawText = event.target?.result as string;
+              const parsed = JSON.parse(rawText);
+              if (!parsed || (!parsed.supplier && !parsed.customers && !parsed.milkEntries)) {
+                showAlert('Invalid File', 'चयनित फ़ाइल Dairy App की सही बैकअप फ़ाइल नहीं है।');
+                return;
+              }
+
+              const targetSuppId = parsed.supplier?.id || supplier?.id || 'supp_8721873433';
+              confirmAction(
+                'डेटाबेस रीस्टोर करें (Restore Database)',
+                `क्या आप फ़ाइल "${file.name}" से पूरा डेटा रीस्टोर करना चाहते हैं?\n• वर्तमान डिवाइस डेटाबेस इस बैकअप से अपडेट हो जाएगा।`,
+                async () => {
+                  try {
+                    const targetSupp = parsed.supplier || supplier;
+                    if (targetSupp) {
+                      await StorageService.saveSupplier(targetSupp);
+                      setSupplier(targetSupp);
+                    }
+                    await StorageService.setAllDataForSupplier(
+                      targetSuppId,
+                      parsed.customers || [],
+                      parsed.milkEntries || [],
+                      parsed.payments || [],
+                      parsed.subSuppliers || [],
+                      parsed.milkInwardEntries || [],
+                      parsed.subSupplierPayments || []
+                    );
+                    await Promise.all([
+                      refreshCustomers(),
+                      refreshMilkEntries(),
+                      refreshPayments(),
+                      refreshSubSuppliers(),
+                      refreshMilkInwardEntries(),
+                      refreshSubSupplierPayments()
+                    ]);
+                    showAlert(
+                      'रीस्टोर सफल (Restored)',
+                      `डेटा सफलतापूर्वक रीस्टोर हो गया:\n• ${parsed.customers?.length || 0} ग्राहक\n• ${parsed.milkEntries?.length || 0} दूध रिकॉर्ड\n• ${parsed.payments?.length || 0} भुगतान`
+                    );
+                  } catch (err: any) {
+                    showAlert('Error', `रीस्टोर विफल: ${err?.message || 'अज्ञात त्रुटि'}`);
+                  }
+                },
+                '📥 रीस्टोर करें (Restore)',
+                'रद्द करें (Cancel)',
+                false
+              );
+            } catch (err: any) {
+              showAlert('Error', `फ़ाइल पढ़ने में त्रुटि: ${err?.message || 'अमान्य JSON'}`);
+            }
+          };
+          reader.readAsText(file);
+        };
+        input.click();
+      } else {
+        showAlert('Notice', 'कृपया वेब ब्राउज़र में बैकअप रीस्टोर करें।');
+      }
+    });
+  };
+
   const handleClearCustomers = () => {
     requireAuth(() => {
       confirmAction(
@@ -710,7 +783,7 @@ export const SettingsScreen = () => {
               onPress={() => setInspectorVisible(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.inspectBtnText}>🔍 Inspect Stored Data</Text>
+              <Text style={styles.inspectBtnText}>🔍 Inspect</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -718,7 +791,15 @@ export const SettingsScreen = () => {
               onPress={handleExportBackup}
               activeOpacity={0.7}
             >
-              <Text style={styles.shareBackupBtnText}>📤 Share Backup</Text>
+              <Text style={styles.shareBackupBtnText}>📤 Backup</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.restoreBackupBtn}
+              onPress={handleImportBackup}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.restoreBackupBtnText}>📥 Restore</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1241,6 +1322,16 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   shareBackupBtnText: { color: '#0284c7', fontWeight: 'bold', fontSize: 12 },
+  restoreBackupBtn: {
+    flex: 1,
+    backgroundColor: '#10b98115',
+    borderWidth: 1,
+    borderColor: '#10b981',
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center'
+  },
+  restoreBackupBtnText: { color: '#059669', fontWeight: 'bold', fontSize: 12 },
 
   // Inspector Modal Styles
   modalOverlay: {

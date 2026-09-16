@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ref, get } from 'firebase/database';
 import { rtdb } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
+import { StorageService } from '../../services/storageService';
 import {
   SubscriptionService,
   SubscriptionStatusResult
@@ -59,7 +60,23 @@ interface SupplierWithSub {
 }
 
 export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { lang, supplier, customers, milkEntries, milkInwardEntries, payments } = useApp();
+  const {
+    lang,
+    supplier,
+    setSupplier,
+    customers,
+    refreshCustomers,
+    milkEntries,
+    refreshMilkEntries,
+    milkInwardEntries,
+    refreshMilkInwardEntries,
+    payments,
+    refreshPayments,
+    subSuppliers,
+    refreshSubSuppliers,
+    subSupplierPayments,
+    refreshSubSupplierPayments
+  } = useApp();
   const [suppliersList, setSuppliersList] = useState<SupplierWithSub[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -457,6 +474,13 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
     await loadDriveBackupsList();
   };
 
+  const handleOpenRestoreModalForSupplier = async (target: SupplierWithSub) => {
+    const q = target.phone || target.businessName || '';
+    setDriveSearchQuery(q);
+    setIsRestoreModalVisible(true);
+    await loadDriveBackupsList(q);
+  };
+
   const loadDriveBackupsList = async (query?: string) => {
     try {
       setIsLoadingDriveList(true);
@@ -475,8 +499,8 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
     confirmAction(
       lang === 'hi' ? '⚠️ डेटाबेस रीस्टोर की पुष्टि' : '⚠️ Confirm Database Restore',
       lang === 'hi'
-        ? `क्या आप फ़ाइल "${fileItem.name}" से डेयरी का डेटा रीस्टोर करना चाहते हैं?\n\nयह डेटाबेस में ग्राहक, दूध और भुगतान को इस स्नैपशॉट से अपडेट कर देगा।`
-        : `Restore dairy data from "${fileItem.name}"?\n\nThis will update customers, milk entries and payments with this snapshot.`,
+        ? `क्या आप फ़ाइल "${fileItem.name}" से डेयरी का डेटा रीस्टोर करना चाहते हैं?\n\nयह स्थानीय डिवाइस और डेटाबेस में सभी ग्राहक, दूध और भुगतान को इस स्नैपशॉट से रीस्टोर कर देगा।`
+        : `Restore dairy data from "${fileItem.name}"?\n\nThis will update all customers, milk entries and payments with this snapshot.`,
       async () => {
         try {
           setRestoringFileId(fileItem.id);
@@ -490,12 +514,35 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
           const restoreRes = await GoogleDriveBackupService.restoreBackupToDatabase(fileRes.data, targetSuppId);
           
           if (restoreRes.success) {
-            showAlert('✓ Restore Complete', restoreRes.message);
+            showAlert(lang === 'hi' ? '✓ रीस्टोर सफल' : '✓ Restore Complete', restoreRes.message);
             setIsRestoreModalVisible(false);
+
+            // If active local supplier (e.g. 8721873433), update AppContext state!
+            const isLocal = supplier && (
+              supplier.id === targetSuppId ||
+              targetSuppId.includes(supplier.phone) ||
+              fileRes.data.supplier?.phone === supplier.phone ||
+              fileRes.data.supplier?.id === supplier.id
+            );
+            if (isLocal) {
+              const updatedSupp = await StorageService.getSupplier();
+              if (updatedSupp) setSupplier(updatedSupp);
+              await Promise.all([
+                refreshCustomers(),
+                refreshMilkEntries(),
+                refreshPayments(),
+                refreshSubSuppliers(),
+                refreshMilkInwardEntries(),
+                refreshSubSupplierPayments()
+              ]);
+            }
+
             await fetchCloudSuppliers();
           } else {
-            showAlert('Error', restoreRes.message);
+            showAlert('Restore Error', restoreRes.message);
           }
+        } catch (err: any) {
+          showAlert('Restore Error', err?.message || 'Failed to restore backup');
         } finally {
           setRestoringFileId(null);
         }
@@ -504,6 +551,71 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
       lang === 'hi' ? 'रद्द करें' : 'Cancel',
       true
     );
+  };
+
+  const handleRestoreFromLocalJson = () => {
+    if (typeof document !== 'undefined') {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.onchange = async (e: any) => {
+        const file = e.target?.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event: any) => {
+          try {
+            const rawText = event.target?.result as string;
+            const parsed = JSON.parse(rawText);
+            if (!parsed || (!parsed.supplier && !parsed.customers && !parsed.milkEntries)) {
+              showAlert('Invalid File', 'चयनित फ़ाइल Dairy App की सही बैकअप फ़ाइल नहीं है।');
+              return;
+            }
+
+            const targetSuppId = parsed.supplier?.id || supplier?.id || 'supp_8721873433';
+            confirmAction(
+              lang === 'hi' ? '⚠️ फ़ाइल से रीस्टोर करें?' : 'Restore from File?',
+              lang === 'hi'
+                ? `क्या आप फ़ाइल "${file.name}" से डेयरी का पूरा डेटा रीस्टोर करना चाहते हैं?\n\nयह आपके डिवाइस पर वर्तमान डेटाबेस को इस बैकअप से अपडेट कर देगा।`
+                : `Restore all dairy data from "${file.name}"?\n\nThis will update your device database with this backup.`,
+              async () => {
+                try {
+                  const restoreRes = await GoogleDriveBackupService.restoreBackupToDatabase(parsed, targetSuppId);
+                  if (restoreRes.success) {
+                    showAlert(lang === 'hi' ? '✓ रीस्टोर सफल' : '✓ Restore Complete', restoreRes.message);
+                    setIsRestoreModalVisible(false);
+                    const updatedSupp = await StorageService.getSupplier();
+                    if (updatedSupp) setSupplier(updatedSupp);
+                    await Promise.all([
+                      refreshCustomers(),
+                      refreshMilkEntries(),
+                      refreshPayments(),
+                      refreshSubSuppliers(),
+                      refreshMilkInwardEntries(),
+                      refreshSubSupplierPayments()
+                    ]);
+                    await fetchCloudSuppliers();
+                  } else {
+                    showAlert('Error', restoreRes.message);
+                  }
+                } catch (err: any) {
+                  showAlert('Error', err?.message || 'Failed to restore');
+                }
+              },
+              lang === 'hi' ? '🔄 हाँ, रीस्टोर करें' : 'Yes, Restore',
+              lang === 'hi' ? 'रद्द करें' : 'Cancel',
+              true
+            );
+          } catch (err: any) {
+            showAlert('Error', `फ़ाइल पढ़ने में त्रुटि: ${err?.message || 'अमान्य JSON फ़ाइल'}`);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    } else {
+      showAlert('Notice', 'फ़ाइल पिकर केवल वेब/ब्राउज़र में समर्थित है।');
+    }
   };
 
   const filteredList = useMemo(() => {
@@ -903,7 +1015,7 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
                   </TouchableOpacity>
                 </View>
 
-                {/* Individual Dairy Drive Backup Button */}
+                {/* Individual Dairy Drive Backup & Restore Buttons */}
                 <View style={styles.singleBackupRow}>
                   <TouchableOpacity
                     style={[styles.singleDriveBtn, singleBackingUpId === item.id && { opacity: 0.6 }]}
@@ -912,8 +1024,15 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
                     activeOpacity={0.8}
                   >
                     <Text style={styles.singleDriveBtnText}>
-                      {singleBackingUpId === item.id ? '⏳ Google Drive पर अपलोड हो रहा है...' : '☁️ इस डेयरी का Google Drive बैकअप लें'}
+                      {singleBackingUpId === item.id ? '⏳ अपलोडिंग...' : '☁️ Drive बैकअप'}
                     </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.singleRestoreBtn}
+                    onPress={() => handleOpenRestoreModalForSupplier(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.singleRestoreBtnText}>🔄 रीस्टोर करें</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -968,6 +1087,17 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
                 onPress={() => loadDriveBackupsList(driveSearchQuery)}
               >
                 <Text style={styles.modalRefreshBtnText}>🔄</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Direct Local JSON File Restore Option */}
+            <View style={styles.modalFileRestoreBar}>
+              <TouchableOpacity
+                style={styles.pickFileBtn}
+                onPress={handleRestoreFromLocalJson}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.pickFileBtnText}>📂 डिवाइस से JSON बैकअप फ़ाइल चुनें (Restore from File)</Text>
               </TouchableOpacity>
             </View>
 
@@ -1559,14 +1689,18 @@ const styles = StyleSheet.create({
     color: '#ffffff'
   },
   singleBackupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginTop: 6
   },
   singleDriveBtn: {
+    flex: 1,
     backgroundColor: '#ecfdf5',
     borderWidth: 1,
     borderColor: '#a7f3d0',
     borderRadius: 8,
-    paddingVertical: 6,
+    paddingVertical: 7,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -1574,6 +1708,41 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#047857'
+  },
+  singleRestoreBtn: {
+    flex: 1,
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    borderRadius: 8,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  singleRestoreBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284c7'
+  },
+  modalFileRestoreBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 8
+  },
+  pickFileBtn: {
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#0284c7',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  pickFileBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0369a1'
   },
   modalOverlay: {
     flex: 1,

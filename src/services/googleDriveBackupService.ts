@@ -1,4 +1,4 @@
-﻿import { ref, get, set, update } from 'firebase/database';
+import { ref, get, set, update } from 'firebase/database';
 import { rtdb } from '../config/firebase';
 import { StorageService } from './storageService';
 import { Supplier, Customer, MilkEntry, Payment, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
@@ -282,20 +282,26 @@ export const GoogleDriveBackupService = {
   async listDriveBackups(query?: string): Promise<{ success: boolean; folders: DriveSupplierFolderItem[]; message?: string }> {
     const webhookUrl = this.getWebhookUrl();
     if (!webhookUrl) {
-      return { success: false, folders: [], message: 'Google Drive Webhook URL is not configured.' };
+      return { success: false, folders: [], message: 'Google Drive Webhook URL दर्ज नहीं है। कृपया पहले Webhook URL सेव करें।' };
     }
 
     try {
       const q = query ? encodeURIComponent(query.trim()) : '';
-      const url = `${webhookUrl}?action=list&query=${q}`;
+      const url = `${webhookUrl}${webhookUrl.includes('?') ? '&' : '?'}action=list&query=${q}`;
       const res = await fetch(url, { method: 'GET' });
-      const data = await res.json();
+      const text = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(text);
+      } catch {
+        return { success: false, folders: [], message: `Google Drive response error: ${text.slice(0, 100)}` };
+      }
       if (data.success && Array.isArray(data.folders)) {
         return { success: true, folders: data.folders };
       }
       return { success: false, folders: [], message: data.message || 'Could not fetch backups from Drive.' };
     } catch (err: any) {
-      return { success: false, folders: [], message: err?.message || 'Network error.' };
+      return { success: false, folders: [], message: err?.message || 'Network error while fetching backups from Drive.' };
     }
   },
 
@@ -306,15 +312,21 @@ export const GoogleDriveBackupService = {
     }
 
     try {
-      const url = `${webhookUrl}?action=get&fileId=${encodeURIComponent(fileId)}`;
+      const url = `${webhookUrl}${webhookUrl.includes('?') ? '&' : '?'}action=get&fileId=${encodeURIComponent(fileId)}`;
       const res = await fetch(url, { method: 'GET' });
-      const json = await res.json();
+      const text = await res.text();
+      let json: any = {};
+      try {
+        json = JSON.parse(text);
+      } catch {
+        return { success: false, message: `Unexpected response from Google Drive: ${text.slice(0, 100)}` };
+      }
       if (json.success && json.data) {
         return { success: true, data: json.data };
       }
       return { success: false, message: json.message || 'Failed to download backup file.' };
     } catch (err: any) {
-      return { success: false, message: err?.message || 'Network error.' };
+      return { success: false, message: err?.message || 'Network error while downloading backup file.' };
     }
   },
 
@@ -327,9 +339,42 @@ export const GoogleDriveBackupService = {
         return { success: false, message: 'Invalid backup file. Missing supplier profile.' };
       }
 
-      const suppRef = ref(rtdb, `suppliers/${targetSupplierId}`);
-      
-      // Convert arrays back to maps for Firebase RTDB
+      // Check if target matches local active supplier (e.g. 8721873433)
+      const localSupp = await StorageService.getSupplier();
+      const isTargetActiveLocal = !!(
+        localSupp && (
+          localSupp.id === targetSupplierId ||
+          targetSupplierId.includes(localSupp.phone) ||
+          (backupData.supplier && (
+            backupData.supplier.id === localSupp.id ||
+            (backupData.supplier.phone && localSupp.phone && backupData.supplier.phone.includes(localSupp.phone)) ||
+            (localSupp.phone && backupData.supplier.phone && localSupp.phone.includes(backupData.supplier.phone))
+          ))
+        )
+      );
+
+      let localSaved = false;
+      if (isTargetActiveLocal && localSupp) {
+        const suppToSave: Supplier = {
+          ...backupData.supplier,
+          id: localSupp.id,
+          phone: localSupp.phone,
+          updatedAt: Date.now()
+        };
+        await StorageService.saveSupplier(suppToSave);
+        await StorageService.setAllDataForSupplier(
+          localSupp.id,
+          backupData.customers || [],
+          backupData.milkEntries || [],
+          backupData.payments || [],
+          backupData.subSuppliers || [],
+          backupData.milkInwardEntries || [],
+          backupData.subSupplierPayments || []
+        );
+        localSaved = true;
+      }
+
+      // Prepare maps for Firebase RTDB
       const custMap: Record<string, Customer> = {};
       (backupData.customers || []).forEach(c => { if (c.id) custMap[c.id] = c; });
 
@@ -365,11 +410,28 @@ export const GoogleDriveBackupService = {
         updatedAt: now
       };
 
-      await set(suppRef, restoreBundle);
+      // Also try restoring to Cloud RTDB (safely handle permissions/offline)
+      let cloudSaved = false;
+      try {
+        const suppRef = ref(rtdb, `suppliers/${targetSupplierId}`);
+        await set(suppRef, restoreBundle);
+        cloudSaved = true;
+      } catch (cloudErr: any) {
+        console.warn('Cloud restore notice (permissions or offline):', cloudErr);
+      }
+
+      if (!localSaved && !cloudSaved) {
+        return {
+          success: false,
+          message: 'रीस्टोर विफल: क्लाउड डेटाबेस पर अनुमति नहीं मिली और यह डेयरी इस डिवाइस पर एक्टिव नहीं है।'
+        };
+      }
 
       return {
         success: true,
-        message: `✓ Successfully restored ${backupData.customers?.length || 0} customers, ${backupData.milkEntries?.length || 0} milk entries, and ${backupData.payments?.length || 0} payments from Google Drive!`
+        message: isTargetActiveLocal
+          ? `✓ आपकी डेयरी (${localSupp?.phone || '8721873433'}) का बैकअप सफलतापूर्वक रीस्टोर हो गया है!\n\n• ${backupData.customers?.length || 0} ग्राहक\n• ${backupData.milkEntries?.length || 0} दूध वितरण\n• ${backupData.payments?.length || 0} भुगतान\n• ${backupData.subSuppliers?.length || 0} विक्रेता/किसान`
+          : `✓ Successfully restored ${backupData.customers?.length || 0} customers, ${backupData.milkEntries?.length || 0} milk entries, and ${backupData.payments?.length || 0} payments!`
       };
     } catch (err: any) {
       console.warn('Restore error:', err);
