@@ -57,6 +57,21 @@ export const SubscriptionModal: React.FC = () => {
   const paytmUrl = `paytmmp://pay?${baseQuery}`;
   const qrUrl = SubscriptionService.generateQrCodeUrl(upiUrl);
 
+  const getMaskedUpi = (upi: string): string => {
+    if (!upi) return 'DairyApp Merchant';
+    const parts = upi.split('@');
+    if (parts.length !== 2) return upi;
+    const prefix = parts[0];
+    const suffix = parts[1];
+    if (/^\d{10}$/.test(prefix)) {
+      return `${prefix.slice(0, 2)}••••••${prefix.slice(-2)}@${suffix}`;
+    }
+    if (prefix.length > 6) {
+      return `${prefix.slice(0, 3)}•••@${suffix}`;
+    }
+    return upi;
+  };
+
   const handleCopyUpiId = async () => {
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
@@ -72,7 +87,10 @@ export const SubscriptionModal: React.FC = () => {
       setCopiedToast(true);
       setTimeout(() => setCopiedToast(false), 3000);
     } catch {
-      showAlert('UPI ID', adminUpi);
+      showAlert(
+        lang === 'hi' ? 'UPI पेमेंट' : 'UPI Payment',
+        lang === 'hi' ? 'कृपया QR कोड स्कैन करें या सीधे ऐप बटन का उपयोग करें।' : 'Please scan QR code or use the direct app buttons.'
+      );
     }
   };
 
@@ -85,8 +103,8 @@ export const SubscriptionModal: React.FC = () => {
       showAlert(
         appName,
         lang === 'hi'
-          ? `UPI ID (${adminUpi}) कॉपी कर लिया गया है!\n\nकृपया अपने मोबाइल में ${appName} खोलें और 'Pay to UPI ID' विकल्प चुनकर ₹${currentPlanObj.price} भेजें।`
-          : `UPI ID (${adminUpi}) has been copied!\n\nPlease open ${appName} on your phone and choose 'Pay to UPI ID' to pay ₹${currentPlanObj.price}.`
+          ? `सत्यापित मर्चेंट ID कॉपी कर ली गई है!\n\nकृपया अपने मोबाइल में ${appName} खोलें और 'Pay to UPI ID' विकल्प में पेस्ट कर ₹${currentPlanObj.price} भेजें।`
+          : `Verified Merchant ID has been copied!\n\nPlease open ${appName} on your phone and paste under 'Pay to UPI ID' to pay ₹${currentPlanObj.price}.`
       );
     }
   };
@@ -259,9 +277,9 @@ export const SubscriptionModal: React.FC = () => {
               <View style={styles.upiCopyRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.upiLabelText}>
-                    {lang === 'hi' ? 'अधिकृत UPI ID:' : 'Official UPI ID:'}
+                    {lang === 'hi' ? '🛡️ सत्यापित मर्चेंट (Verified Merchant):' : '🛡️ Verified Merchant Gateway:'}
                   </Text>
-                  <Text style={styles.upiValText} selectable>{adminUpi}</Text>
+                  <Text style={styles.upiValText} selectable>{getMaskedUpi(adminUpi)}</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.copyBtn, copiedToast && styles.copyBtnDone]}
@@ -270,8 +288,8 @@ export const SubscriptionModal: React.FC = () => {
                 >
                   <Text style={styles.copyBtnText}>
                     {copiedToast
-                      ? (lang === 'hi' ? '✓ कॉपी हुआ' : '✓ Copied!')
-                      : (lang === 'hi' ? '📋 कॉपी करें' : '📋 Copy')}
+                      ? (lang === 'hi' ? '✓ ID कॉपी हुआ' : '✓ ID Copied!')
+                      : (lang === 'hi' ? '📋 ID कॉपी करें' : '📋 Copy ID')}
                   </Text>
                 </TouchableOpacity>
               </View>

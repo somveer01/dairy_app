@@ -1,0 +1,26 @@
+﻿{
+  "rules": {
+    "suppliers": {
+      "$supplierId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "cards": {
+      "$supplierId": {
+        "$partyId": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    "system": {
+      "settings": {
+        "adminUpiId": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    }
+  }
+}
