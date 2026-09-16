@@ -52,12 +52,13 @@ interface SupplierWithSub {
 }
 
 export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const { lang, supplier } = useApp();
+  const { lang, supplier, customers, milkEntries, milkInwardEntries, payments } = useApp();
   const [suppliersList, setSuppliersList] = useState<SupplierWithSub[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'using' | 'dormant' | 'active' | 'trial' | 'expired'>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [cloudError, setCloudError] = useState<string | null>(null);
 
   // Admin UPI ID state
   const [adminUpiInput, setAdminUpiInput] = useState(SubscriptionService.getAdminUpiId());
@@ -74,131 +75,194 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
     });
   }, []);
 
+  const getLocalSupplierObj = (): SupplierWithSub | null => {
+    if (!supplier || !supplier.phone) return null;
+    const subDetails = SubscriptionService.getSubscriptionStatus(supplier);
+    const custCount = customers ? customers.length : 0;
+    const entryCount = milkEntries ? milkEntries.length : 0;
+    const inwardCount = milkInwardEntries ? milkInwardEntries.length : 0;
+    const payCount = payments ? payments.length : 0;
+
+    let latestEntryDateIso: string | null = null;
+    if (milkEntries && milkEntries.length > 0) {
+      milkEntries.forEach(e => {
+        if (e.date && (!latestEntryDateIso || e.date > latestEntryDateIso)) {
+          latestEntryDateIso = e.date;
+        }
+      });
+    }
+
+    return {
+      id: supplier.id,
+      name: supplier.name || 'Owner',
+      phone: supplier.phone,
+      businessName: supplier.businessName || 'Dairy Farm',
+      createdAt: supplier.createdAt || Date.now(),
+      subDetails,
+      usageStats: {
+        customersCount: custCount,
+        milkEntriesCount: entryCount,
+        inwardCount,
+        paymentsCount: payCount,
+        lastActiveAt: Date.now(),
+        lastEntryDate: latestEntryDateIso ? formatToDisplayDate(latestEntryDateIso) : null,
+        isActiveRecently: true,
+        activityLabelHi: '🟢 सक्रिय (Local Device)',
+        activityLabelEn: '🟢 Local Active',
+        timeAgoStr: 'अभी सक्रिय',
+        statusBadgeColor: 'green'
+      }
+    };
+  };
+
   const fetchCloudSuppliers = async () => {
     try {
       setIsLoading(true);
+      setCloudError(null);
       const suppliersRef = ref(rtdb, 'suppliers');
       const snap = await get(suppliersRef);
 
-      if (!snap.exists()) {
-        setSuppliersList([]);
-        return;
-      }
-
-      const raw = snap.val();
       const list: SupplierWithSub[] = [];
 
-      for (const [suppId, data] of Object.entries<any>(raw)) {
-        if (!data) continue;
-        const profile: Supplier = data.profile || {
-          id: suppId,
-          name: 'Supplier',
-          phone: suppId.replace('supp_', ''),
-          businessName: 'Dairy Farm',
-          createdAt: Date.now()
-        };
+      if (snap.exists()) {
+        const raw = snap.val();
 
-        const subDetails = SubscriptionService.getSubscriptionStatus(profile);
+        for (const [suppId, data] of Object.entries<any>(raw)) {
+          if (!data) continue;
+          const profile: Supplier = data.profile || {
+            id: suppId,
+            name: 'Supplier',
+            phone: suppId.replace('supp_', ''),
+            businessName: 'Dairy Farm',
+            createdAt: Date.now()
+          };
 
-        // Calculate Usage & Activity Metrics
-        const custCount = data.customers && typeof data.customers === 'object' ? Object.keys(data.customers).length : 0;
-        const entryCount = data.milkEntries && typeof data.milkEntries === 'object' ? Object.keys(data.milkEntries).length : 0;
-        const inwardCount = data.milkInwardEntries && typeof data.milkInwardEntries === 'object' ? Object.keys(data.milkInwardEntries).length : 0;
-        const payCount = data.payments && typeof data.payments === 'object' ? Object.keys(data.payments).length : 0;
+          const subDetails = SubscriptionService.getSubscriptionStatus(profile);
 
-        let lastActive = (profile as any).lastSyncedAt || (profile as any).updatedAt || data.updatedAt || data.lastActiveAt || profile.createdAt || Date.now();
-        let latestEntryDateIso: string | null = null;
+          // Calculate Usage & Activity Metrics
+          const custCount = data.customers && typeof data.customers === 'object' ? Object.keys(data.customers).length : 0;
+          const entryCount = data.milkEntries && typeof data.milkEntries === 'object' ? Object.keys(data.milkEntries).length : 0;
+          const inwardCount = data.milkInwardEntries && typeof data.milkInwardEntries === 'object' ? Object.keys(data.milkInwardEntries).length : 0;
+          const payCount = data.payments && typeof data.payments === 'object' ? Object.keys(data.payments).length : 0;
 
-        if (data.milkEntries && typeof data.milkEntries === 'object') {
-          for (const e of Object.values<any>(data.milkEntries)) {
-            if (!e) continue;
-            if (e.createdAt && e.createdAt > lastActive) lastActive = e.createdAt;
-            if (e.updatedAt && e.updatedAt > lastActive) lastActive = e.updatedAt;
-            if (e.date && (!latestEntryDateIso || e.date > latestEntryDateIso)) {
-              latestEntryDateIso = e.date;
+          let lastActive = (profile as any).lastSyncedAt || (profile as any).updatedAt || data.updatedAt || data.lastActiveAt || profile.createdAt || Date.now();
+          let latestEntryDateIso: string | null = null;
+
+          if (data.milkEntries && typeof data.milkEntries === 'object') {
+            for (const e of Object.values<any>(data.milkEntries)) {
+              if (!e) continue;
+              if (e.createdAt && e.createdAt > lastActive) lastActive = e.createdAt;
+              if (e.updatedAt && e.updatedAt > lastActive) lastActive = e.updatedAt;
+              if (e.date && (!latestEntryDateIso || e.date > latestEntryDateIso)) {
+                latestEntryDateIso = e.date;
+              }
             }
           }
-        }
 
-        if (data.milkInwardEntries && typeof data.milkInwardEntries === 'object') {
-          for (const i of Object.values<any>(data.milkInwardEntries)) {
-            if (!i) continue;
-            if (i.createdAt && i.createdAt > lastActive) lastActive = i.createdAt;
-            if (i.updatedAt && i.updatedAt > lastActive) lastActive = i.updatedAt;
-            if (i.date && (!latestEntryDateIso || i.date > latestEntryDateIso)) {
-              latestEntryDateIso = i.date;
+          if (data.milkInwardEntries && typeof data.milkInwardEntries === 'object') {
+            for (const i of Object.values<any>(data.milkInwardEntries)) {
+              if (!i) continue;
+              if (i.createdAt && i.createdAt > lastActive) lastActive = i.createdAt;
+              if (i.updatedAt && i.updatedAt > lastActive) lastActive = i.updatedAt;
+              if (i.date && (!latestEntryDateIso || i.date > latestEntryDateIso)) {
+                latestEntryDateIso = i.date;
+              }
             }
           }
+
+          const now = Date.now();
+          const diffMs = Math.max(0, now - lastActive);
+          const diffHours = diffMs / (1000 * 60 * 60);
+          const diffDays = Math.floor(diffHours / 24);
+
+          let timeAgoStr = 'आज';
+          if (diffHours < 1) timeAgoStr = 'अभी सक्रिय';
+          else if (diffHours < 24) timeAgoStr = `${Math.floor(diffHours)} घंटे पहले`;
+          else if (diffDays === 1) timeAgoStr = 'कल';
+          else timeAgoStr = `${diffDays} दिन पहले`;
+
+          let isActiveRecently = false;
+          let activityLabelHi = '🔴 बंद पड़ा है (Inactive)';
+          let activityLabelEn = '🔴 Inactive';
+          let statusBadgeColor: 'green' | 'yellow' | 'red' | 'gray' = 'red';
+
+          if (entryCount === 0 && custCount === 0) {
+            activityLabelHi = '⚪ खाली खाता (डेटा नहीं)';
+            activityLabelEn = '⚪ Empty Account';
+            statusBadgeColor = 'gray';
+          } else if (diffDays <= 2) {
+            isActiveRecently = true;
+            activityLabelHi = '🟢 सक्रिय (Active)';
+            activityLabelEn = '🟢 Active';
+            statusBadgeColor = 'green';
+          } else if (diffDays <= 7) {
+            isActiveRecently = true;
+            activityLabelHi = '🟡 मध्यम सक्रिय (3-7 दिन)';
+            activityLabelEn = '🟡 Moderate';
+            statusBadgeColor = 'yellow';
+          } else {
+            activityLabelHi = '🔴 निष्क्रिय (7+ दिन से बंद)';
+            activityLabelEn = '🔴 Dormant';
+            statusBadgeColor = 'red';
+          }
+
+          const usageStats: SupplierUsageStats = {
+            customersCount: custCount,
+            milkEntriesCount: entryCount,
+            inwardCount,
+            paymentsCount: payCount,
+            lastActiveAt: lastActive,
+            lastEntryDate: latestEntryDateIso ? formatToDisplayDate(latestEntryDateIso) : null,
+            isActiveRecently,
+            activityLabelHi,
+            activityLabelEn,
+            timeAgoStr,
+            statusBadgeColor
+          };
+
+          list.push({
+            id: suppId,
+            name: profile.name,
+            phone: profile.phone,
+            businessName: profile.businessName,
+            createdAt: profile.createdAt || Date.now(),
+            subDetails,
+            usageStats,
+            pendingSubscription: data.pendingSubscription
+          });
         }
+      }
 
-        const now = Date.now();
-        const diffMs = Math.max(0, now - lastActive);
-        const diffHours = diffMs / (1000 * 60 * 60);
-        const diffDays = Math.floor(diffHours / 24);
-
-        let timeAgoStr = 'आज';
-        if (diffHours < 1) timeAgoStr = 'अभी सक्रिय';
-        else if (diffHours < 24) timeAgoStr = `${Math.floor(diffHours)} घंटे पहले`;
-        else if (diffDays === 1) timeAgoStr = 'कल';
-        else timeAgoStr = `${diffDays} दिन पहले`;
-
-        let isActiveRecently = false;
-        let activityLabelHi = '🔴 बंद पड़ा है (Inactive)';
-        let activityLabelEn = '🔴 Inactive';
-        let statusBadgeColor: 'green' | 'yellow' | 'red' | 'gray' = 'red';
-
-        if (entryCount === 0 && custCount === 0) {
-          activityLabelHi = '⚪ खाली खाता (डेटा नहीं)';
-          activityLabelEn = '⚪ Empty Account';
-          statusBadgeColor = 'gray';
-        } else if (diffDays <= 2) {
-          isActiveRecently = true;
-          activityLabelHi = '🟢 सक्रिय (Active)';
-          activityLabelEn = '🟢 Active';
-          statusBadgeColor = 'green';
-        } else if (diffDays <= 7) {
-          isActiveRecently = true;
-          activityLabelHi = '🟡 मध्यम सक्रिय (3-7 दिन)';
-          activityLabelEn = '🟡 Moderate';
-          statusBadgeColor = 'yellow';
-        } else {
-          activityLabelHi = '🔴 निष्क्रिय (7+ दिन से बंद)';
-          activityLabelEn = '🔴 Dormant';
-          statusBadgeColor = 'red';
+      // Ensure local supplier is included so dairy details are NEVER missing!
+      const localObj = getLocalSupplierObj();
+      if (localObj) {
+        const exists = list.some(s => s.phone === localObj.phone || s.id === localObj.id);
+        if (!exists) {
+          list.unshift(localObj);
         }
-
-        const usageStats: SupplierUsageStats = {
-          customersCount: custCount,
-          milkEntriesCount: entryCount,
-          inwardCount,
-          paymentsCount: payCount,
-          lastActiveAt: lastActive,
-          lastEntryDate: latestEntryDateIso ? formatToDisplayDate(latestEntryDateIso) : null,
-          isActiveRecently,
-          activityLabelHi,
-          activityLabelEn,
-          timeAgoStr,
-          statusBadgeColor
-        };
-
-        list.push({
-          id: suppId,
-          name: profile.name,
-          phone: profile.phone,
-          businessName: profile.businessName,
-          createdAt: profile.createdAt || Date.now(),
-          subDetails,
-          usageStats,
-          pendingSubscription: data.pendingSubscription
-        });
       }
 
       // Sort newest created first
       list.sort((a, b) => b.createdAt - a.createdAt);
       setSuppliersList(list);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Super Admin fetch error:', err);
-      showAlert('Error', 'Failed to fetch suppliers from cloud database.');
+      const isPerm = err?.message?.toLowerCase().includes('permission') || err?.message?.toLowerCase().includes('denied');
+      setCloudError(
+        isPerm
+          ? (lang === 'hi'
+              ? 'Firebase डेटाबेस सुरक्षा नियम लॉक हैं (Permission Denied)। सभी डेयरियां देखने के लिए Firebase Console में Rules को true करें।'
+              : 'Firebase Realtime Database Rules are locked (Permission Denied). Please set Rules to true in Firebase Console.')
+          : (err?.message || 'Failed to fetch cloud suppliers.')
+      );
+
+      // Fallback to local supplier so screen is never blank!
+      const localObj = getLocalSupplierObj();
+      if (localObj) {
+        setSuppliersList([localObj]);
+      } else {
+        setSuppliersList([]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -465,6 +529,21 @@ export const SuperAdminScreen: React.FC<{ onBack: () => void }> = ({ onBack }) =
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Cloud Security Rules Warning Banner */}
+      {cloudError && (
+        <View style={styles.cloudErrorBanner}>
+          <Text style={styles.cloudErrorTitle}>⚠️ {cloudError}</Text>
+          <TouchableOpacity
+            style={styles.openConsoleBtn}
+            onPress={() => Linking.openURL('https://console.firebase.google.com/project/diaryapp-28278/database/diaryapp-28278-default-rtdb/rules')}
+          >
+            <Text style={styles.openConsoleBtnText}>
+              🔗 Firebase Rules अनलॉक करें (Click to Unlock)
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Supplier List */}
       {isLoading ? (
@@ -1034,5 +1113,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#b45309'
+  },
+  cloudErrorBanner: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 12,
+    backgroundColor: '#fff1f2',
+    borderWidth: 1.5,
+    borderColor: '#fecdd3',
+    borderRadius: 12
+  },
+  cloudErrorTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#be123c',
+    lineHeight: 18,
+    marginBottom: 8
+  },
+  openConsoleBtn: {
+    backgroundColor: '#e11d48',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    alignSelf: 'flex-start'
+  },
+  openConsoleBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff'
   }
 });
