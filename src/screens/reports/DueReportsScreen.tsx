@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,11 @@ import {
   Modal,
   TextInput,
   Keyboard,
-  ScrollView
+  ScrollView,
+  BackHandler
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
@@ -301,6 +303,95 @@ export const DueReportsScreen = () => {
     }
     setCalendarPickerVisible(false);
   };
+
+  // Hardware/gesture Back button handler for modals, search, and sub-modes
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // 1. Nested quick entry popups
+        if (quickEntryModalVisible) {
+          setQuickEntryModalVisible(false);
+          return true;
+        }
+        if (quickSubEntryModalVisible) {
+          setQuickSubEntryModalVisible(false);
+          return true;
+        }
+
+        // 2. Pickers
+        if (calendarPickerVisible) {
+          handleCloseCalendarPicker();
+          return true;
+        }
+        if (monthPickerVisible) {
+          setMonthPickerVisible(false);
+          return true;
+        }
+
+        // 3. Payment modals
+        if (paymentModalVisible) {
+          setPaymentModalVisible(false);
+          return true;
+        }
+        if (subPaymentModalVisible) {
+          setSubPaymentModalVisible(false);
+          return true;
+        }
+
+        // 4. Payment History modals
+        if (payHistoryVisible) {
+          setPayHistoryVisible(false);
+          return true;
+        }
+        if (subPayHistoryVisible) {
+          setSubPayHistoryVisible(false);
+          return true;
+        }
+
+        // 5. Date-wise Audit Modals
+        if (selectedDetailCustomerId) {
+          setSelectedDetailCustomerId(null);
+          return true;
+        }
+        if (selectedDetailSubId) {
+          setSelectedDetailSubId(null);
+          return true;
+        }
+
+        // 6. Search query
+        if (searchQuery.trim().length > 0) {
+          setSearchQuery('');
+          return true;
+        }
+
+        // 7. Sub-Supplier (vendor) mode -> switch back to Customer mode
+        if (partyMode === 'subSuppliers') {
+          setPartyMode('customers');
+          return true;
+        }
+
+        // 8. Default behavior (navigates back to DashboardTab)
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [
+      quickEntryModalVisible,
+      quickSubEntryModalVisible,
+      calendarPickerVisible,
+      monthPickerVisible,
+      paymentModalVisible,
+      subPaymentModalVisible,
+      payHistoryVisible,
+      subPayHistoryVisible,
+      selectedDetailCustomerId,
+      selectedDetailSubId,
+      searchQuery,
+      partyMode,
+      calendarTarget
+    ])
+  );
 
 
   // All calculated due summaries for the selected period (Optimized O(N + M) single-pass)
@@ -1703,7 +1794,7 @@ export const DueReportsScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={styles.modalBackBtnText}>✕ Close</Text>
+                  <Text style={styles.modalBackBtnText}>‹ {lang === 'hi' ? 'वापस' : 'Back'}</Text>
                 </TouchableOpacity>
                 <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                   {lang === 'hi' ? 'तारीख-वार दूध रिपोर्ट' : 'Date-Wise Delivery Report'} ({auditDateList.length} {lang === 'hi' ? 'दिन' : 'Days'})
@@ -2087,7 +2178,7 @@ export const DueReportsScreen = () => {
                   activeOpacity={0.7}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={styles.modalBackBtnText}>✕ Close</Text>
+                  <Text style={styles.modalBackBtnText}>‹ {lang === 'hi' ? 'वापस' : 'Back'}</Text>
                 </TouchableOpacity>
                 <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                   {lang === 'hi' ? 'तारीख-वार आवक रिपोर्ट' : 'Date-Wise Inward Report'} ({subAuditDateList.length} {lang === 'hi' ? 'दिन' : 'Days'})
@@ -2773,7 +2864,7 @@ export const DueReportsScreen = () => {
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.modalBackBtnText}>✕ {t.cancel}</Text>
+                <Text style={styles.modalBackBtnText}>‹ {lang === 'hi' ? 'वापस' : 'Back'}</Text>
               </TouchableOpacity>
               <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                 💰 {payHistoryCustomer ? `${payHistoryCustomer.name} — ${t.paymentHistory}` : t.allPayments}
@@ -2891,7 +2982,7 @@ export const DueReportsScreen = () => {
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Text style={styles.modalBackBtnText}>✕ {t.cancel}</Text>
+                <Text style={styles.modalBackBtnText}>‹ {lang === 'hi' ? 'वापस' : 'Back'}</Text>
               </TouchableOpacity>
               <Text style={styles.modalHeaderTitle} numberOfLines={1}>
                 🚜 {subPayHistoryVendor ? `${subPayHistoryVendor.name} — ${lang === 'hi' ? 'भुगतान इतिहास' : 'Payment History'}` : (lang === 'hi' ? 'सभी सप्लायर भुगतान' : 'All Vendor Payments')}

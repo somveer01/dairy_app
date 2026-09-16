@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,11 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
-  Keyboard
+  Keyboard,
+  BackHandler
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
@@ -85,6 +87,39 @@ export const DailyRegisterScreen = () => {
     current.setDate(current.getDate() + days);
     setSelectedDate(toLocalIso(current));
   };
+
+  // Hardware/gesture Back button handler for modals and sub-modes
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // Step 1: Close any open modal
+        if (modalVisible) {
+          setModalVisible(false);
+          return true;
+        }
+        if (addonModalVisible) {
+          setAddonModalVisible(false);
+          return true;
+        }
+        if (subModalVisible) {
+          setSubModalVisible(false);
+          return true;
+        }
+
+        // Step 2: If in inward procurement mode, revert to customer delivery mode
+        if (registerMode === 'procurement') {
+          setRegisterMode('delivery');
+          return true;
+        }
+
+        // Step 3: Default behavior (return to DashboardTab)
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [modalVisible, addonModalVisible, subModalVisible, registerMode])
+  );
 
   // --- CUSTOMER DELIVERY DATA & STATS ---
   const { sessionEntriesMap, stats } = useMemo(() => {
@@ -1042,7 +1077,12 @@ export const DailyRegisterScreen = () => {
         )}
 
         {/* Detailed Customer Delivery Entry Modal */}
-        <Modal visible={modalVisible} animationType="slide" transparent>
+        <Modal
+          visible={modalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setModalVisible(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
@@ -1152,7 +1192,12 @@ export const DailyRegisterScreen = () => {
         </Modal>
 
         {/* Modal: Dairy Add-on Products (Paneer, Curd, Ghee, Buttermilk) */}
-        <Modal visible={addonModalVisible} animationType="slide" transparent>
+        <Modal
+          visible={addonModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setAddonModalVisible(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
@@ -1286,7 +1331,12 @@ export const DailyRegisterScreen = () => {
         </Modal>
 
         {/* Detailed Sub-Supplier Inward Milk Entry Modal */}
-        <Modal visible={subModalVisible} animationType="slide" transparent>
+        <Modal
+          visible={subModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSubModalVisible(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>

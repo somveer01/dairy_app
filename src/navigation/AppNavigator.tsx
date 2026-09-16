@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, StyleSheet, Platform } from 'react-native';
+import { Text, View, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { DailyRegisterScreen } from '../screens/register/DailyRegisterScreen';
@@ -28,8 +28,8 @@ export const AppNavigator = () => {
   return (
     <Tab.Navigator
       key={lang}
-      screenOptions={{
-
+      backBehavior="firstRoute"
+      screenOptions={({ navigation, route }) => ({
         headerShown: true,
         headerStyle: {
           backgroundColor: '#ffffff',
@@ -45,6 +45,19 @@ export const AppNavigator = () => {
           color: '#0f172a'
         },
         headerTitleAlign: 'center',
+        headerLeft: route.name !== 'DashboardTab'
+          ? () => (
+              <TouchableOpacity
+                style={styles.headerBackBtn}
+                onPress={() => navigation.navigate('DashboardTab')}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.headerBackArrow}>‹</Text>
+                <Text style={styles.headerBackText}>{lang === 'hi' ? 'होम' : 'Home'}</Text>
+              </TouchableOpacity>
+            )
+          : undefined,
         tabBarActiveTintColor: '#0284c7',
         tabBarInactiveTintColor: '#64748b',
         tabBarHideOnKeyboard: true,
@@ -75,7 +88,7 @@ export const AppNavigator = () => {
           marginTop: 2,
           lineHeight: 14
         }
-      }}
+      })}
     >
       <Tab.Screen
         name="DashboardTab"
@@ -140,5 +153,25 @@ const styles = StyleSheet.create({
   tabIconEmoji: {
     fontSize: 17,
     lineHeight: 20
+  },
+  headerBackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 8
+  },
+  headerBackArrow: {
+    fontSize: 24,
+    lineHeight: 26,
+    fontWeight: '700',
+    color: '#0284c7',
+    marginRight: 2
+  },
+  headerBackText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0284c7'
   }
 });

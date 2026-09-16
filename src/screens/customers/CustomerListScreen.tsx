@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
-  ScrollView
+  ScrollView,
+  BackHandler
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as Contacts from 'expo-contacts';
 import { Contact } from 'expo-contacts';
 import { useApp } from '../../context/AppContext';
@@ -119,6 +121,49 @@ export const CustomerListScreen = () => {
   const [isScanningWhatsApp, setIsScanningWhatsApp] = useState(false);
   const [whatsappDefaultCowRate, setWhatsappDefaultCowRate] = useState('55');
   const [whatsappDefaultBuffaloRate, setWhatsappDefaultBuffaloRate] = useState('70');
+
+  // Hardware/gesture Back button handler for modals, search, and sub-modes
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // 1. If any modal is open, close it
+        if (contactModalVisible) {
+          setContactModalVisible(false);
+          return true;
+        }
+        if (whatsappModalVisible) {
+          setWhatsappModalVisible(false);
+          return true;
+        }
+        if (modalVisible) {
+          setModalVisible(false);
+          return true;
+        }
+        if (subModalVisible) {
+          setSubModalVisible(false);
+          return true;
+        }
+
+        // 2. If search is active, clear search query
+        if (search.trim().length > 0) {
+          setSearch('');
+          return true;
+        }
+
+        // 3. If in vendor directory mode, switch back to customers directory
+        if (directoryMode === 'subSuppliers') {
+          setDirectoryMode('customers');
+          return true;
+        }
+
+        // 4. Let default navigation take over (navigates back to DashboardTab)
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [contactModalVisible, whatsappModalVisible, modalVisible, subModalVisible, search, directoryMode])
+  );
 
   const openWhatsAppModal = () => {
     Keyboard.dismiss();
@@ -1556,7 +1601,12 @@ export const CustomerListScreen = () => {
         )}
 
         {/* --- CONTACTS IMPORT MODAL (MULTIPLE SELECTION) --- */}
-        <Modal visible={contactModalVisible} animationType="slide" transparent>
+        <Modal
+          visible={contactModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setContactModalVisible(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.contactModalContent}>
               <View style={styles.contactModalHeader}>
@@ -1774,7 +1824,12 @@ export const CustomerListScreen = () => {
         </Modal>
 
         {/* --- WHATSAPP GROUP MEMBER IMPORT MODAL --- */}
-        <Modal visible={whatsappModalVisible} animationType="slide" transparent>
+        <Modal
+          visible={whatsappModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setWhatsappModalVisible(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.contactModalContent}>
               {/* Header */}
@@ -2013,7 +2068,12 @@ export const CustomerListScreen = () => {
         </Modal>
 
         {/* Add/Edit Modal */}
-        <Modal visible={modalVisible} animationType="slide" transparent>
+        <Modal
+          visible={modalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setModalVisible(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>
@@ -2224,7 +2284,12 @@ export const CustomerListScreen = () => {
         </Modal>
 
         {/* --- ADD / EDIT SUB-SUPPLIER (VENDOR / FARMER) MODAL --- */}
-        <Modal visible={subModalVisible} animationType="slide" transparent>
+        <Modal
+          visible={subModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSubModalVisible(false)}
+        >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,11 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
-  Linking
+  Linking,
+  BackHandler
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { FirebaseSyncService, normalizePhoneDigits } from '../../services/firebaseSyncService';
@@ -63,6 +65,30 @@ export const SettingsScreen = () => {
   const [gheeRate, setGheeRate] = useState('700');
   const [butterMilkRate, setButterMilkRate] = useState('20');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Hardware/gesture Back button handler for modals
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (inspectorVisible) {
+          setInspectorVisible(false);
+          return true;
+        }
+        if (editProfileVisible) {
+          setEditProfileVisible(false);
+          return true;
+        }
+        if (installModalVisible) {
+          setInstallModalVisible(false);
+          return true;
+        }
+        return false;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [inspectorVisible, editProfileVisible, installModalVisible])
+  );
 
   useEffect(() => {
     if (supplier?.settings) {
@@ -797,7 +823,12 @@ export const SettingsScreen = () => {
       </ScrollView>
 
       {/* Storage Inspector Modal */}
-      <Modal visible={inspectorVisible} animationType="slide" transparent>
+      <Modal
+        visible={inspectorVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setInspectorVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.inspectorModalContent}>
             <View style={styles.inspectorHeader}>
@@ -908,7 +939,12 @@ export const SettingsScreen = () => {
       />
 
       {/* Edit Supplier Profile Modal */}
-      <Modal visible={editProfileVisible} animationType="fade" transparent>
+      <Modal
+        visible={editProfileVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setEditProfileVisible(false)}
+      >
         <View style={styles.editModalOverlay}>
           <View style={styles.editModalContent}>
             <Text style={styles.editModalTitle}>

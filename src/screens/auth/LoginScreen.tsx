@@ -10,7 +10,8 @@ import {
   ScrollView,
   Keyboard,
   Modal,
-  ActivityIndicator
+  ActivityIndicator,
+  BackHandler
 } from 'react-native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
@@ -95,6 +96,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
     }, 1000);
     return () => clearInterval(timer);
   }, [resendCooldown]);
+
+  // Hardware back press handler if onClose is provided
+  React.useEffect(() => {
+    if (!onClose) return;
+    const onBackPress = () => {
+      onClose();
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [onClose]);
 
   // Cleanup reCAPTCHA badge on screen unmount / successful login
   React.useEffect(() => {
@@ -530,7 +542,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             activeOpacity={0.7}
           >
-            <Text style={styles.closeModalBtnText}>✕ {lang === 'hi' ? 'बंद करें (रद्द)' : 'Close'}</Text>
+            <Text style={styles.closeModalBtnText}>‹ {lang === 'hi' ? 'वापस' : 'Back'}</Text>
           </TouchableOpacity>
         )}
 

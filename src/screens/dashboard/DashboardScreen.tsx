@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,12 @@ import {
   Keyboard,
   Platform,
   Linking,
-  FlatList
+  FlatList,
+  BackHandler,
+  ToastAndroid
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { InstallAppModal } from '../../components/InstallAppModal';
@@ -362,6 +365,51 @@ export const DashboardScreen = ({ navigation }: any) => {
     if (!selectedPaymentCustId) return null;
     return customerPaymentSummaries.find(c => c.customerId === selectedPaymentCustId) || null;
   }, [customerPaymentSummaries, selectedPaymentCustId]);
+
+  // Double-tap hardware back button to exit on Android Dashboard
+  const lastBackPressRef = useRef<number>(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // If Payment History Modal is open, step back inside it
+        if (payHistoryVisible) {
+          if (selectedPaymentCustId) {
+            setSelectedPaymentCustId(null);
+          } else if (selectedPaymentSubId) {
+            setSelectedPaymentSubId(null);
+          } else {
+            setPayHistoryVisible(false);
+          }
+          return true;
+        }
+
+        // If Edit Dairy Profile modal is open, close it
+        if (editDairyModalVisible) {
+          setEditDairyModalVisible(false);
+          return true;
+        }
+
+        const now = Date.now();
+        if (now - lastBackPressRef.current < 2000) {
+          BackHandler.exitApp();
+          return true;
+        }
+
+        lastBackPressRef.current = now;
+        if (Platform.OS === 'android') {
+          ToastAndroid.show(
+            isHindi ? 'बाहर निकलने के लिए दोबारा दबाएं' : 'Press back again to exit',
+            ToastAndroid.SHORT
+          );
+        }
+        return true;
+      };
+
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+    }, [payHistoryVisible, selectedPaymentCustId, selectedPaymentSubId, editDairyModalVisible, isHindi])
+  );
 
 
   const handleSaveDairyProfile = async () => {
@@ -910,7 +958,20 @@ export const DashboardScreen = ({ navigation }: any) => {
       </ScrollView>
 
       {/* EMBEDDED PAYMENT HISTORY MODAL (Customer-Wise & Drill-Down) */}
-      <Modal visible={payHistoryVisible} transparent animationType="slide">
+      <Modal
+        visible={payHistoryVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (selectedPaymentCustId) {
+            setSelectedPaymentCustId(null);
+          } else if (selectedPaymentSubId) {
+            setSelectedPaymentSubId(null);
+          } else {
+            setPayHistoryVisible(false);
+          }
+        }}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.payHistoryModalContent}>
 
@@ -1412,7 +1473,12 @@ export const DashboardScreen = ({ navigation }: any) => {
       </Modal>
 
       {/* Dairy Profile Edit / Setup Popup Modal */}
-      <Modal visible={editDairyModalVisible} transparent animationType="slide">
+      <Modal
+        visible={editDairyModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditDairyModalVisible(false)}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
