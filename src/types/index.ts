@@ -1,6 +1,30 @@
-export type MilkType = 'cow' | 'buffalo';
+export type MilkType = 'cow' | 'buffalo' | 'packet_full_cream' | 'packet_toned' | 'packet_double_toned' | 'packet_other' | string;
 
 export type SessionType = 'Morning' | 'Evening' | 'Custom';
+
+export interface DairyProductItem {
+  id: string;
+  name: string;
+  unit: 'kg' | 'gm' | 'pkt' | 'litre' | 'cup' | 'piece';
+  defaultRate: number;
+  isActive: boolean;
+}
+
+export interface DairyEntryAddon {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  rate: number;
+  totalAmount: number;
+}
+
+export interface SupplierSettings {
+  enablePacketMilk?: boolean;
+  enableDairyAddons?: boolean;
+  packetBrands?: string[];
+  customProducts?: DairyProductItem[];
+}
 
 export interface Supplier {
   id: string;
@@ -9,6 +33,7 @@ export interface Supplier {
   email?: string;
   password?: string;
   businessName: string;
+  settings?: SupplierSettings;
   createdAt: number;
   updatedAt?: number;
 }
@@ -22,6 +47,9 @@ export interface Customer {
   defaultLitres: number;
   milkType: MilkType;
   ratePerLitre: number;
+  isPacketMilk?: boolean;
+  packetBrand?: string;
+  packetVariant?: string;
   notes?: string;
   createdAt: number;
   updatedAt?: number;
@@ -38,7 +66,12 @@ export interface MilkEntry {
   milkType: MilkType;
   quantityLitres: number;
   ratePerLitre: number;
-  amount: number; // quantityLitres * ratePerLitre
+  amount: number; // quantityLitres * ratePerLitre (base milk amount)
+  addons?: DairyEntryAddon[];
+  totalDayAmount?: number; // amount + sum of addons
+  isPacketMilk?: boolean;
+  packetBrand?: string;
+  packetVariant?: string;
   isPaid: boolean;
   notes?: string;
   createdAt: number;
@@ -63,7 +96,9 @@ export interface CustomerDueSummary {
   customer: Customer;
   totalLitresCow: number;
   totalLitresBuffalo: number;
+  totalLitresPacket?: number;
   totalLitres: number;
+  totalAddonsAmount?: number;
   totalAmountBilled: number;
   totalPaid: number;
   netDue: number;

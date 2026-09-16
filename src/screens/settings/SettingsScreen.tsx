@@ -55,6 +55,76 @@ export const SettingsScreen = () => {
   const [editPhone, setEditPhone] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+  // Packet Milk & Dairy Add-On Feature States
+  const [enablePacketMilk, setEnablePacketMilk] = useState(false);
+  const [enableDairyAddons, setEnableDairyAddons] = useState(false);
+  const [paneerRate, setPaneerRate] = useState('360');
+  const [curdRate, setCurdRate] = useState('70');
+  const [gheeRate, setGheeRate] = useState('700');
+  const [butterMilkRate, setButterMilkRate] = useState('20');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (supplier?.settings) {
+      setEnablePacketMilk(Boolean(supplier.settings.enablePacketMilk));
+      setEnableDairyAddons(Boolean(supplier.settings.enableDairyAddons));
+      const products = supplier.settings.customProducts || [];
+      const p = products.find(i => i.id === 'prod_paneer');
+      const c = products.find(i => i.id === 'prod_curd');
+      const g = products.find(i => i.id === 'prod_ghee');
+      const bm = products.find(i => i.id === 'prod_buttermilk');
+      if (p) setPaneerRate(String(p.defaultRate));
+      if (c) setCurdRate(String(c.defaultRate));
+      if (g) setGheeRate(String(g.defaultRate));
+      if (bm) setButterMilkRate(String(bm.defaultRate));
+    }
+  }, [supplier]);
+
+  const handleTogglePacketMilk = async () => {
+    const nextVal = !enablePacketMilk;
+    setEnablePacketMilk(nextVal);
+    await saveFeatureSettings(nextVal, enableDairyAddons);
+  };
+
+  const handleToggleDairyAddons = async () => {
+    const nextVal = !enableDairyAddons;
+    setEnableDairyAddons(nextVal);
+    await saveFeatureSettings(enablePacketMilk, nextVal);
+  };
+
+  const saveFeatureSettings = async (packetVal: boolean, addonsVal: boolean) => {
+    if (!supplier) return;
+    setIsSavingSettings(true);
+    try {
+      const customProducts: import('../../types').DairyProductItem[] = [
+        { id: 'prod_paneer', name: 'पनीर (Paneer)', unit: 'kg', defaultRate: parseFloat(paneerRate) || 360, isActive: true },
+        { id: 'prod_curd', name: 'दही (Curd)', unit: 'kg', defaultRate: parseFloat(curdRate) || 70, isActive: true },
+        { id: 'prod_ghee', name: 'देसी घी (Ghee)', unit: 'kg', defaultRate: parseFloat(gheeRate) || 700, isActive: true },
+        { id: 'prod_buttermilk', name: 'छाछ (Buttermilk)', unit: 'pkt', defaultRate: parseFloat(butterMilkRate) || 20, isActive: true }
+      ];
+
+      const updatedSupplier: import('../../types').Supplier = {
+        ...supplier,
+        settings: {
+          ...supplier.settings,
+          enablePacketMilk: packetVal,
+          enableDairyAddons: addonsVal,
+          packetBrands: supplier.settings?.packetBrands || ['Mother Dairy', 'Amul', 'Verka', 'Saras', 'Paras', 'Custom'],
+          customProducts
+        },
+        updatedAt: Date.now()
+      };
+
+      await StorageService.saveSupplier(updatedSupplier);
+      setSupplier(updatedSupplier);
+      AutoSyncService.queueSync(updatedSupplier, 500);
+    } catch (e: any) {
+      console.warn('Failed to save settings:', e);
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = AutoSyncService.subscribe((status, timestamp) => {
       setSyncStatus(status);
@@ -372,6 +442,124 @@ export const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Feature Permissions: Packet Milk & Dairy Add-ons */}
+        <Text style={styles.sectionHeader}>
+          {lang === 'hi' ? '📦 पैकेट दूध एवं डेयरी उत्पाद सुविधाएँ' : '📦 Packet Milk & Dairy Products'}
+        </Text>
+        <View style={styles.featureCard}>
+          {/* Feature 1: Packet Milk Toggle */}
+          <View style={styles.featureRow}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.featureTitle}>
+                  {lang === 'hi' ? '📦 पैकेट दूध सेवा' : '📦 Packet Milk Service'}
+                </Text>
+                {enablePacketMilk && (
+                  <View style={styles.activePill}>
+                    <Text style={styles.activePillText}>{lang === 'hi' ? 'सक्रिय' : 'Active'}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.featureDesc}>
+                {lang === 'hi'
+                  ? 'मदर डेयरी, अमूल, वेरका आदि (फुल क्रीम, टोन्ड) पैकेट दूध के विकल्प ग्राहकों के लिए चालू करें।'
+                  : 'Enable branded packet milk options (Full Cream, Toned) like Mother Dairy, Amul, Verka for customers.'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggleBtn, enablePacketMilk ? styles.toggleBtnOn : styles.toggleBtnOff]}
+              onPress={handleTogglePacketMilk}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.toggleBtnText}>
+                {enablePacketMilk ? (lang === 'hi' ? 'चालू ✓' : 'ON ✓') : (lang === 'hi' ? 'बंद ✕' : 'OFF ✕')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.featureDivider} />
+
+          {/* Feature 2: Dairy Add-ons Toggle (Paneer, Curd, Ghee) */}
+          <View style={styles.featureRow}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.featureTitle}>
+                  {lang === 'hi' ? '🧀 पनीर, दही, घी आदि उत्पाद' : '🧀 Paneer, Dahi, Ghee Products'}
+                </Text>
+                {enableDairyAddons && (
+                  <View style={styles.activePill}>
+                    <Text style={styles.activePillText}>{lang === 'hi' ? 'सक्रिय' : 'Active'}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.featureDesc}>
+                {lang === 'hi'
+                  ? 'रोज़ाना दूध के साथ पनीर, ताजा दही, देसी घी और छाछ को रजिस्टर में 1-टैप से जोड़ने की सुविधा।'
+                  : 'Enable 1-tap add-on recording for Paneer, fresh Curd, Ghee, and Buttermilk on daily delivery.'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggleBtn, enableDairyAddons ? styles.toggleBtnOn : styles.toggleBtnOff]}
+              onPress={handleToggleDairyAddons}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.toggleBtnText}>
+                {enableDairyAddons ? (lang === 'hi' ? 'चालू ✓' : 'ON ✓') : (lang === 'hi' ? 'बंद ✕' : 'OFF ✕')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Rates setup if Dairy Add-ons is enabled */}
+          {enableDairyAddons && (
+            <View style={styles.rateSetupBox}>
+              <Text style={styles.rateSetupTitle}>
+                ⚙️ {lang === 'hi' ? 'डिफ़ॉल्ट बिक्री दर (₹ सेट करें)' : 'Default Product Rates (₹)'}
+              </Text>
+              <View style={styles.rateInputsGrid}>
+                <View style={styles.rateInputCol}>
+                  <Text style={styles.rateColLabel}>🧀 {lang === 'hi' ? 'पनीर / kg' : 'Paneer / kg'}</Text>
+                  <TextInput
+                    style={styles.rateInputField}
+                    keyboardType="numeric"
+                    value={paneerRate}
+                    onChangeText={setPaneerRate}
+                    onBlur={() => saveFeatureSettings(enablePacketMilk, enableDairyAddons)}
+                  />
+                </View>
+                <View style={styles.rateInputCol}>
+                  <Text style={styles.rateColLabel}>🥣 {lang === 'hi' ? 'दही / kg' : 'Curd / kg'}</Text>
+                  <TextInput
+                    style={styles.rateInputField}
+                    keyboardType="numeric"
+                    value={curdRate}
+                    onChangeText={setCurdRate}
+                    onBlur={() => saveFeatureSettings(enablePacketMilk, enableDairyAddons)}
+                  />
+                </View>
+                <View style={styles.rateInputCol}>
+                  <Text style={styles.rateColLabel}>🧈 {lang === 'hi' ? 'घी / kg' : 'Ghee / kg'}</Text>
+                  <TextInput
+                    style={styles.rateInputField}
+                    keyboardType="numeric"
+                    value={gheeRate}
+                    onChangeText={setGheeRate}
+                    onBlur={() => saveFeatureSettings(enablePacketMilk, enableDairyAddons)}
+                  />
+                </View>
+                <View style={styles.rateInputCol}>
+                  <Text style={styles.rateColLabel}>🥛 {lang === 'hi' ? 'छाछ / pkt' : 'Chhachh'}</Text>
+                  <TextInput
+                    style={styles.rateInputField}
+                    keyboardType="numeric"
+                    value={butterMilkRate}
+                    onChangeText={setButterMilkRate}
+                    onBlur={() => saveFeatureSettings(enablePacketMilk, enableDairyAddons)}
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
 
         {/* Permanent Storage & Database Status */}
         <Text style={styles.sectionHeader}>📁 Permanent Storage & Database</Text>
@@ -1174,5 +1362,109 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: 14
+  },
+
+  // Feature Toggle & Product Rates Styles
+  featureCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between'
+  },
+  featureTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  featureDesc: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    lineHeight: 17
+  },
+  activePill: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 12
+  },
+  activePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#16a34a'
+  },
+  toggleBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    minWidth: 72,
+    alignItems: 'center'
+  },
+  toggleBtnOn: {
+    backgroundColor: '#16a34a'
+  },
+  toggleBtnOff: {
+    backgroundColor: '#94a3b8'
+  },
+  toggleBtnText: {
+    color: '#ffffff',
+    fontWeight: 'bold',
+    fontSize: 13
+  },
+  featureDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 14
+  },
+  rateSetupBox: {
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  rateSetupTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 10
+  },
+  rateInputsGrid: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  rateInputCol: {
+    flex: 1
+  },
+  rateColLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 4
+  },
+  rateInputField: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f172a',
+    textAlign: 'center'
   }
 });

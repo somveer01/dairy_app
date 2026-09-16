@@ -47,6 +47,14 @@ export const DailyRegisterScreen = () => {
   const [rate, setRate] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Add-on Dairy Products Modal State
+  const [addonModalVisible, setAddonModalVisible] = useState(false);
+  const [addonCustomer, setAddonCustomer] = useState<Customer | null>(null);
+  const [paneerQty, setPaneerQty] = useState('');
+  const [curdQty, setCurdQty] = useState('');
+  const [gheeQty, setGheeQty] = useState('');
+  const [butterMilkQty, setButterMilkQty] = useState('');
+
   // Sub-Supplier Inward Entry Modal State
   const [subModalVisible, setSubModalVisible] = useState(false);
   const [selectedSubSupplier, setSelectedSubSupplier] = useState<SubSupplier | null>(null);
@@ -55,6 +63,21 @@ export const DailyRegisterScreen = () => {
   const [subLitres, setSubLitres] = useState('');
   const [subRate, setSubRate] = useState('');
   const [subNotes, setSubNotes] = useState('');
+
+  const productRates = useMemo(() => {
+    const defaultRates: Record<string, number> = {
+      prod_paneer: 360,
+      prod_curd: 70,
+      prod_ghee: 700,
+      prod_buttermilk: 20
+    };
+    if (supplier?.settings?.customProducts) {
+      supplier.settings.customProducts.forEach(p => {
+        defaultRates[p.id] = p.defaultRate;
+      });
+    }
+    return defaultRates;
+  }, [supplier?.settings?.customProducts]);
 
   const changeDateBy = (days: number) => {
     const parts = selectedDate.split('-').map(Number);
@@ -68,6 +91,7 @@ export const DailyRegisterScreen = () => {
     const map = new Map<string, MilkEntry>();
     let cowQty = 0;
     let buffaloQty = 0;
+    let packetQty = 0;
     let totalAmt = 0;
     let count = 0;
 
@@ -75,9 +99,21 @@ export const DailyRegisterScreen = () => {
       const e = milkEntries[i];
       if (!e.isDeleted && e.date === selectedDate && e.session === activeSession) {
         map.set(e.customerId, e);
-        if (e.milkType === 'cow') cowQty += e.quantityLitres;
-        else buffaloQty += e.quantityLitres;
-        totalAmt += e.amount;
+        if (e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet'))) {
+          packetQty += e.quantityLitres;
+        } else if (e.milkType === 'cow') {
+          cowQty += e.quantityLitres;
+        } else {
+          buffaloQty += e.quantityLitres;
+        }
+
+        let dayAmt = e.totalDayAmount != null ? e.totalDayAmount : e.amount;
+        if (e.totalDayAmount == null && e.addons && Array.isArray(e.addons)) {
+          let addonTotal = 0;
+          for (const a of e.addons) addonTotal += (a.totalAmount || 0);
+          dayAmt = e.amount + addonTotal;
+        }
+        totalAmt += dayAmt;
         count++;
       }
     }
@@ -87,8 +123,9 @@ export const DailyRegisterScreen = () => {
       stats: {
         cowQty,
         buffaloQty,
-        totalQty: cowQty + buffaloQty,
-        totalLitres: cowQty + buffaloQty,
+        packetQty,
+        totalQty: cowQty + buffaloQty + packetQty,
+        totalLitres: cowQty + buffaloQty + packetQty,
         totalAmt,
         count
       }
@@ -183,6 +220,7 @@ export const DailyRegisterScreen = () => {
         return;
       }
 
+      const milkAmt = customer.defaultLitres * customer.ratePerLitre;
       const newEntry: MilkEntry = {
         id: `entry_${selectedDate}_${activeSession}_${customer.id}_${Date.now()}`,
         supplierId: supplier?.id || 'supp_default',
@@ -193,7 +231,11 @@ export const DailyRegisterScreen = () => {
         milkType: customer.milkType,
         quantityLitres: customer.defaultLitres,
         ratePerLitre: customer.ratePerLitre,
-        amount: customer.defaultLitres * customer.ratePerLitre,
+        amount: milkAmt,
+        totalDayAmount: milkAmt,
+        isPacketMilk: customer.isPacketMilk,
+        packetBrand: customer.packetBrand,
+        packetVariant: customer.packetVariant,
         isPaid: false,
         createdAt: Date.now()
       };
@@ -227,20 +269,27 @@ export const DailyRegisterScreen = () => {
           ? `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`
           : `Record default delivery for all ${unrecordedCustomers.length} customers?\n• Session: ${sessionLabel}\n• Date: ${formatToDisplayDate(selectedDate)}`,
         async () => {
-          const newEntries: MilkEntry[] = unrecordedCustomers.map(c => ({
-            id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-            supplierId: supplier?.id || 'supp_default',
-            customerId: c.id,
-            customerName: c.name,
-            date: selectedDate,
-            session: activeSession,
-            milkType: c.milkType,
-            quantityLitres: c.defaultLitres,
-            ratePerLitre: c.ratePerLitre,
-            amount: c.defaultLitres * c.ratePerLitre,
-            isPaid: false,
-            createdAt: Date.now()
-          }));
+          const newEntries: MilkEntry[] = unrecordedCustomers.map(c => {
+            const milkAmt = c.defaultLitres * c.ratePerLitre;
+            return {
+              id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+              supplierId: supplier?.id || 'supp_default',
+              customerId: c.id,
+              customerName: c.name,
+              date: selectedDate,
+              session: activeSession,
+              milkType: c.milkType,
+              quantityLitres: c.defaultLitres,
+              ratePerLitre: c.ratePerLitre,
+              amount: milkAmt,
+              totalDayAmount: milkAmt,
+              isPacketMilk: c.isPacketMilk,
+              packetBrand: c.packetBrand,
+              packetVariant: c.packetVariant,
+              isPaid: false,
+              createdAt: Date.now()
+            };
+          });
           await StorageService.saveMilkEntriesBatch(newEntries);
           await refreshMilkEntries();
           CardSyncService.syncAllCards(supplier, customers, [...milkEntries, ...newEntries], payments);
@@ -279,6 +328,12 @@ export const DailyRegisterScreen = () => {
       }
 
       const existing = sessionEntriesMap.get(selectedCustomer.id);
+      const milkAmt = qty * rateVal;
+      let addonAmt = 0;
+      if (existing?.addons) {
+        for (const a of existing.addons) addonAmt += (a.totalAmount || 0);
+      }
+
       const entry: MilkEntry = {
         id: existing ? existing.id : `entry_${selectedDate}_${session}_${selectedCustomer.id}_${Date.now()}`,
         supplierId: supplier?.id || 'supp_default',
@@ -286,10 +341,15 @@ export const DailyRegisterScreen = () => {
         customerName: selectedCustomer.name,
         date: selectedDate,
         session: session,
-        milkType: milkType,
+        milkType: selectedCustomer.isPacketMilk ? selectedCustomer.milkType : milkType,
         quantityLitres: qty,
         ratePerLitre: rateVal,
-        amount: qty * rateVal,
+        amount: milkAmt,
+        totalDayAmount: milkAmt + addonAmt,
+        isPacketMilk: selectedCustomer.isPacketMilk,
+        packetBrand: selectedCustomer.packetBrand,
+        packetVariant: selectedCustomer.packetVariant,
+        addons: existing?.addons,
         isPaid: existing ? existing.isPaid : false,
         notes: notes.trim(),
         createdAt: existing ? existing.createdAt : Date.now()
@@ -299,6 +359,128 @@ export const DailyRegisterScreen = () => {
       await refreshMilkEntries();
       CardSyncService.syncCustomerCard(selectedCustomer.id, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), entry], payments);
       setModalVisible(false);
+    });
+  };
+
+  const openAddonModal = (cust: Customer) => {
+    Keyboard.dismiss();
+    setAddonCustomer(cust);
+    const existing = sessionEntriesMap.get(cust.id);
+    let pQty = '';
+    let cQty = '';
+    let gQty = '';
+    let bQty = '';
+    if (existing?.addons) {
+      for (const a of existing.addons) {
+        if (a.productId === 'prod_paneer') pQty = a.quantity > 0 ? a.quantity.toString() : '';
+        if (a.productId === 'prod_curd') cQty = a.quantity > 0 ? a.quantity.toString() : '';
+        if (a.productId === 'prod_ghee') gQty = a.quantity > 0 ? a.quantity.toString() : '';
+        if (a.productId === 'prod_buttermilk') bQty = a.quantity > 0 ? a.quantity.toString() : '';
+      }
+    }
+    setPaneerQty(pQty);
+    setCurdQty(cQty);
+    setGheeQty(gQty);
+    setButterMilkQty(bQty);
+    setAddonModalVisible(true);
+  };
+
+  const handleSaveAddons = async () => {
+    Keyboard.dismiss();
+    if (!addonCustomer) return;
+    requireAuth(async () => {
+      const existing = sessionEntriesMap.get(addonCustomer.id);
+      const newAddons: import('../../types').DairyEntryAddon[] = [];
+      let totalAddonsAmount = 0;
+
+      const pQ = parseFloat(paneerQty) || 0;
+      if (pQ > 0) {
+        const rateP = productRates.prod_paneer || 360;
+        const amt = pQ * rateP;
+        newAddons.push({
+          productId: 'prod_paneer',
+          productName: 'पनीर (Paneer)',
+          quantity: pQ,
+          unit: 'kg',
+          rate: rateP,
+          totalAmount: amt
+        });
+        totalAddonsAmount += amt;
+      }
+
+      const cQ = parseFloat(curdQty) || 0;
+      if (cQ > 0) {
+        const rateC = productRates.prod_curd || 70;
+        const amt = cQ * rateC;
+        newAddons.push({
+          productId: 'prod_curd',
+          productName: 'दही (Curd)',
+          quantity: cQ,
+          unit: 'kg',
+          rate: rateC,
+          totalAmount: amt
+        });
+        totalAddonsAmount += amt;
+      }
+
+      const gQ = parseFloat(gheeQty) || 0;
+      if (gQ > 0) {
+        const rateG = productRates.prod_ghee || 700;
+        const amt = gQ * rateG;
+        newAddons.push({
+          productId: 'prod_ghee',
+          productName: 'देसी घी (Ghee)',
+          quantity: gQ,
+          unit: 'kg',
+          rate: rateG,
+          totalAmount: amt
+        });
+        totalAddonsAmount += amt;
+      }
+
+      const bQ = parseFloat(butterMilkQty) || 0;
+      if (bQ > 0) {
+        const rateB = productRates.prod_buttermilk || 20;
+        const amt = bQ * rateB;
+        newAddons.push({
+          productId: 'prod_buttermilk',
+          productName: 'छाछ (Buttermilk)',
+          quantity: bQ,
+          unit: 'pkt',
+          rate: rateB,
+          totalAmount: amt
+        });
+        totalAddonsAmount += amt;
+      }
+
+      const milkAmt = existing ? existing.amount : 0;
+      const totalDayAmt = milkAmt + totalAddonsAmount;
+
+      const entry: MilkEntry = {
+        id: existing ? existing.id : `entry_${selectedDate}_${activeSession}_${addonCustomer.id}_${Date.now()}`,
+        supplierId: supplier?.id || 'supp_default',
+        customerId: addonCustomer.id,
+        customerName: addonCustomer.name,
+        date: selectedDate,
+        session: activeSession,
+        milkType: existing ? existing.milkType : addonCustomer.milkType,
+        quantityLitres: existing ? existing.quantityLitres : 0,
+        ratePerLitre: existing ? existing.ratePerLitre : addonCustomer.ratePerLitre,
+        amount: milkAmt,
+        totalDayAmount: totalDayAmt,
+        isPacketMilk: addonCustomer.isPacketMilk,
+        packetBrand: addonCustomer.packetBrand,
+        packetVariant: addonCustomer.packetVariant,
+        addons: newAddons,
+        isPaid: existing ? existing.isPaid : false,
+        notes: existing?.notes || '',
+        createdAt: existing ? existing.createdAt : Date.now()
+      };
+
+      await StorageService.saveMilkEntry(entry);
+      await refreshMilkEntries();
+      CardSyncService.syncCustomerCard(addonCustomer.id, supplier, customers, [...milkEntries.filter(e => e.id !== entry.id), entry], payments);
+      setAddonModalVisible(false);
     });
   };
 
@@ -566,7 +748,9 @@ export const DailyRegisterScreen = () => {
             <View style={styles.kpiCol}>
               <Text style={styles.kpiLabel}>Total Milk</Text>
               <Text style={styles.kpiValue}>{stats.totalLitres.toFixed(1)} L</Text>
-              <Text style={styles.kpiSub}>🐄 {stats.cowQty.toFixed(1)}L | 🐃 {stats.buffaloQty.toFixed(1)}L</Text>
+              <Text style={styles.kpiSub}>
+                🐄 {stats.cowQty.toFixed(1)}L | 🐃 {stats.buffaloQty.toFixed(1)}L{stats.packetQty > 0 ? ` | 📦 ${stats.packetQty.toFixed(1)}L` : ''}
+              </Text>
             </View>
             <View style={styles.kpiDivider} />
             <View style={styles.kpiCol}>
@@ -632,6 +816,11 @@ export const DailyRegisterScreen = () => {
             renderItem={({ item, index }) => {
               const entry = sessionEntriesMap.get(item.id);
               const isDelivered = !!entry;
+              const entryAddons = entry?.addons || [];
+              const entryAddonsTotal = entryAddons.reduce((sum, a) => sum + (a.totalAmount || 0), 0);
+              const displayAmt = entry
+                ? (entry.totalDayAmount != null ? entry.totalDayAmount : (entry.amount + entryAddonsTotal))
+                : 0;
 
               return (
                 <View style={[styles.rowCard, isDelivered && styles.rowCardDelivered]}>
@@ -644,7 +833,9 @@ export const DailyRegisterScreen = () => {
                     <View style={{ flex: 1, marginLeft: 10 }}>
                       <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
                       <Text style={styles.rowCustSub}>
-                        {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'} • {item.defaultLitres}L @ ₹{item.ratePerLitre}
+                        {item.isPacketMilk
+                          ? `📦 ${item.packetBrand || 'Packet'} (${item.packetVariant || 'Milk'}) • ${item.defaultLitres}L @ ₹${item.ratePerLitre}`
+                          : `${item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'} • ${item.defaultLitres}L @ ₹${item.ratePerLitre}`}
                       </Text>
                     </View>
                   </View>
@@ -654,8 +845,21 @@ export const DailyRegisterScreen = () => {
                       <View style={styles.deliveredBox}>
                         <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
                           <Text style={styles.deliveredQty}>{entry.quantityLitres} L</Text>
-                          <Text style={styles.deliveredAmount}>₹{entry.amount.toFixed(0)}</Text>
+                          <Text style={styles.deliveredAmount}>₹{displayAmt.toFixed(0)}</Text>
                         </View>
+
+                        {supplier?.settings?.enableDairyAddons && (
+                          <TouchableOpacity
+                            style={[styles.addonBadgeBtn, entryAddonsTotal > 0 && styles.addonBadgeBtnActive]}
+                            onPress={() => openAddonModal(item)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                          >
+                            <Text style={[styles.addonBadgeText, entryAddonsTotal > 0 && styles.addonBadgeTextActive]}>
+                              {entryAddonsTotal > 0 ? `🧀 ₹${entryAddonsTotal}` : '+ 🧀'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity
                           style={[styles.paidBtn, entry.isPaid ? styles.paidBtnActive : styles.paidBtnPending]}
@@ -696,6 +900,17 @@ export const DailyRegisterScreen = () => {
                         >
                           <Text style={styles.quickAddBtnText}>+ {item.defaultLitres}L</Text>
                         </TouchableOpacity>
+
+                        {supplier?.settings?.enableDairyAddons && (
+                          <TouchableOpacity
+                            style={styles.addonQuickBtn}
+                            onPress={() => openAddonModal(item)}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                          >
+                            <Text style={styles.addonQuickBtnText}>+ 🧀</Text>
+                          </TouchableOpacity>
+                        )}
 
                         <TouchableOpacity
                           style={styles.customQtyBtn}
@@ -834,25 +1049,35 @@ export const DailyRegisterScreen = () => {
                 {selectedCustomer?.name} — {session} ({formatToDisplayDate(selectedDate)})
               </Text>
 
-              <Text style={styles.label}>{t.selectMilkType} *</Text>
-              <View style={styles.typeSelectorRow}>
-                <TouchableOpacity
-                  style={[styles.typeOption, milkType === 'cow' && styles.typeOptionSelectedCow]}
-                  onPress={() => setMilkType('cow')}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                >
-                  <Text style={styles.typeOptionText}>🐄 {t.cowMilk}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.typeOption, milkType === 'buffalo' && styles.typeOptionSelectedBuffalo]}
-                  onPress={() => setMilkType('buffalo')}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                >
-                  <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk}</Text>
-                </TouchableOpacity>
-              </View>
+              {selectedCustomer?.isPacketMilk ? (
+                <View style={{ marginBottom: 10, padding: 8, backgroundColor: '#eff6ff', borderRadius: 8, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                  <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#1e40af' }}>
+                    📦 {selectedCustomer.packetBrand || 'Packet'} ({selectedCustomer.packetVariant || 'Milk'})
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.label}>{t.selectMilkType} *</Text>
+                  <View style={styles.typeSelectorRow}>
+                    <TouchableOpacity
+                      style={[styles.typeOption, milkType === 'cow' && styles.typeOptionSelectedCow]}
+                      onPress={() => setMilkType('cow')}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Text style={styles.typeOptionText}>🐄 {t.cowMilk}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.typeOption, milkType === 'buffalo' && styles.typeOptionSelectedBuffalo]}
+                      onPress={() => setMilkType('buffalo')}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
 
               <View style={styles.rowTwoInputs}>
                 <View style={{ flex: 1, marginRight: 8 }}>
@@ -920,6 +1145,140 @@ export const DailyRegisterScreen = () => {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
                   <Text style={styles.modalSaveBtnText}>{t.save}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Modal: Dairy Add-on Products (Paneer, Curd, Ghee, Buttermilk) */}
+        <Modal visible={addonModalVisible} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>
+                🧀 {addonCustomer?.name} — {lang === 'hi' ? 'डेयरी उत्पाद' : 'Dairy Products'}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+                {activeSession} • {formatToDisplayDate(selectedDate)}
+              </Text>
+
+              {/* Paneer Input */}
+              <View style={styles.addonInputRow}>
+                <View style={{ flex: 1.4 }}>
+                  <Text style={styles.addonProdTitle}>🧀 पनीर (Paneer)</Text>
+                  <Text style={styles.addonProdRate}>₹{productRates.prod_paneer || 360} / kg</Text>
+                </View>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TextInput
+                    style={styles.addonNumberInput}
+                    placeholder="0.0"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                    value={paneerQty}
+                    onChangeText={setPaneerQty}
+                  />
+                  <Text style={styles.addonUnitText}>kg</Text>
+                </View>
+                <Text style={styles.addonSubtotalText}>
+                  ₹{((parseFloat(paneerQty) || 0) * (productRates.prod_paneer || 360)).toFixed(0)}
+                </Text>
+              </View>
+
+              {/* Curd / Dahi Input */}
+              <View style={styles.addonInputRow}>
+                <View style={{ flex: 1.4 }}>
+                  <Text style={styles.addonProdTitle}>🥣 ताजा दही (Curd)</Text>
+                  <Text style={styles.addonProdRate}>₹{productRates.prod_curd || 70} / kg</Text>
+                </View>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TextInput
+                    style={styles.addonNumberInput}
+                    placeholder="0.0"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                    value={curdQty}
+                    onChangeText={setCurdQty}
+                  />
+                  <Text style={styles.addonUnitText}>kg</Text>
+                </View>
+                <Text style={styles.addonSubtotalText}>
+                  ₹{((parseFloat(curdQty) || 0) * (productRates.prod_curd || 70)).toFixed(0)}
+                </Text>
+              </View>
+
+              {/* Desi Ghee Input */}
+              <View style={styles.addonInputRow}>
+                <View style={{ flex: 1.4 }}>
+                  <Text style={styles.addonProdTitle}>🧈 देसी घी (Ghee)</Text>
+                  <Text style={styles.addonProdRate}>₹{productRates.prod_ghee || 700} / kg</Text>
+                </View>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TextInput
+                    style={styles.addonNumberInput}
+                    placeholder="0.0"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                    value={gheeQty}
+                    onChangeText={setGheeQty}
+                  />
+                  <Text style={styles.addonUnitText}>kg</Text>
+                </View>
+                <Text style={styles.addonSubtotalText}>
+                  ₹{((parseFloat(gheeQty) || 0) * (productRates.prod_ghee || 700)).toFixed(0)}
+                </Text>
+              </View>
+
+              {/* Buttermilk / Chhachh Input */}
+              <View style={styles.addonInputRow}>
+                <View style={{ flex: 1.4 }}>
+                  <Text style={styles.addonProdTitle}>🥛 छाछ (Buttermilk)</Text>
+                  <Text style={styles.addonProdRate}>₹{productRates.prod_buttermilk || 20} / pkt</Text>
+                </View>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TextInput
+                    style={styles.addonNumberInput}
+                    placeholder="0"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={butterMilkQty}
+                    onChangeText={setButterMilkQty}
+                  />
+                  <Text style={styles.addonUnitText}>pkt</Text>
+                </View>
+                <Text style={styles.addonSubtotalText}>
+                  ₹{((parseFloat(butterMilkQty) || 0) * (productRates.prod_buttermilk || 20)).toFixed(0)}
+                </Text>
+              </View>
+
+              {/* Total Addons Summary */}
+              <View style={styles.addonTotalBar}>
+                <Text style={styles.addonTotalBarLabel}>{lang === 'hi' ? 'उत्पाद कुल जोड़:' : 'Total Addons:'}</Text>
+                <Text style={styles.addonTotalBarValue}>
+                  ₹{(
+                    (parseFloat(paneerQty) || 0) * (productRates.prod_paneer || 360) +
+                    (parseFloat(curdQty) || 0) * (productRates.prod_curd || 70) +
+                    (parseFloat(gheeQty) || 0) * (productRates.prod_ghee || 700) +
+                    (parseFloat(butterMilkQty) || 0) * (productRates.prod_buttermilk || 20)
+                  ).toFixed(0)}
+                </Text>
+              </View>
+
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setAddonModalVisible(false)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalCancelBtnText}>{t.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalSaveBtn}
+                  onPress={handleSaveAddons}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.modalSaveBtnText}>{lang === 'hi' ? 'सुरक्षित करें ✓' : 'Save Addons ✓'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1266,5 +1625,106 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fca5a5'
   },
-  modalDeleteBtnText: { color: '#dc2626', fontWeight: 'bold', fontSize: 13 }
+  modalDeleteBtnText: { color: '#dc2626', fontWeight: 'bold', fontSize: 13 },
+
+  // Dairy Add-on Styles
+  addonBadgeBtn: {
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    marginRight: 6
+  },
+  addonBadgeBtnActive: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b'
+  },
+  addonBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b'
+  },
+  addonBadgeTextActive: {
+    color: '#b45309'
+  },
+  addonQuickBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    marginRight: 6
+  },
+  addonQuickBtnText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#92400e'
+  },
+  addonInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  addonProdTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  addonProdRate: {
+    fontSize: 11,
+    color: '#64748b'
+  },
+  addonNumberInput: {
+    width: 60,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    textAlign: 'center'
+  },
+  addonUnitText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  addonSubtotalText: {
+    flex: 0.8,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#059669',
+    textAlign: 'right'
+  },
+  addonTotalBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 12
+  },
+  addonTotalBarLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065f46'
+  },
+  addonTotalBarValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#059669'
+  }
 });

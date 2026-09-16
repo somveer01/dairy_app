@@ -19,7 +19,7 @@ export const WhatsAppService = {
     supplierBusinessName: string,
     periodLabel: string
   ): string {
-    const { customer, totalLitresCow, totalLitresBuffalo, totalAmountBilled, totalPaid, netDue } = summary;
+    const { customer, totalLitresCow, totalLitresBuffalo, totalLitresPacket, totalAddonsAmount, totalAmountBilled, totalPaid, netDue } = summary;
 
     let itemsText = '';
     if (summary.deliveredDaysCount !== undefined && summary.totalRangeDays !== undefined && summary.totalRangeDays > 0) {
@@ -34,12 +34,18 @@ export const WhatsAppService = {
     if (totalLitresBuffalo > 0) {
       itemsText += `\n🐃 Buffalo Milk: ${totalLitresBuffalo.toFixed(1)} L`;
     }
+    if (totalLitresPacket && totalLitresPacket > 0) {
+      itemsText += `\n📦 Packet Milk: ${totalLitresPacket.toFixed(1)} L`;
+    }
+    if (totalAddonsAmount && totalAddonsAmount > 0) {
+      itemsText += `\n🧀 Dairy Products / Add-ons: ₹${totalAddonsAmount.toFixed(0)}`;
+    }
 
     const message = `🥛 *${supplierBusinessName}*
 -----------------------------
 👤 Customer: *${customer.name}*
 📅 Period: ${periodLabel}${itemsText}
-💰 Total Milk Billed: ₹${totalAmountBilled.toFixed(2)}
+💰 Total Amount Billed: ₹${totalAmountBilled.toFixed(2)}
 💵 Payment Received: ₹${totalPaid.toFixed(2)}
 -----------------------------
 🔴 *Total Due Balance: ₹${netDue.toFixed(2)}*
@@ -55,7 +61,7 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
     periodLabel: string,
     auditItems: CustomerDateAuditItem[]
   ): string {
-    const { customer, totalLitresCow, totalLitresBuffalo, totalAmountBilled, totalPaid, netDue } = summary;
+    const { customer, totalLitresCow, totalLitresBuffalo, totalLitresPacket, totalAddonsAmount, totalAmountBilled, totalPaid, netDue } = summary;
 
     const deliveredDays = auditItems.filter(item => item.isDelivered).length;
     const missingDays = auditItems.filter(item => !item.isDelivered).length;
@@ -68,14 +74,25 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
       const y = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10);
       const d = parseInt(parts[2], 10);
-      const dateObj = new Date(y, m - 1, d);
+      const dateObj = new Date(y, m - 1, d, 12, 0, 0);
       const dayName = DAYS_SHORT[dateObj.getDay()] || '';
       const dateFormatted = `${formatToDisplayDate(item.date)} (${dayName})`;
 
-
       if (item.isDelivered) {
         const details = item.entries
-          .map((e: any) => `${e.quantityLitres}L ${e.milkType === 'cow' ? 'Cow' : 'Buf'} [${e.session}]`)
+          .map((e: any) => {
+            let label = '';
+            if (e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet'))) {
+              label = `${e.quantityLitres}L [${e.packetBrand || 'Packet'} ${e.packetVariant || ''}]`;
+            } else if (e.quantityLitres > 0) {
+              label = `${e.quantityLitres}L ${e.milkType === 'cow' ? 'Cow' : 'Buf'}`;
+            }
+            if (e.addons && e.addons.length > 0) {
+              const addonsStr = e.addons.map((a: any) => `${a.productName || a.id} (${a.quantity}${a.unit})`).join('+');
+              label = label ? `${label} + 🧀 ${addonsStr}` : `🧀 ${addonsStr}`;
+            }
+            return `${label} [${e.session}]`;
+          })
           .join(', ');
         breakdownText += `\n✓ ${dateFormatted}: ${details} = ₹${item.totalAmount.toFixed(0)}`;
       } else {
@@ -90,6 +107,12 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
     if (totalLitresBuffalo > 0) {
       itemsText += `\n🐃 Buffalo Milk: ${totalLitresBuffalo.toFixed(1)} L`;
     }
+    if (totalLitresPacket && totalLitresPacket > 0) {
+      itemsText += `\n📦 Packet Milk: ${totalLitresPacket.toFixed(1)} L`;
+    }
+    if (totalAddonsAmount && totalAddonsAmount > 0) {
+      itemsText += `\n🧀 Dairy Products / Add-ons: ₹${totalAddonsAmount.toFixed(0)}`;
+    }
 
     const message = `🥛 *${supplierBusinessName}*
 -----------------------------
@@ -100,7 +123,7 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
 📅 *DATE-WISE DELIVERY LOG:*${breakdownText}
 -----------------------------
 ${itemsText}
-💰 Total Milk Billed: ₹${totalAmountBilled.toFixed(2)}
+💰 Total Amount Billed: ₹${totalAmountBilled.toFixed(2)}
 💵 Payment Received: ₹${totalPaid.toFixed(2)}
 -----------------------------
 🔴 *Net Due Balance: ₹${netDue.toFixed(2)}*

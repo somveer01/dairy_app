@@ -11,6 +11,11 @@ export interface CardEntryItem {
   quantityLitres: number;
   ratePerLitre: number;
   amount: number;
+  totalDayAmount?: number;
+  isPacketMilk?: boolean;
+  packetBrand?: string;
+  packetVariant?: string;
+  addons?: import('../types').DairyEntryAddon[];
 }
 
 export interface CardPaymentItem {
@@ -31,6 +36,9 @@ export interface CustomerCardData {
   ratePerLitre: number;
   defaultLitres: number;
   partyType?: 'customer' | 'vendor';
+  isPacketMilk?: boolean;
+  packetBrand?: string;
+  packetVariant?: string;
   entries: Record<string, CardEntryItem[]>;
   payments: CardPaymentItem[];
   lastUpdated: number;
@@ -185,7 +193,12 @@ Thank you! — ${dairyName}`;
           milkType: e.milkType,
           quantityLitres: e.quantityLitres,
           ratePerLitre: e.ratePerLitre,
-          amount: e.amount
+          amount: e.amount,
+          totalDayAmount: e.totalDayAmount,
+          isPacketMilk: e.isPacketMilk,
+          packetBrand: e.packetBrand,
+          packetVariant: e.packetVariant,
+          addons: e.addons
         });
       });
 
@@ -207,6 +220,9 @@ Thank you! — ${dairyName}`;
         ratePerLitre: customer.ratePerLitre,
         defaultLitres: customer.defaultLitres,
         partyType: 'customer',
+        isPacketMilk: customer.isPacketMilk,
+        packetBrand: customer.packetBrand,
+        packetVariant: customer.packetVariant,
         entries: entriesMap,
         payments: paymentsList,
         lastUpdated: Date.now()

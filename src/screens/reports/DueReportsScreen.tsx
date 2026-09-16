@@ -340,15 +340,30 @@ export const DueReportsScreen = () => {
 
       let totalLitresCow = 0;
       let totalLitresBuffalo = 0;
+      let totalLitresPacket = 0;
+      let totalAddonsAmount = 0;
       let totalBilled = 0;
       let unpaidCount = 0;
       const deliveredDays = new Set<string>();
 
       for (let i = 0; i < custEntries.length; i++) {
         const entry = custEntries[i];
-        if (entry.milkType === 'cow') totalLitresCow += entry.quantityLitres;
-        if (entry.milkType === 'buffalo') totalLitresBuffalo += entry.quantityLitres;
-        totalBilled += entry.amount;
+        if (entry.isPacketMilk || (entry.milkType && entry.milkType.startsWith('packet'))) {
+          totalLitresPacket += entry.quantityLitres;
+        } else if (entry.milkType === 'cow') {
+          totalLitresCow += entry.quantityLitres;
+        } else {
+          totalLitresBuffalo += entry.quantityLitres;
+        }
+
+        let entryAddonAmt = 0;
+        if (entry.addons && Array.isArray(entry.addons)) {
+          for (const a of entry.addons) entryAddonAmt += (a.totalAmount || 0);
+        }
+        totalAddonsAmount += entryAddonAmt;
+
+        const entryTotal = entry.totalDayAmount != null ? entry.totalDayAmount : (entry.amount + entryAddonAmt);
+        totalBilled += entryTotal;
         if (!entry.isPaid) unpaidCount++;
         deliveredDays.add(entry.date);
       }
@@ -359,7 +374,9 @@ export const DueReportsScreen = () => {
         customer: cust,
         totalLitresCow,
         totalLitresBuffalo,
-        totalLitres: totalLitresCow + totalLitresBuffalo,
+        totalLitresPacket,
+        totalAddonsAmount,
+        totalLitres: totalLitresCow + totalLitresBuffalo + totalLitresPacket,
         totalAmountBilled: totalBilled,
         totalPaid,
         netDue,
@@ -564,7 +581,13 @@ export const DueReportsScreen = () => {
       );
       const isDelivered = entries.length > 0;
       const totalLitres = entries.reduce((sum, e) => sum + e.quantityLitres, 0);
-      const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
+      const totalAmount = entries.reduce((sum, e) => {
+        let addonAmt = 0;
+        if (e.addons && Array.isArray(e.addons)) {
+          for (const a of e.addons) addonAmt += (a.totalAmount || 0);
+        }
+        return sum + (e.totalDayAmount != null ? e.totalDayAmount : (e.amount + addonAmt));
+      }, 0);
 
       const parts = dateStr.split('-');
       const y = parseInt(parts[0], 10);
@@ -1457,6 +1480,16 @@ export const DueReportsScreen = () => {
                   {item.totalLitresBuffalo > 0 && (
                     <Text style={styles.qtyTag}>🐃 Buffalo: {item.totalLitresBuffalo.toFixed(1)} L</Text>
                   )}
+                  {item.totalLitresPacket && item.totalLitresPacket > 0 ? (
+                    <Text style={[styles.qtyTag, { backgroundColor: '#e0e7ff', color: '#4338ca' }]}>
+                      📦 Packet: {item.totalLitresPacket.toFixed(1)} L
+                    </Text>
+                  ) : null}
+                  {item.totalAddonsAmount && item.totalAddonsAmount > 0 ? (
+                    <Text style={[styles.qtyTag, { backgroundColor: '#fef3c7', color: '#b45309' }]}>
+                      🧀 Products: ₹{item.totalAddonsAmount.toFixed(0)}
+                    </Text>
+                  ) : null}
                   <Text style={styles.qtyTagTotal}>Total: {item.totalLitres.toFixed(1)} L</Text>
                   <Text style={styles.qtyTagDays}>
                     📅 {item.deliveredDaysCount || 0}{dateRange.totalDays > 0 ? `/${dateRange.totalDays}` : ''} {lang === 'hi' ? 'दिन' : 'Days'}
@@ -1858,27 +1891,39 @@ export const DueReportsScreen = () => {
                       {/* Entries Breakdown for delivered days */}
                       {dayItem.isDelivered && (
                         <View style={styles.dayEntriesBreakdown}>
-                          {dayItem.entries.map((e) => (
-                            <View key={e.id} style={styles.entryLine}>
-                              <View style={styles.entryLineLeft}>
-                                <Text style={styles.entrySessionTag}>
-                                  {e.session === 'Morning' ? '🌅 Morning' : e.session === 'Evening' ? '🌇 Evening' : '🥛 Custom'}
-                                </Text>
-                                <Text style={styles.entryDetailTag}>
-                                  {e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'} • {e.quantityLitres}L @ ₹{e.ratePerLitre}/L
-                                </Text>
+                          {dayItem.entries.map((e) => {
+                            const milkLabel = e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet'))
+                              ? `📦 ${e.packetBrand || 'Packet'} (${e.packetVariant || 'Milk'})`
+                              : `${e.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}`;
+                            const addonStr = e.addons && e.addons.length > 0
+                              ? ' + 🧀 ' + e.addons.map((a: any) => `${a.productName || a.id} (${a.quantity}${a.unit})`).join(', ')
+                              : '';
+                            const entryTotal = e.totalDayAmount != null
+                              ? e.totalDayAmount
+                              : (e.amount + (e.addons ? e.addons.reduce((s: number, a: any) => s + (a.totalAmount || 0), 0) : 0));
+
+                            return (
+                              <View key={e.id} style={styles.entryLine}>
+                                <View style={styles.entryLineLeft}>
+                                  <Text style={styles.entrySessionTag}>
+                                    {e.session === 'Morning' ? '🌅 Morning' : e.session === 'Evening' ? '🌇 Evening' : '🥛 Custom'}
+                                  </Text>
+                                  <Text style={styles.entryDetailTag}>
+                                    {e.quantityLitres > 0 ? `${milkLabel} • ${e.quantityLitres}L @ ₹${e.ratePerLitre}/L` : ''}{addonStr}
+                                  </Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Text style={styles.entryAmountText}>= ₹{entryTotal.toFixed(0)}</Text>
+                                  <TouchableOpacity
+                                    onPress={() => handleDeleteEntry(e.id, dayItem.formattedDate)}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Text style={styles.entryDeleteText}>🗑️</Text>
+                                  </TouchableOpacity>
+                                </View>
                               </View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <Text style={styles.entryAmountText}>= ₹{e.amount.toFixed(0)}</Text>
-                                <TouchableOpacity
-                                  onPress={() => handleDeleteEntry(e.id, dayItem.formattedDate)}
-                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                                >
-                                  <Text style={styles.entryDeleteText}>🗑️</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          ))}
+                            );
+                          })}
                         </View>
                       )}
                     </View>

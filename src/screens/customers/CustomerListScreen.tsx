@@ -97,6 +97,11 @@ export const CustomerListScreen = () => {
   const [defaultLitres, setDefaultLitres] = useState('2.0');
   const [ratePerLitre, setRatePerLitre] = useState('55');
   const [notes, setNotes] = useState('');
+  // Packet milk state
+  const [isPacketMilk, setIsPacketMilk] = useState(false);
+  const [packetBrand, setPacketBrand] = useState('Mother Dairy');
+  const [customBrandName, setCustomBrandName] = useState('');
+  const [packetVariant, setPacketVariant] = useState('Full Cream');
 
   // Contact Import Modal State
   const [contactModalVisible, setContactModalVisible] = useState(false);
@@ -321,6 +326,10 @@ export const CustomerListScreen = () => {
       setDefaultLitres('2.0');
       setRatePerLitre('55');
       setNotes('');
+      setIsPacketMilk(false);
+      setPacketBrand('Mother Dairy');
+      setCustomBrandName('');
+      setPacketVariant('Full Cream');
       setModalVisible(true);
     });
   };
@@ -336,6 +345,11 @@ export const CustomerListScreen = () => {
       setDefaultLitres(cust.defaultLitres.toString());
       setRatePerLitre(cust.ratePerLitre.toString());
       setNotes(cust.notes || '');
+      setIsPacketMilk(!!cust.isPacketMilk);
+      const isKnownBrand = ['Mother Dairy', 'Amul', 'Verka', 'Saras', 'Paras'].includes(cust.packetBrand || '');
+      setPacketBrand(isKnownBrand ? (cust.packetBrand || 'Mother Dairy') : (cust.packetBrand ? 'Custom' : 'Mother Dairy'));
+      setCustomBrandName(!isKnownBrand && cust.packetBrand ? cust.packetBrand : '');
+      setPacketVariant(cust.packetVariant || 'Full Cream');
       setModalVisible(true);
     });
   };
@@ -380,6 +394,7 @@ export const CustomerListScreen = () => {
 
       const litres = parseFloat(defaultLitres) || 1.0;
       const rate = parseFloat(ratePerLitre) || 50;
+      const finalBrand = packetBrand === 'Custom' ? (customBrandName.trim() || 'Packet') : packetBrand;
 
       const customerData: Customer = {
         id: editingCustomer ? editingCustomer.id : 'cust_' + Date.now(),
@@ -387,10 +402,13 @@ export const CustomerListScreen = () => {
         name: trimmedName,
         phone: normPhone,
         address: address.trim(),
-        milkType: milkType,
+        milkType: isPacketMilk ? (`packet_${packetVariant.toLowerCase().replace(/\s+/g, '_')}` as MilkType) : milkType,
         defaultLitres: litres,
         ratePerLitre: rate,
         notes: notes.trim(),
+        isPacketMilk: !!isPacketMilk,
+        packetBrand: isPacketMilk ? finalBrand : undefined,
+        packetVariant: isPacketMilk ? packetVariant : undefined,
         createdAt: editingCustomer ? editingCustomer.createdAt : Date.now()
       };
 
@@ -1313,11 +1331,19 @@ export const CustomerListScreen = () => {
                     <Text style={styles.customerPhone}>📞 {item.phone}</Text>
                     {item.address ? <Text style={styles.customerAddress} numberOfLines={1}>📍 {item.address}</Text> : null}
                   </View>
-                  <View style={[styles.milkTypeBadge, item.milkType === 'cow' ? styles.cowBadge : styles.buffaloBadge]}>
-                    <Text style={styles.milkTypeText}>
-                      {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}
-                    </Text>
-                  </View>
+                  {item.isPacketMilk ? (
+                    <View style={[styles.milkTypeBadge, styles.packetBadge]}>
+                      <Text style={styles.packetBadgeText}>
+                        📦 {item.packetBrand || 'Packet'} ({item.packetVariant || 'Milk'})
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.milkTypeBadge, item.milkType === 'cow' ? styles.cowBadge : styles.buffaloBadge]}>
+                      <Text style={styles.milkTypeText}>
+                        {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.detailsRow}>
@@ -2034,38 +2060,121 @@ export const CustomerListScreen = () => {
                 onChangeText={setAddress}
               />
 
-              {/* Milk Type Selector: Cow vs Buffalo */}
-              <Text style={styles.label}>{t.selectMilkType} *</Text>
-              <View style={styles.typeSelectorRow}>
-                <TouchableOpacity
-                  style={[
-                    styles.typeOption,
-                    milkType === 'cow' && styles.typeOptionSelectedCow
-                  ]}
-                  onPress={() => {
-                    setMilkType('cow');
-                    if (!editingCustomer) setRatePerLitre('55');
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                >
-                  <Text style={styles.typeOptionText}>🐄 {t.cowMilk}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.typeOption,
-                    milkType === 'buffalo' && styles.typeOptionSelectedBuffalo
-                  ]}
-                  onPress={() => {
-                    setMilkType('buffalo');
-                    if (!editingCustomer) setRatePerLitre('70');
-                  }}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                >
-                  <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk}</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Milk Category: Loose vs Packet Milk (if enabled in supplier settings) */}
+              {supplier?.settings?.enablePacketMilk ? (
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={styles.label}>{lang === 'hi' ? 'दूध का स्वरूप *' : 'Milk Category *'}</Text>
+                  <View style={styles.categoryToggleRow}>
+                    <TouchableOpacity
+                      style={[styles.categoryToggleBtn, !isPacketMilk && styles.categoryToggleBtnActiveLoose]}
+                      onPress={() => setIsPacketMilk(false)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.categoryToggleText, !isPacketMilk && styles.categoryToggleTextActive]}>
+                        🥛 {lang === 'hi' ? 'खुला दूध (डेयरी)' : 'Loose Milk'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.categoryToggleBtn, isPacketMilk && styles.categoryToggleBtnActivePacket]}
+                      onPress={() => setIsPacketMilk(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.categoryToggleText, isPacketMilk && styles.categoryToggleTextActive]}>
+                        📦 {lang === 'hi' ? 'पैकेट दूध (ब्रांडेड)' : 'Packet Milk'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {isPacketMilk ? (
+                <View style={styles.packetConfigBox}>
+                  <Text style={[styles.label, { color: '#166534', marginTop: 0 }]}>
+                    {lang === 'hi' ? 'कंपनी / ब्रांड चुनें *' : 'Select Brand *'}
+                  </Text>
+                  <View style={styles.chipRow}>
+                    {['Mother Dairy', 'Amul', 'Verka', 'Saras', 'Paras', 'Custom'].map(brand => (
+                      <TouchableOpacity
+                        key={brand}
+                        style={[styles.packetChip, packetBrand === brand && styles.packetChipActive]}
+                        onPress={() => setPacketBrand(brand)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.packetChipText, packetBrand === brand && styles.packetChipTextActive]}>
+                          {brand}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {packetBrand === 'Custom' && (
+                    <TextInput
+                      style={[styles.modalInput, { marginTop: 6, backgroundColor: '#ffffff' }]}
+                      placeholder={lang === 'hi' ? 'ब्रांड का नाम लिखें (उदा. पारस, नमस्ते इंडिया)' : 'Enter Brand Name'}
+                      placeholderTextColor="#94a3b8"
+                      value={customBrandName}
+                      onChangeText={setCustomBrandName}
+                    />
+                  )}
+
+                  <Text style={[styles.label, { color: '#166534', marginTop: 8 }]}>
+                    {lang === 'hi' ? 'वेरिएंट / प्रकार चुनें *' : 'Select Variant *'}
+                  </Text>
+                  <View style={styles.chipRow}>
+                    {[
+                      { key: 'Full Cream', labelHi: 'फुल क्रीम', labelEn: 'Full Cream' },
+                      { key: 'Toned', labelHi: 'टोन्ड', labelEn: 'Toned' },
+                      { key: 'Double Toned', labelHi: 'डबल टोन्ड', labelEn: 'Double Toned' },
+                      { key: 'Cow Packet', labelHi: 'गाय पैकेट', labelEn: 'Cow Packet' }
+                    ].map(variant => (
+                      <TouchableOpacity
+                        key={variant.key}
+                        style={[styles.packetChip, packetVariant === variant.key && styles.packetChipActiveVariant]}
+                        onPress={() => setPacketVariant(variant.key)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.packetChipText, packetVariant === variant.key && styles.packetChipTextActiveVariant]}>
+                          {lang === 'hi' ? variant.labelHi : variant.labelEn}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <>
+                  {/* Milk Type Selector: Cow vs Buffalo */}
+                  <Text style={styles.label}>{t.selectMilkType} *</Text>
+                  <View style={styles.typeSelectorRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeOption,
+                        milkType === 'cow' && styles.typeOptionSelectedCow
+                      ]}
+                      onPress={() => {
+                        setMilkType('cow');
+                        if (!editingCustomer) setRatePerLitre('55');
+                      }}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Text style={styles.typeOptionText}>🐄 {t.cowMilk}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeOption,
+                        milkType === 'buffalo' && styles.typeOptionSelectedBuffalo
+                      ]}
+                      onPress={() => {
+                        setMilkType('buffalo');
+                        if (!editingCustomer) setRatePerLitre('70');
+                      }}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Text style={styles.typeOptionText}>🐃 {t.buffaloMilk}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
 
               <View style={styles.rowTwoInputs}>
                 <View style={{ flex: 1, marginRight: 8 }}>
@@ -2856,5 +2965,94 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   checkboxChecked: { backgroundColor: '#16a34a', borderColor: '#16a34a' },
-  checkmark: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' }
+  checkmark: { color: '#ffffff', fontSize: 13, fontWeight: 'bold' },
+
+  // Packet Milk Styles
+  packetBadge: {
+    backgroundColor: '#dbeafe',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8
+  },
+  packetBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8'
+  },
+  categoryToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4
+  },
+  categoryToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center'
+  },
+  categoryToggleBtnActiveLoose: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#0284c7'
+  },
+  categoryToggleBtnActivePacket: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#16a34a'
+  },
+  categoryToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  categoryToggleTextActive: {
+    color: '#0f172a',
+    fontWeight: '700'
+  },
+  packetConfigBox: {
+    marginBottom: 10,
+    padding: 10,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bbf7d0'
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6
+  },
+  packetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1'
+  },
+  packetChipActive: {
+    backgroundColor: '#16a34a',
+    borderColor: '#15803d'
+  },
+  packetChipActiveVariant: {
+    backgroundColor: '#0284c7',
+    borderColor: '#0369a1'
+  },
+  packetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155'
+  },
+  packetChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '700'
+  },
+  packetChipTextActiveVariant: {
+    color: '#ffffff',
+    fontWeight: '700'
+  }
 });
