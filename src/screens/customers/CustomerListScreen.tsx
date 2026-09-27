@@ -160,6 +160,10 @@ export const CustomerListScreen = () => {
         return false;
       };
 
+      refreshCustomers();
+      refreshMilkEntries();
+      refreshPayments();
+
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => sub.remove();
     }, [contactModalVisible, whatsappModalVisible, modalVisible, subModalVisible, search, directoryMode])
@@ -1272,7 +1276,12 @@ export const CustomerListScreen = () => {
   const customerBalanceMap = useMemo(() => {
     const deliveriesMap = new Map<string, number>();
     (milkEntries || []).filter(e => !e.isDeleted).forEach(e => {
-      deliveriesMap.set(e.customerId, (deliveriesMap.get(e.customerId) || 0) + e.amount);
+      let addonAmt = 0;
+      if (e.addons && Array.isArray(e.addons)) {
+        for (const a of e.addons) addonAmt += (a.totalAmount || 0);
+      }
+      const entryTotal = e.totalDayAmount != null ? e.totalDayAmount : (e.amount + addonAmt);
+      deliveriesMap.set(e.customerId, (deliveriesMap.get(e.customerId) || 0) + entryTotal);
     });
     const paymentsMap = new Map<string, number>();
     (payments || []).filter(p => !p.isDeleted).forEach(p => {
@@ -1419,20 +1428,20 @@ export const CustomerListScreen = () => {
                     {(() => {
                       const bal = customerBalanceMap.get(item.id);
                       if (!bal) return null;
-                      if (bal.advance > 0) {
+                      if (bal.advance > 0.01) {
                         return (
                           <View style={{ backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                             <Text style={{ fontSize: 11, color: '#15803d', fontWeight: 'bold' }}>
-                              🟢 ₹{bal.advance.toFixed(0)} {lang === 'hi' ? 'जमा' : 'Adv'}
+                              🟢 ₹{bal.advance.toFixed(2)} {lang === 'hi' ? 'जमा' : 'Adv'}
                             </Text>
                           </View>
                         );
                       }
-                      if (bal.netDue > 0) {
+                      if (bal.netDue > 0.01) {
                         return (
                           <View style={{ backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                             <Text style={{ fontSize: 11, color: '#b91c1c', fontWeight: 'bold' }}>
-                              🔴 ₹{bal.netDue.toFixed(0)} {lang === 'hi' ? 'बाकी' : 'Due'}
+                              🔴 ₹{bal.netDue.toFixed(2)} {lang === 'hi' ? 'बाकी' : 'Due'}
                             </Text>
                           </View>
                         );
@@ -1463,7 +1472,9 @@ export const CustomerListScreen = () => {
                   <TouchableOpacity
                     style={styles.shareCardBtn}
                     onPress={async () => {
-                      await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                      const latestEntries = await StorageService.getMilkEntries(supplier?.id);
+                      const latestPayments = await StorageService.getPayments(supplier?.id);
+                      await CardSyncService.syncCustomerCard(item.id, supplier, customers, latestEntries, latestPayments);
                       await CardSyncService.shareCardViaWhatsApp(item, supplier, lang);
                     }}
                     activeOpacity={0.7}
@@ -1475,7 +1486,9 @@ export const CustomerListScreen = () => {
                   <TouchableOpacity
                     style={styles.viewCardBtn}
                     onPress={async () => {
-                      await CardSyncService.syncCustomerCard(item.id, supplier, customers, milkEntries, payments);
+                      const latestEntries = await StorageService.getMilkEntries(supplier?.id);
+                      const latestPayments = await StorageService.getPayments(supplier?.id);
+                      await CardSyncService.syncCustomerCard(item.id, supplier, customers, latestEntries, latestPayments);
                       const url = CardSyncService.getCardUrl(supplier?.id || 'supp_1', item.id, true, 'customer');
                       if (Platform.OS === 'web' && typeof window !== 'undefined') {
                         try {

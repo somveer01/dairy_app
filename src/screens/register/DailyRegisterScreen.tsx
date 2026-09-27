@@ -24,9 +24,11 @@ export const DailyRegisterScreen = () => {
     t,
     lang,
     customers,
+    refreshCustomers,
     milkEntries,
     refreshMilkEntries,
     payments,
+    refreshPayments,
     subSuppliers,
     refreshSubSuppliers,
     milkInwardEntries,
@@ -115,6 +117,10 @@ export const DailyRegisterScreen = () => {
         // Step 3: Default behavior (return to DashboardTab)
         return false;
       };
+
+      refreshMilkEntries();
+      refreshPayments();
+      refreshCustomers();
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => sub.remove();
@@ -221,26 +227,35 @@ export const DailyRegisterScreen = () => {
     return list;
   }, [subSuppliers, searchFilter]);
 
-  const customerAdvanceMap = useMemo(() => {
+  const customerBalanceMap = useMemo(() => {
     const deliveriesMap = new Map<string, number>();
     (milkEntries || []).filter(e => !e.isDeleted).forEach(e => {
-      deliveriesMap.set(e.customerId, (deliveriesMap.get(e.customerId) || 0) + e.amount);
+      let addonAmt = 0;
+      if (e.addons && Array.isArray(e.addons)) {
+        for (const a of e.addons) addonAmt += (a.totalAmount || 0);
+      }
+      const entryTotal = e.totalDayAmount != null ? e.totalDayAmount : (e.amount + addonAmt);
+      deliveriesMap.set(e.customerId, (deliveriesMap.get(e.customerId) || 0) + entryTotal);
     });
     const paymentsMap = new Map<string, number>();
     (payments || []).filter(p => !p.isDeleted).forEach(p => {
       paymentsMap.set(p.customerId, (paymentsMap.get(p.customerId) || 0) + p.amountPaid);
     });
 
-    const advMap = new Map<string, number>();
+    const balMap = new Map<string, { netDue: number; advance: number }>();
     (customers || []).forEach(c => {
       const billed = deliveriesMap.get(c.id) || 0;
       const paid = paymentsMap.get(c.id) || 0;
-      const advance = paid - billed;
-      if (advance > 0.01) {
-        advMap.set(c.id, advance);
+      const diff = billed - paid;
+      if (diff > 0.01) {
+        balMap.set(c.id, { netDue: diff, advance: 0 });
+      } else if (diff < -0.01) {
+        balMap.set(c.id, { netDue: 0, advance: Math.abs(diff) });
+      } else {
+        balMap.set(c.id, { netDue: 0, advance: 0 });
       }
     });
-    return advMap;
+    return balMap;
   }, [customers, milkEntries, payments]);
 
   // --- CUSTOMER DELIVERY ACTIONS ---
@@ -891,12 +906,12 @@ export const DailyRegisterScreen = () => {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
                         {(() => {
-                          const adv = customerAdvanceMap.get(item.id);
-                          if (adv && adv > 0) {
+                          const bal = customerBalanceMap.get(item.id);
+                          if (bal && bal.advance > 0.01) {
                             return (
                               <View style={{ backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
                                 <Text style={{ fontSize: 10, color: '#15803d', fontWeight: 'bold' }}>
-                                  🟢 ₹{adv.toFixed(0)} {lang === 'hi' ? 'जमा' : 'Adv'}
+                                  🟢 ₹{bal.advance.toFixed(2)} {lang === 'hi' ? 'जमा' : 'Adv'}
                                 </Text>
                               </View>
                             );
