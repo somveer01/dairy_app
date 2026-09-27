@@ -41,16 +41,36 @@ export const WhatsAppService = {
       itemsText += `\n🧀 Dairy Products / Add-ons: ₹${totalAddonsAmount.toFixed(0)}`;
     }
 
+    let carryoverText = '';
+    if ((summary.previousAdvance || 0) > 0) {
+      carryoverText += `\n🟢 Previous Advance (पिछला जमा): -₹${summary.previousAdvance?.toFixed(2)}`;
+    } else if ((summary.previousDue || 0) > 0) {
+      carryoverText += `\n🔴 Previous Due (पिछला बकाया): +₹${summary.previousDue?.toFixed(2)}`;
+    }
+
+    const isAdvance = (summary.advanceBalance || 0) > 0;
+    const balanceRow = isAdvance
+      ? `🟢 *Advance Balance (अग्रिम जमा शेष): ₹${(summary.advanceBalance || 0).toFixed(2)}*`
+      : netDue > 0
+      ? `🔴 *Total Due Balance (कुल बकाया): ₹${netDue.toFixed(2)}*`
+      : `✓ *Account Fully Settled (हिसाब चुकता): ₹0.00*`;
+
+    const footerPrompt = isAdvance
+      ? `Your advance payment is safe and will be adjusted against upcoming deliveries. Thank you!`
+      : netDue > 0
+      ? `Please clear the pending balance at your earliest convenience. Thank you!`
+      : `Your account has no outstanding balance. Thank you!`;
+
     const message = `🥛 *${supplierBusinessName}*
 -----------------------------
 👤 Customer: *${customer.name}*
-📅 Period: ${periodLabel}${itemsText}
+📅 Period: ${periodLabel}${itemsText}${carryoverText}
 💰 Total Amount Billed: ₹${totalAmountBilled.toFixed(2)}
 💵 Payment Received: ₹${totalPaid.toFixed(2)}
 -----------------------------
-🔴 *Total Due Balance: ₹${netDue.toFixed(2)}*
+${balanceRow}
 -----------------------------
-Please clear the pending balance at your earliest convenience. Thank you!`;
+${footerPrompt}`;
 
     return message;
   },
@@ -114,6 +134,26 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
       itemsText += `\n🧀 Dairy Products / Add-ons: ₹${totalAddonsAmount.toFixed(0)}`;
     }
 
+    let carryoverText = '';
+    if ((summary.previousAdvance || 0) > 0) {
+      carryoverText += `\n🟢 Previous Advance (पिछला जमा): -₹${summary.previousAdvance?.toFixed(2)}`;
+    } else if ((summary.previousDue || 0) > 0) {
+      carryoverText += `\n🔴 Previous Due (पिछला बकाया): +₹${summary.previousDue?.toFixed(2)}`;
+    }
+
+    const isAdvance = (summary.advanceBalance || 0) > 0;
+    const balanceRow = isAdvance
+      ? `🟢 *Advance Balance (अग्रिम जमा शेष): ₹${(summary.advanceBalance || 0).toFixed(2)}*`
+      : netDue > 0
+      ? `🔴 *Net Due Balance (कुल बकाया): ₹${netDue.toFixed(2)}*`
+      : `✓ *Account Fully Settled (हिसाब चुकता): ₹0.00*`;
+
+    const footerPrompt = isAdvance
+      ? `Your advance payment is safe and will be adjusted against upcoming deliveries. Thank you!`
+      : netDue > 0
+      ? `Please review and clear the pending balance. Thank you!`
+      : `Your account has no pending balance. Thank you!`;
+
     const message = `🥛 *${supplierBusinessName}*
 -----------------------------
 👤 Customer: *${customer.name}*
@@ -122,13 +162,13 @@ Please clear the pending balance at your earliest convenience. Thank you!`;
 -----------------------------
 📅 *DATE-WISE DELIVERY LOG:*${breakdownText}
 -----------------------------
-${itemsText}
+${itemsText}${carryoverText}
 💰 Total Amount Billed: ₹${totalAmountBilled.toFixed(2)}
 💵 Payment Received: ₹${totalPaid.toFixed(2)}
 -----------------------------
-🔴 *Net Due Balance: ₹${netDue.toFixed(2)}*
+${balanceRow}
 -----------------------------
-Please review and clear the pending balance. Thank you!`;
+${footerPrompt}`;
 
     return message;
   },

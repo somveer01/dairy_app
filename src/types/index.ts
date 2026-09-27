@@ -104,6 +104,7 @@ export interface Payment {
   customerName: string;
   date: string; // YYYY-MM-DD
   amountPaid: number;
+  paymentType?: 'regular' | 'advance';
   notes?: string;
   createdAt: number;
   updatedAt?: number;
@@ -120,6 +121,10 @@ export interface CustomerDueSummary {
   totalAmountBilled: number;
   totalPaid: number;
   netDue: number;
+  advanceBalance?: number;
+  previousDue?: number;
+  previousAdvance?: number;
+  balanceStatus?: 'due' | 'advance' | 'settled';
   unpaidEntriesCount: number;
   deliveredDaysCount?: number;
   totalRangeDays?: number;

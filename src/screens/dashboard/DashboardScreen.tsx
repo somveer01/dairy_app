@@ -128,12 +128,35 @@ export const DashboardScreen = ({ navigation }: any) => {
   // Daily Margin (Sales revenue - Purchase cost today)
   const todayMargin = todayStats.totalBilled - todayProcurementStats.totalPurchaseCost;
 
-  // Total Outstanding Due across all customers
-  const overallDue = useMemo(() => {
-    const totalDeliveriesAmount = milkEntries.filter(e => !e.isDeleted).reduce((sum, e) => sum + e.amount, 0);
-    const totalPaymentsReceived = payments.filter(p => !p.isDeleted).reduce((sum, p) => sum + p.amountPaid, 0);
-    return Math.max(0, totalDeliveriesAmount - totalPaymentsReceived);
-  }, [milkEntries, payments]);
+  // Customer balances: calculate per-customer so advance of one customer does not hide due of another
+  const { overallDue, overallAdvance } = useMemo(() => {
+    const activeCustomers = customers.filter(c => !c.isDeleted);
+    const deliveriesByCust = new Map<string, number>();
+    milkEntries.filter(e => !e.isDeleted).forEach(e => {
+      deliveriesByCust.set(e.customerId, (deliveriesByCust.get(e.customerId) || 0) + e.amount);
+    });
+
+    const paymentsByCust = new Map<string, number>();
+    payments.filter(p => !p.isDeleted).forEach(p => {
+      paymentsByCust.set(p.customerId, (paymentsByCust.get(p.customerId) || 0) + p.amountPaid);
+    });
+
+    let dueSum = 0;
+    let advSum = 0;
+
+    activeCustomers.forEach(c => {
+      const billed = deliveriesByCust.get(c.id) || 0;
+      const paid = paymentsByCust.get(c.id) || 0;
+      const bal = billed - paid;
+      if (bal > 0.01) {
+        dueSum += bal;
+      } else if (bal < -0.01) {
+        advSum += Math.abs(bal);
+      }
+    });
+
+    return { overallDue: dueSum, overallAdvance: advSum };
+  }, [customers, milkEntries, payments]);
 
   // Total Received Payments All Time
   const totalReceivedAllTime = useMemo(() => {
@@ -731,6 +754,11 @@ export const DashboardScreen = ({ navigation }: any) => {
             <Text style={styles.metricAmountRed} numberOfLines={1}>₹{overallDue.toFixed(0)}</Text>
             <View style={styles.metricActionRow}>
               <Text style={styles.metricActionRed}>{isHindi ? 'हिसाब देखें' : 'View Dues'} →</Text>
+              {overallAdvance > 0 && (
+                <Text style={{ fontSize: 10, color: '#16a34a', fontWeight: 'bold' }}>
+                  (₹{overallAdvance.toFixed(0)} {isHindi ? 'जमा' : 'Adv'})
+                </Text>
+              )}
             </View>
           </TouchableOpacity>
 

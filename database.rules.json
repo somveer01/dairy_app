@@ -1,25 +1,30 @@
-﻿{
+{
   "rules": {
     "suppliers": {
+      ".read": "auth != null && root.child('system/admins/' + auth.uid).val() === true",
       "$supplierId": {
-        ".read": true,
-        ".write": true
+        ".read": "auth != null && ((auth.token.email !== null && ('supp_' + auth.token.email.replace('@dairyapp.local', '')) === $supplierId) || (auth.token.phone_number !== null && auth.token.phone_number.endsWith($supplierId.replace('supp_', ''))) || root.child('system/admins/' + auth.uid).val() === true)",
+        ".write": "auth != null && ((auth.token.email !== null && ('supp_' + auth.token.email.replace('@dairyapp.local', '')) === $supplierId) || (auth.token.phone_number !== null && auth.token.phone_number.endsWith($supplierId.replace('supp_', ''))) || root.child('system/admins/' + auth.uid).val() === true)"
       }
     },
     "cards": {
       "$supplierId": {
+        ".write": "auth != null && ((auth.token.email !== null && ('supp_' + auth.token.email.replace('@dairyapp.local', '')) === $supplierId) || (auth.token.phone_number !== null && auth.token.phone_number.endsWith($supplierId.replace('supp_', ''))) || root.child('system/admins/' + auth.uid).val() === true)",
         "$partyId": {
-          ".read": true,
-          ".write": true
+          ".read": true
         }
       }
     },
     "system": {
       "settings": {
+        ".read": true,
         "adminUpiId": {
-          ".read": true,
-          ".write": true
+          ".write": "auth != null && root.child('system/admins/' + auth.uid).val() === true"
         }
+      },
+      "admins": {
+        ".read": false,
+        ".write": false
       }
     }
   }

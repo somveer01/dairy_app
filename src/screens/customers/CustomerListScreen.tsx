@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -1269,6 +1269,32 @@ export const CustomerListScreen = () => {
         (s.address && s.address.toLowerCase().includes(search.toLowerCase())))
   );
 
+  const customerBalanceMap = useMemo(() => {
+    const deliveriesMap = new Map<string, number>();
+    (milkEntries || []).filter(e => !e.isDeleted).forEach(e => {
+      deliveriesMap.set(e.customerId, (deliveriesMap.get(e.customerId) || 0) + e.amount);
+    });
+    const paymentsMap = new Map<string, number>();
+    (payments || []).filter(p => !p.isDeleted).forEach(p => {
+      paymentsMap.set(p.customerId, (paymentsMap.get(p.customerId) || 0) + p.amountPaid);
+    });
+
+    const balMap = new Map<string, { netDue: number; advance: number }>();
+    (customers || []).forEach(c => {
+      const billed = deliveriesMap.get(c.id) || 0;
+      const paid = paymentsMap.get(c.id) || 0;
+      const diff = billed - paid;
+      if (diff > 0.01) {
+        balMap.set(c.id, { netDue: diff, advance: 0 });
+      } else if (diff < -0.01) {
+        balMap.set(c.id, { netDue: 0, advance: Math.abs(diff) });
+      } else {
+        balMap.set(c.id, { netDue: 0, advance: 0 });
+      }
+    });
+    return balMap;
+  }, [customers, milkEntries, payments]);
+
   const filteredPhoneContacts = deviceContacts.filter(
     c =>
       c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
@@ -1376,19 +1402,44 @@ export const CustomerListScreen = () => {
                     <Text style={styles.customerPhone}>📞 {item.phone}</Text>
                     {item.address ? <Text style={styles.customerAddress} numberOfLines={1}>📍 {item.address}</Text> : null}
                   </View>
-                  {item.isPacketMilk ? (
-                    <View style={[styles.milkTypeBadge, styles.packetBadge]}>
-                      <Text style={styles.packetBadgeText}>
-                        📦 {item.packetBrand || 'Packet'} ({item.packetVariant || 'Milk'})
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.milkTypeBadge, item.milkType === 'cow' ? styles.cowBadge : styles.buffaloBadge]}>
-                      <Text style={styles.milkTypeText}>
-                        {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}
-                      </Text>
-                    </View>
-                  )}
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    {item.isPacketMilk ? (
+                      <View style={[styles.milkTypeBadge, styles.packetBadge]}>
+                        <Text style={styles.packetBadgeText}>
+                          📦 {item.packetBrand || 'Packet'} ({item.packetVariant || 'Milk'})
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.milkTypeBadge, item.milkType === 'cow' ? styles.cowBadge : styles.buffaloBadge]}>
+                        <Text style={styles.milkTypeText}>
+                          {item.milkType === 'cow' ? '🐄 Cow' : '🐃 Buffalo'}
+                        </Text>
+                      </View>
+                    )}
+                    {(() => {
+                      const bal = customerBalanceMap.get(item.id);
+                      if (!bal) return null;
+                      if (bal.advance > 0) {
+                        return (
+                          <View style={{ backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 11, color: '#15803d', fontWeight: 'bold' }}>
+                              🟢 ₹{bal.advance.toFixed(0)} {lang === 'hi' ? 'जमा' : 'Adv'}
+                            </Text>
+                          </View>
+                        );
+                      }
+                      if (bal.netDue > 0) {
+                        return (
+                          <View style={{ backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 11, color: '#b91c1c', fontWeight: 'bold' }}>
+                              🔴 ₹{bal.netDue.toFixed(0)} {lang === 'hi' ? 'बाकी' : 'Due'}
+                            </Text>
+                          </View>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </View>
                 </View>
 
                 <View style={styles.detailsRow}>

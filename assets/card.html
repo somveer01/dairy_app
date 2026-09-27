@@ -514,6 +514,19 @@
       color: #16a34a;
     }
 
+    .due-hero-banner.hero-advance {
+      background: #f0fdf4;
+      border-top: 1px dashed #86efac;
+    }
+
+    .due-hero-banner.hero-advance .due-hero-title {
+      color: #15803d;
+    }
+
+    .due-hero-banner.hero-advance .due-hero-amount {
+      color: #16a34a;
+    }
+
     .due-hero-title {
       font-size: 13px;
       font-weight: 800;
@@ -1756,13 +1769,19 @@
       });
 
       // Previous month carryover due (unpaid balance up to the start of this month)
-      const prevDue = Math.max(0, prevDeliveries - prevPaid);
+      const prevNet = prevDeliveries - prevPaid;
+      const prevDue = prevNet > 0.01 ? prevNet : 0;
+      const prevAdvance = prevNet < -0.01 ? Math.abs(prevNet) : 0;
 
-      // This month's net pending due: previous due carried forward + this month bill - this month paid
-      const monthDue = Math.max(0, (prevDeliveries - prevPaid) + totalMonthBilled - totalMonthPaid);
+      // This month's net pending due / advance
+      const monthNet = prevNet + totalMonthBilled - totalMonthPaid;
+      const monthDue = monthNet > 0.01 ? monthNet : 0;
+      const monthAdvance = monthNet < -0.01 ? Math.abs(monthNet) : 0;
 
-      // Lifetime all-time net due
-      const netDue = Math.max(0, allTimeDeliveries - allTimePaid);
+      // Lifetime all-time net due / advance
+      const allTimeNet = allTimeDeliveries - allTimePaid;
+      const netDue = allTimeNet > 0.01 ? allTimeNet : 0;
+      const netAdvance = allTimeNet < -0.01 ? Math.abs(allTimeNet) : 0;
 
       // Determine if currently viewing the real current calendar month
       const now = new Date();
@@ -1790,8 +1809,15 @@
       document.getElementById('labelDeliveredDays').innerText = isVendor ? t.vendorDeliveredDays : t.deliveredDays;
       document.getElementById('valDeliveredDays').innerText = `${deliveredDaysCount} ${t.daysUnit}`;
 
-      document.getElementById('labelPrevDue').innerText = isVendor ? (currentLang === 'hi' ? 'पिछला देय बाकी:' : 'Previous Payable:') : t.prevDue;
-      document.getElementById('valPrevDue').innerText = `₹${prevDue.toFixed(2)}`;
+      if (prevAdvance > 0) {
+        document.getElementById('labelPrevDue').innerText = isVendor ? (currentLang === 'hi' ? 'पिछला जमा:' : 'Previous Advance:') : (currentLang === 'hi' ? 'पिछला अग्रिम जमा:' : 'Previous Advance:');
+        document.getElementById('valPrevDue').innerText = `-₹${prevAdvance.toFixed(2)}`;
+        document.getElementById('valPrevDue').style.color = '#059669';
+      } else {
+        document.getElementById('labelPrevDue').innerText = isVendor ? (currentLang === 'hi' ? 'पिछला देय बाकी:' : 'Previous Payable:') : t.prevDue;
+        document.getElementById('valPrevDue').innerText = `₹${prevDue.toFixed(2)}`;
+        document.getElementById('valPrevDue').style.color = '';
+      }
 
       const rowDairyProducts = document.getElementById('rowDairyProducts');
       if (rowDairyProducts) {
@@ -1810,18 +1836,32 @@
       document.getElementById('labelTotalPaid').innerText = isVendor ? t.vendorTotalPaid : t.totalPaid;
       document.getElementById('valTotalPaid').innerText = `₹${totalMonthPaid.toFixed(2)}`;
 
-      document.getElementById('labelMonthDue').innerText = isVendor ? t.vendorMonthDue : t.monthDue;
-      document.getElementById('valMonthDue').innerText = `₹${monthDue.toFixed(2)}`;
+      if (monthAdvance > 0) {
+        document.getElementById('labelMonthDue').innerText = isVendor ? (currentLang === 'hi' ? 'अग्रिम जमा शेष:' : 'Advance Balance:') : (currentLang === 'hi' ? 'अग्रिम जमा शेष:' : 'Advance Balance:');
+        document.getElementById('valMonthDue').innerText = `₹${monthAdvance.toFixed(2)}`;
+        document.getElementById('valMonthDue').style.color = '#059669';
+      } else {
+        document.getElementById('labelMonthDue').innerText = isVendor ? t.vendorMonthDue : t.monthDue;
+        document.getElementById('valMonthDue').innerText = `₹${monthDue.toFixed(2)}`;
+        document.getElementById('valMonthDue').style.color = '';
+      }
 
-      // Show Net Pending Due / Net Payable Hero Banner ONLY on current month
+      // Show Net Pending Due / Advance Credit Hero Banner ONLY on current month
       const heroBanner = document.getElementById('dueHeroBanner');
       if (heroBanner) {
         if (isCurrentMonth) {
           heroBanner.style.display = 'flex';
-          heroBanner.className = isVendor ? 'due-hero-banner vendor-due-hero' : 'due-hero-banner';
-          document.getElementById('labelNetDue').innerText = isVendor ? t.vendorNetDue : t.netDue;
-          document.getElementById('subNetDue').innerText = isVendor ? t.vendorNetDueSub : t.netDueSub;
-          document.getElementById('valNetDue').innerText = `₹${netDue.toFixed(2)}`;
+          if (netAdvance > 0) {
+            heroBanner.className = 'due-hero-banner hero-advance';
+            document.getElementById('labelNetDue').innerText = currentLang === 'hi' ? '🟢 अग्रिम जमा शेष' : '🟢 Advance Credit Balance';
+            document.getElementById('subNetDue').innerText = currentLang === 'hi' ? 'आपकी अग्रिम राशि सुरक्षित है' : 'Advance credit balance with dairy';
+            document.getElementById('valNetDue').innerText = `₹${netAdvance.toFixed(2)}`;
+          } else {
+            heroBanner.className = isVendor ? 'due-hero-banner vendor-due-hero' : 'due-hero-banner';
+            document.getElementById('labelNetDue').innerText = isVendor ? t.vendorNetDue : t.netDue;
+            document.getElementById('subNetDue').innerText = isVendor ? t.vendorNetDueSub : t.netDueSub;
+            document.getElementById('valNetDue').innerText = `₹${netDue.toFixed(2)}`;
+          }
         } else {
           heroBanner.style.display = 'none';
         }

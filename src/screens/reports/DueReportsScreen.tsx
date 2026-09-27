@@ -33,7 +33,7 @@ import { showAlert, confirmAction } from '../../utils/alertUtils';
 import { formatToDisplayDate, parseToIsoDate, getTodayDisplayDate, shiftDisplayDate } from '../../utils/dateUtils';
 
 export type ReportMode = 'month' | 'custom' | 'all';
-type DueFilterType = 'all' | 'dueOnly' | 'paidOnly';
+type DueFilterType = 'all' | 'dueOnly' | 'advanceOnly' | 'paidOnly';
 type AuditFilterType = 'all' | 'missing' | 'delivered';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -395,38 +395,54 @@ export const DueReportsScreen = () => {
 
 
   // All calculated due summaries for the selected period (Optimized O(N + M) single-pass)
+  // All calculated due summaries for the selected period (Optimized O(N + M) single-pass)
   const allDueSummaries: CustomerDueSummary[] = useMemo(() => {
     const { startDate, endDate, totalDays } = dateRange;
 
     // Single-pass indexing for entries in range: O(M)
     const entriesByCust = new Map<string, MilkEntry[]>();
+    // Indexing for entries before startDate (previous balance carryforward)
+    const prevEntriesByCust = new Map<string, number>();
+
     for (let i = 0; i < milkEntries.length; i++) {
       const e = milkEntries[i];
-      if (!e.isDeleted && e.date >= startDate && e.date <= endDate) {
+      if (e.isDeleted) continue;
+      let entryAddonAmt = 0;
+      if (e.addons && Array.isArray(e.addons)) {
+        for (const a of e.addons) entryAddonAmt += (a.totalAmount || 0);
+      }
+      const entryTotal = e.totalDayAmount != null ? e.totalDayAmount : (e.amount + entryAddonAmt);
+
+      if (e.date >= startDate && e.date <= endDate) {
         let list = entriesByCust.get(e.customerId);
         if (!list) {
           list = [];
           entriesByCust.set(e.customerId, list);
         }
         list.push(e);
+      } else if (e.date < startDate) {
+        prevEntriesByCust.set(e.customerId, (prevEntriesByCust.get(e.customerId) || 0) + entryTotal);
       }
     }
 
     // Single-pass indexing for payments: O(P)
     const paymentsAllTimeByCust = new Map<string, number>();
     const paymentsInPeriodByCust = new Map<string, number>();
+    const prevPaymentsByCust = new Map<string, number>();
+
     for (let i = 0; i < payments.length; i++) {
       const p = payments[i];
       if (p.isDeleted) continue;
       paymentsAllTimeByCust.set(p.customerId, (paymentsAllTimeByCust.get(p.customerId) || 0) + p.amountPaid);
       if (p.date >= startDate && p.date <= endDate) {
         paymentsInPeriodByCust.set(p.customerId, (paymentsInPeriodByCust.get(p.customerId) || 0) + p.amountPaid);
+      } else if (p.date < startDate) {
+        prevPaymentsByCust.set(p.customerId, (prevPaymentsByCust.get(p.customerId) || 0) + p.amountPaid);
       }
     }
 
     return customers.filter(c => !c.isDeleted).map(cust => {
       const custEntries = entriesByCust.get(cust.id) || [];
-      const totalPaidAllTime = paymentsAllTimeByCust.get(cust.id) || 0;
       const totalPaid = paymentsInPeriodByCust.get(cust.id) || 0;
 
       let totalLitresCow = 0;
@@ -459,7 +475,33 @@ export const DueReportsScreen = () => {
         deliveredDays.add(entry.date);
       }
 
-      const netDue = Math.max(0, totalBilled - totalPaidAllTime);
+      // Previous carryover balance:
+      const prevBilled = prevEntriesByCust.get(cust.id) || 0;
+      const prevPaid = prevPaymentsByCust.get(cust.id) || 0;
+      const prevNet = prevBilled - prevPaid;
+
+      const previousDue = prevNet > 0 ? prevNet : 0;
+      const previousAdvance = prevNet < 0 ? Math.abs(prevNet) : 0;
+
+      // Net closing balance:
+      // In 'all' mode: prevNet is 0 (all entries are in range), so closingBalance = totalBilled - totalPaidAllTime
+      const isAllTime = reportMode === 'all';
+      const effectivePaid = isAllTime ? (paymentsAllTimeByCust.get(cust.id) || 0) : totalPaid;
+      const closingBalance = (isAllTime ? 0 : prevNet) + totalBilled - effectivePaid;
+
+      let netDue = 0;
+      let advanceBalance = 0;
+      let balanceStatus: 'due' | 'advance' | 'settled' = 'settled';
+
+      if (closingBalance > 0.01) {
+        netDue = closingBalance;
+        balanceStatus = 'due';
+      } else if (closingBalance < -0.01) {
+        advanceBalance = Math.abs(closingBalance);
+        balanceStatus = 'advance';
+      } else {
+        balanceStatus = 'settled';
+      }
 
       return {
         customer: cust,
@@ -469,14 +511,18 @@ export const DueReportsScreen = () => {
         totalAddonsAmount,
         totalLitres: totalLitresCow + totalLitresBuffalo + totalLitresPacket,
         totalAmountBilled: totalBilled,
-        totalPaid,
+        totalPaid: effectivePaid,
         netDue,
+        advanceBalance,
+        previousDue,
+        previousAdvance,
+        balanceStatus,
         unpaidEntriesCount: unpaidCount,
         deliveredDaysCount: deliveredDays.size,
         totalRangeDays: totalDays
       };
     });
-  }, [customers, milkEntries, payments, dateRange]);
+  }, [customers, milkEntries, payments, dateRange, reportMode]);
 
   // Filtered by Search Query (Name/Phone/Address) and Due Status
   const filteredSummaries = useMemo(() => {
@@ -490,7 +536,8 @@ export const DueReportsScreen = () => {
       }
 
       if (dueFilter === 'dueOnly' && item.netDue <= 0) return false;
-      if (dueFilter === 'paidOnly' && item.netDue > 0) return false;
+      if (dueFilter === 'advanceOnly' && (!item.advanceBalance || item.advanceBalance <= 0)) return false;
+      if (dueFilter === 'paidOnly' && (item.netDue > 0 || (item.advanceBalance || 0) > 0)) return false;
 
       return true;
     });
@@ -498,6 +545,10 @@ export const DueReportsScreen = () => {
 
   const totalPeriodDue = useMemo(() => {
     return allDueSummaries.reduce((sum, item) => sum + item.netDue, 0);
+  }, [allDueSummaries]);
+
+  const totalPeriodAdvance = useMemo(() => {
+    return allDueSummaries.reduce((sum, item) => sum + (item.advanceBalance || 0), 0);
   }, [allDueSummaries]);
 
   const totalPeriodBilled = useMemo(() => {
@@ -1399,6 +1450,15 @@ export const DueReportsScreen = () => {
                 <Text style={styles.bannerSubLabel}>{t.netDue}</Text>
                 <Text style={[styles.bannerSubAmount, { color: '#fef08a' }]}>₹{totalPeriodDue.toFixed(0)}</Text>
               </View>
+              {totalPeriodAdvance > 0 && (
+                <>
+                  <View style={styles.bannerItemDivider} />
+                  <View style={styles.bannerItem}>
+                    <Text style={styles.bannerSubLabel}>{lang === 'hi' ? 'अग्रिम जमा' : 'Advance'}</Text>
+                    <Text style={[styles.bannerSubAmount, { color: '#86efac' }]}>₹{totalPeriodAdvance.toFixed(0)}</Text>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         ) : (
@@ -1476,7 +1536,7 @@ export const DueReportsScreen = () => {
           )}
         </View>
 
-        {/* Quick Filter Chips: All, Pending Due (बकाया), Fully Paid (चुकता) */}
+        {/* Quick Filter Chips: All, Pending Due (बकाया), Advance (अग्रिम), Fully Paid (चुकता) */}
         <View style={styles.filterChipsRow}>
           <TouchableOpacity
             style={[styles.filterChip, dueFilter === 'all' && styles.filterChipActive]}
@@ -1502,6 +1562,18 @@ export const DueReportsScreen = () => {
             </Text>
           </TouchableOpacity>
 
+          {partyMode === 'customers' && (
+            <TouchableOpacity
+              style={[styles.filterChip, dueFilter === 'advanceOnly' && styles.filterChipActiveAdvance]}
+              onPress={() => setDueFilter('advanceOnly')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterChipText, dueFilter === 'advanceOnly' && styles.filterChipTextActiveAdvance]}>
+                🟢 {lang === 'hi' ? 'अग्रिम जमा' : 'Advance'} ({allDueSummaries.filter(d => (d.advanceBalance || 0) > 0).length})
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             style={[styles.filterChip, dueFilter === 'paidOnly' && styles.filterChipActivePaid]}
             onPress={() => setDueFilter('paidOnly')}
@@ -1510,7 +1582,7 @@ export const DueReportsScreen = () => {
             <Text style={[styles.filterChipText, dueFilter === 'paidOnly' && styles.filterChipTextActivePaid]}>
               ✓ {t.settled} (
               {partyMode === 'customers'
-                ? allDueSummaries.filter(d => d.netDue <= 0).length
+                ? allDueSummaries.filter(d => d.netDue <= 0 && (!d.advanceBalance || d.advanceBalance <= 0)).length
                 : allSubDueSummaries.filter(d => d.netPayable <= 0).length}
               )
             </Text>
@@ -1565,9 +1637,20 @@ export const DueReportsScreen = () => {
                   </View>
 
                   <View style={styles.netDueBox}>
-                    <Text style={styles.netDueLabel}>Net Due</Text>
-                    <Text style={[styles.netDueAmount, item.netDue > 0 ? styles.dueRed : styles.dueGreen]}>
-                      ₹{item.netDue.toFixed(2)}
+                    <Text style={styles.netDueLabel}>
+                      {(item.advanceBalance || 0) > 0
+                        ? (lang === 'hi' ? 'अग्रिम जमा' : 'Advance Credit')
+                        : item.netDue > 0
+                        ? (lang === 'hi' ? 'कुल बकाया' : 'Net Due')
+                        : (lang === 'hi' ? 'हिसाब चुकता' : 'Settled')}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.netDueAmount,
+                        (item.advanceBalance || 0) > 0 ? styles.advanceGreen : item.netDue > 0 ? styles.dueRed : styles.dueGreen
+                      ]}
+                    >
+                      ₹{(item.advanceBalance || 0) > 0 ? (item.advanceBalance || 0).toFixed(2) : item.netDue.toFixed(2)}
                     </Text>
                   </View>
                 </View>
@@ -1596,11 +1679,21 @@ export const DueReportsScreen = () => {
                   </Text>
                 </View>
 
-                {/* Billed vs Paid */}
+                {/* Billed vs Paid & Carryover */}
                 <View style={styles.finRow}>
-                  <Text style={styles.finText}>Billed: ₹{item.totalAmountBilled.toFixed(0)}</Text>
-                  <Text style={styles.finText}>Paid: ₹{item.totalPaid.toFixed(0)}</Text>
-                  <Text style={styles.cardTapPromptText}>Tap for full report ›</Text>
+                  <Text style={styles.finText}>{lang === 'hi' ? 'बिल' : 'Billed'}: ₹{item.totalAmountBilled.toFixed(0)}</Text>
+                  <Text style={styles.finText}>{lang === 'hi' ? 'जमा' : 'Paid'}: ₹{item.totalPaid.toFixed(0)}</Text>
+                  {(item.previousAdvance || 0) > 0 && (
+                    <Text style={[styles.finText, { color: '#059669', fontWeight: '700' }]}>
+                      {lang === 'hi' ? 'पिछला जमा' : 'Prev Adv'}: -₹{item.previousAdvance?.toFixed(0)}
+                    </Text>
+                  )}
+                  {(item.previousDue || 0) > 0 && (
+                    <Text style={[styles.finText, { color: '#dc2626', fontWeight: '700' }]}>
+                      {lang === 'hi' ? 'पिछला बाकी' : 'Prev Due'}: +₹{item.previousDue?.toFixed(0)}
+                    </Text>
+                  )}
+                  <Text style={styles.cardTapPromptText}>{lang === 'hi' ? 'विस्तृत रिपोर्ट ›' : 'Tap for full report ›'}</Text>
                 </View>
 
                 {/* Action Buttons: Record Payment, Live Card & WhatsApp Summary */}
@@ -1835,9 +1928,26 @@ export const DueReportsScreen = () => {
                     </View>
 
                     <View style={styles.detailNetDueBadge}>
-                      <Text style={styles.detailNetDueLabel}>Net Due</Text>
-                      <Text style={[styles.detailNetDueAmount, activeDetailSummary.netDue > 0 ? styles.dueRed : styles.dueGreen]}>
-                        ₹{activeDetailSummary.netDue.toFixed(2)}
+                      <Text style={styles.detailNetDueLabel}>
+                        {(activeDetailSummary.advanceBalance || 0) > 0
+                          ? (lang === 'hi' ? 'अग्रिम जमा' : 'Advance Credit')
+                          : activeDetailSummary.netDue > 0
+                          ? (lang === 'hi' ? 'कुल बकाया' : 'Net Due')
+                          : (lang === 'hi' ? 'हिसाब चुकता' : 'Settled')}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.detailNetDueAmount,
+                          (activeDetailSummary.advanceBalance || 0) > 0
+                            ? styles.advanceGreen
+                            : activeDetailSummary.netDue > 0
+                            ? styles.dueRed
+                            : styles.dueGreen
+                        ]}
+                      >
+                        ₹{(activeDetailSummary.advanceBalance || 0) > 0
+                          ? (activeDetailSummary.advanceBalance || 0).toFixed(2)
+                          : activeDetailSummary.netDue.toFixed(2)}
                       </Text>
                     </View>
                   </View>
@@ -2559,6 +2669,7 @@ export const DueReportsScreen = () => {
                 const custPaymentsAll = payments.filter(p => p.customerId === paymentCustomer.id);
                 const custLifetimePaid = custPaymentsAll.reduce((s, p) => s + p.amountPaid, 0);
                 const summary = allDueSummaries.find(s => s.customer.id === paymentCustomer.id);
+                const isAdvance = (summary?.advanceBalance || 0) > 0;
                 return (
                   <View style={styles.payModalInfoRow}>
                     <View style={styles.payModalInfoBox}>
@@ -2570,8 +2681,12 @@ export const DueReportsScreen = () => {
                       <Text style={[styles.payModalInfoValue, { color: '#16a34a' }]}>₹{custLifetimePaid.toFixed(0)}</Text>
                     </View>
                     <View style={styles.payModalInfoBox}>
-                      <Text style={styles.payModalInfoLabel}>{t.outstandingDue}</Text>
-                      <Text style={[styles.payModalInfoValue, { color: '#dc2626' }]}>₹{(summary?.netDue || 0).toFixed(0)}</Text>
+                      <Text style={styles.payModalInfoLabel}>
+                        {isAdvance ? (lang === 'hi' ? 'वर्तमान अग्रिम' : 'Current Advance') : t.outstandingDue}
+                      </Text>
+                      <Text style={[styles.payModalInfoValue, { color: isAdvance ? '#059669' : '#dc2626' }]}>
+                        ₹{isAdvance ? (summary?.advanceBalance || 0).toFixed(0) : (summary?.netDue || 0).toFixed(0)}
+                      </Text>
                     </View>
                   </View>
                 );
@@ -2635,6 +2750,78 @@ export const DueReportsScreen = () => {
                 value={payAmount}
                 onChangeText={setPayAmount}
               />
+
+              {/* Quick Amount Presets */}
+              {paymentCustomer && (() => {
+                const summary = allDueSummaries.find(s => s.customer.id === paymentCustomer.id);
+                const currentDue = summary?.netDue || 0;
+                return (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6, marginBottom: 4 }}>
+                    {currentDue > 0 && (
+                      <TouchableOpacity
+                        style={styles.quickPresetBtn}
+                        onPress={() => setPayAmount(String(Math.round(currentDue)))}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.quickPresetText}>
+                          {lang === 'hi' ? `पूरा बकाया (₹${Math.round(currentDue)})` : `Full Due (₹${Math.round(currentDue)})`}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {[500, 1000, 2000].map(val => (
+                      <TouchableOpacity
+                        key={val}
+                        style={styles.quickPresetBtn}
+                        onPress={() => setPayAmount(String(val))}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.quickPresetText}>+₹{val}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                );
+              })()}
+
+              {/* Real-time balance preview */}
+              {paymentCustomer && parseFloat(payAmount) > 0 && (() => {
+                const summary = allDueSummaries.find(s => s.customer.id === paymentCustomer.id);
+                const currentNet = (summary?.netDue || 0) - (summary?.advanceBalance || 0);
+                const entered = parseFloat(payAmount) || 0;
+                const newNet = currentNet - entered;
+                const isAdv = newNet < -0.01;
+                const isDue = newNet > 0.01;
+                return (
+                  <View
+                    style={[
+                      styles.previewBalanceBox,
+                      {
+                        backgroundColor: isAdv ? '#f0fdf4' : isDue ? '#fef2f2' : '#f0fdf4',
+                        borderColor: isAdv ? '#86efac' : isDue ? '#fca5a5' : '#86efac',
+                        borderWidth: 1
+                      }
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.previewBalanceText,
+                        { color: isAdv ? '#15803d' : isDue ? '#b91c1c' : '#15803d' }
+                      ]}
+                    >
+                      {isAdv
+                        ? (lang === 'hi'
+                            ? `✓ भुगतान के बाद अग्रिम (Advance): ₹${Math.abs(newNet).toFixed(0)}`
+                            : `✓ Post-payment Advance Credit: ₹${Math.abs(newNet).toFixed(0)}`)
+                        : isDue
+                        ? (lang === 'hi'
+                            ? `⚠️ भुगतान के बाद बकाया: ₹${newNet.toFixed(0)}`
+                            : `⚠️ Post-payment Remaining Due: ₹${newNet.toFixed(0)}`)
+                        : (lang === 'hi'
+                            ? `✓ भुगतान के बाद पूरा हिसाब चुकता`
+                            : `✓ Post-payment Fully Settled`)}
+                    </Text>
+                  </View>
+                );
+              })()}
 
               <Text style={styles.label}>{lang === 'hi' ? 'नोट्स' : 'Notes'}</Text>
               <TextInput
@@ -3526,11 +3713,13 @@ const styles = StyleSheet.create({
   },
   filterChipActive: { backgroundColor: '#0284c7', borderColor: '#0284c7' },
   filterChipActiveDue: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },
-  filterChipActivePaid: { backgroundColor: '#dcfce7', borderColor: '#22c55e' },
+  filterChipActiveAdvance: { backgroundColor: '#dcfce7', borderColor: '#16a34a' },
+  filterChipActivePaid: { backgroundColor: '#f1f5f9', borderColor: '#94a3b8' },
   filterChipText: { fontSize: 11, color: '#64748b', fontWeight: '600' },
   filterChipTextActive: { color: '#ffffff', fontWeight: 'bold' },
   filterChipTextActiveDue: { color: '#dc2626', fontWeight: 'bold' },
-  filterChipTextActivePaid: { color: '#16a34a', fontWeight: 'bold' },
+  filterChipTextActiveAdvance: { color: '#15803d', fontWeight: 'bold' },
+  filterChipTextActivePaid: { color: '#475569', fontWeight: 'bold' },
   tapHintBox: {
     backgroundColor: '#eff6ff',
     borderWidth: 1,
@@ -3569,6 +3758,23 @@ const styles = StyleSheet.create({
   netDueAmount: { fontSize: 18, fontWeight: 'bold', marginTop: 1 },
   dueRed: { color: '#dc2626' },
   dueGreen: { color: '#16a34a' },
+  advanceGreen: { color: '#059669' },
+  quickPresetBtn: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6
+  },
+  quickPresetText: { fontSize: 12, color: '#16a34a', fontWeight: '600' },
+  previewBalanceBox: {
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    marginBottom: 4
+  },
+  previewBalanceText: { fontSize: 13, fontWeight: '700', textAlign: 'center' },
   qtyRow: { flexDirection: 'row', gap: 6, marginVertical: 8, flexWrap: 'wrap' },
   qtyTag: {
     backgroundColor: '#f1f5f9',

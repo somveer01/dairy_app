@@ -221,6 +221,28 @@ export const DailyRegisterScreen = () => {
     return list;
   }, [subSuppliers, searchFilter]);
 
+  const customerAdvanceMap = useMemo(() => {
+    const deliveriesMap = new Map<string, number>();
+    (milkEntries || []).filter(e => !e.isDeleted).forEach(e => {
+      deliveriesMap.set(e.customerId, (deliveriesMap.get(e.customerId) || 0) + e.amount);
+    });
+    const paymentsMap = new Map<string, number>();
+    (payments || []).filter(p => !p.isDeleted).forEach(p => {
+      paymentsMap.set(p.customerId, (paymentsMap.get(p.customerId) || 0) + p.amountPaid);
+    });
+
+    const advMap = new Map<string, number>();
+    (customers || []).forEach(c => {
+      const billed = deliveriesMap.get(c.id) || 0;
+      const paid = paymentsMap.get(c.id) || 0;
+      const advance = paid - billed;
+      if (advance > 0.01) {
+        advMap.set(c.id, advance);
+      }
+    });
+    return advMap;
+  }, [customers, milkEntries, payments]);
+
   // --- CUSTOMER DELIVERY ACTIONS ---
   const handleDeleteEntry = (entry: MilkEntry, customerName: string) => {
     requireAuth(() => {
@@ -866,7 +888,22 @@ export const DailyRegisterScreen = () => {
                       </Text>
                     </View>
                     <View style={{ flex: 1, marginLeft: 10 }}>
-                      <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
+                        {(() => {
+                          const adv = customerAdvanceMap.get(item.id);
+                          if (adv && adv > 0) {
+                            return (
+                              <View style={{ backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10, color: '#15803d', fontWeight: 'bold' }}>
+                                  🟢 ₹{adv.toFixed(0)} {lang === 'hi' ? 'जमा' : 'Adv'}
+                                </Text>
+                              </View>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </View>
                       <Text style={styles.rowCustSub}>
                         {item.isPacketMilk
                           ? `📦 ${item.packetBrand || 'Packet'} (${item.packetVariant || 'Milk'}) • ${item.defaultLitres}L @ ₹${item.ratePerLitre}`
