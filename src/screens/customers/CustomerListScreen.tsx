@@ -1464,13 +1464,6 @@ export const CustomerListScreen = () => {
                           </Text>
                         </View>
                       )}
-                      {item.routeGroup ? (
-                        <View style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                          <Text style={{ fontSize: 10, fontWeight: '600', color: '#475569' }}>
-                            🏘️ {item.routeGroup}
-                          </Text>
-                        </View>
-                      ) : null}
                     </View>
                     <Text style={styles.customerPhone}>📞 {item.phone}</Text>
                     {item.address ? <Text style={styles.customerAddress} numberOfLines={1}>📍 {item.address}</Text> : null}
@@ -2422,18 +2415,6 @@ export const CustomerListScreen = () => {
                   );
                 })}
               </View>
-
-              {/* Optional Route / Area Group */}
-              <Text style={styles.label}>
-                {lang === 'hi' ? 'गली / कॉलोनी / एरिया ग्रुप (वैकल्पिक)' : 'Area / Colony / Route Group (Optional)'}
-              </Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder={lang === 'hi' ? 'उदा. शिव कॉलोनी, गली नं. 2, मेन मार्केट' : 'e.g. Shiv Colony, Sector 4, Main Market'}
-                placeholderTextColor="#94a3b8"
-                value={routeGroup}
-                onChangeText={setRouteGroup}
-              />
 
               <View style={styles.modalButtonRow}>
                 <TouchableOpacity

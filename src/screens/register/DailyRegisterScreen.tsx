@@ -601,33 +601,21 @@ export const DailyRegisterScreen = () => {
     });
   };
 
-  // --- SHIFT & GROUP WHATSAPP BROADCAST HANDLERS ---
-  const routeGroupsList = useMemo(() => {
-    const groups = new Set<string>();
-    customers.forEach(c => {
-      if (!c.isDeleted && c.routeGroup && c.routeGroup.trim()) {
-        groups.add(c.routeGroup.trim());
-      }
-    });
-    return Array.from(groups);
-  }, [customers]);
-
+  // --- SHIFT WHATSAPP BROADCAST HANDLERS ---
   const broadcastFilteredCustomers = useMemo(() => {
     return customers.filter(c => {
       if (c.isDeleted) return false;
       const cShift = c.shift || 'All';
       if (broadcastShift === 'Morning' && cShift !== 'Morning' && cShift !== 'All') return false;
       if (broadcastShift === 'Evening' && cShift !== 'Evening' && cShift !== 'All') return false;
-      if (broadcastRouteGroup !== 'ALL_GROUPS' && (c.routeGroup || '').trim() !== broadcastRouteGroup) return false;
       return true;
     });
-  }, [customers, broadcastShift, broadcastRouteGroup]);
+  }, [customers, broadcastShift]);
 
   const openBroadcastModal = () => {
     Keyboard.dismiss();
     const initialShift: CustomerShift = activeSession === 'Morning' ? 'Morning' : activeSession === 'Evening' ? 'Evening' : 'All';
     setBroadcastShift(initialShift);
-    setBroadcastRouteGroup('ALL_GROUPS');
     setSentCustomerIds({});
     const dairyName = supplier?.businessName || 'डेयरी फ़ार्म';
     if (!broadcastMessage.trim()) {
@@ -1101,13 +1089,6 @@ export const DailyRegisterScreen = () => {
                             </Text>
                           </View>
                         )}
-                        {item.routeGroup ? (
-                          <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: '#475569' }}>
-                              📍 {item.routeGroup}
-                            </Text>
-                          </View>
-                        ) : null}
                         {(() => {
                           const bal = customerBalanceMap.get(item.id);
                           if (bal && bal.advance > 0.01) {
@@ -1737,47 +1718,6 @@ export const DailyRegisterScreen = () => {
                   })}
                 </View>
 
-                {/* Optional Route/Colony Group Filter */}
-                {routeGroupsList.length > 0 && (
-                  <>
-                    <Text style={styles.label}>
-                      {lang === 'hi' ? 'एरिया / गली ग्रुप चुनें (Route Group):' : 'Filter by Area / Route Group:'}
-                    </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4, marginBottom: 4 }}>
-                      <View style={{ flexDirection: 'row', gap: 6 }}>
-                        <TouchableOpacity
-                          style={[
-                             { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc' },
-                            broadcastRouteGroup === 'ALL_GROUPS' && { backgroundColor: '#0f172a', borderColor: '#0f172a' }
-                          ]}
-                          onPress={() => setBroadcastRouteGroup('ALL_GROUPS')}
-                        >
-                          <Text style={{ fontSize: 11, fontWeight: 'bold', color: broadcastRouteGroup === 'ALL_GROUPS' ? '#fff' : '#334155' }}>
-                            🌐 {lang === 'hi' ? 'सभी एरिया' : 'All Areas'}
-                          </Text>
-                        </TouchableOpacity>
-                        {routeGroupsList.map(grp => {
-                          const active = broadcastRouteGroup === grp;
-                          return (
-                            <TouchableOpacity
-                              key={grp}
-                              style={[
-                                { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc' },
-                                active && { backgroundColor: '#0f172a', borderColor: '#0f172a' }
-                              ]}
-                              onPress={() => setBroadcastRouteGroup(grp)}
-                            >
-                              <Text style={{ fontSize: 11, fontWeight: 'bold', color: active ? '#fff' : '#334155' }}>
-                                📍 {grp}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </ScrollView>
-                  </>
-                )}
-
                 {/* Quick 1-Tap Message Presets */}
                 <Text style={styles.label}>
                   {lang === 'hi' ? '2. रेडीमेड संदेश चुनें (1-Tap Templates):' : '2. Quick Message Presets:'}
@@ -1906,7 +1846,7 @@ export const DailyRegisterScreen = () => {
                               {idx + 1}. {c.name}
                             </Text>
                             <Text style={{ fontSize: 11, color: '#64748b' }}>
-                              📞 {c.phone} {c.routeGroup ? `• 📍 ${c.routeGroup}` : ''}
+                              📞 {c.phone}
                             </Text>
                           </View>
                           <TouchableOpacity
@@ -1929,7 +1869,7 @@ export const DailyRegisterScreen = () => {
                     })}
                     {broadcastFilteredCustomers.length === 0 && (
                       <Text style={{ textAlign: 'center', color: '#94a3b8', paddingVertical: 14, fontSize: 12 }}>
-                        {lang === 'hi' ? 'इस शिफ्ट/ग्रुप में कोई ग्राहक नहीं है।' : 'No customers in this shift/group.'}
+                        {lang === 'hi' ? 'इस शिफ्ट में कोई ग्राहक नहीं है।' : 'No customers in this shift.'}
                       </Text>
                     )}
                   </ScrollView>
