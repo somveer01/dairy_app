@@ -29,6 +29,12 @@ export interface CustomerCardData {
   supplierBusinessName: string;
   supplierName: string;
   supplierPhone: string;
+  supplierUpiId?: string;
+  liveAnnouncement?: {
+    message: string;
+    updatedAt: number;
+    active: boolean;
+  };
   customerId: string;
   customerName: string;
   customerPhone: string;
@@ -236,6 +242,8 @@ Thank you! — ${dairyName}`;
         supplierBusinessName: supplier?.businessName || 'डेयरी फ़ार्म',
         supplierName: supplier?.name || 'सप्लायर',
         supplierPhone: supplier?.phone || '',
+        supplierUpiId: supplier?.settings?.upiId || undefined,
+        liveAnnouncement: supplier?.settings?.liveAnnouncement || undefined,
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone,
@@ -423,6 +431,8 @@ Thank you! — ${dairyName}`;
           supplierBusinessName: supplier?.businessName || 'डेयरी फ़ार्म',
           supplierName: supplier?.name || 'सप्लायर',
           supplierPhone: supplier?.phone || '',
+          supplierUpiId: supplier?.settings?.upiId || undefined,
+          liveAnnouncement: supplier?.settings?.liveAnnouncement || undefined,
           customerId: customer.id,
           customerName: customer.name,
           customerPhone: customer.phone,

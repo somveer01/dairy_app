@@ -1,6 +1,7 @@
 export type MilkType = 'cow' | 'buffalo' | 'packet_full_cream' | 'packet_toned' | 'packet_double_toned' | 'packet_other' | string;
 
 export type SessionType = 'Morning' | 'Evening' | 'Custom';
+export type CustomerShift = 'All' | 'Morning' | 'Evening';
 
 export interface DairyProductItem {
   id: string;
@@ -41,6 +42,14 @@ export interface SupplierSettings {
   enableDairyAddons?: boolean;
   packetBrands?: string[];
   customProducts?: DairyProductItem[];
+  upiId?: string;
+  morningGroupLink?: string;
+  eveningGroupLink?: string;
+  liveAnnouncement?: {
+    message: string;
+    updatedAt: number;
+    active: boolean;
+  };
 }
 
 export interface Supplier {
@@ -65,6 +74,8 @@ export interface Customer {
   defaultLitres: number;
   milkType: MilkType;
   ratePerLitre: number;
+  shift?: CustomerShift;
+  routeGroup?: string;
   isPacketMilk?: boolean;
   packetBrand?: string;
   packetVariant?: string;

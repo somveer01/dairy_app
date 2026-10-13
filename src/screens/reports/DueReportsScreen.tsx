@@ -9,7 +9,9 @@ import {
   TextInput,
   Keyboard,
   ScrollView,
-  BackHandler
+  BackHandler,
+  Image,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -77,6 +79,7 @@ export const DueReportsScreen = () => {
     subSupplierPayments,
     refreshSubSupplierPayments,
     supplier,
+    setSupplier,
     requireAuth
   } = useApp();
   
@@ -153,6 +156,10 @@ export const DueReportsScreen = () => {
   const [quickSubEntryMilkType, setQuickSubEntryMilkType] = useState<MilkType>('cow');
   const [quickSubEntryLitres, setQuickSubEntryLitres] = useState('');
   const [quickSubEntryRate, setQuickSubEntryRate] = useState('');
+
+  // Dynamic UPI QR Code Bill Modal State
+  const [qrBillSummary, setQrBillSummary] = useState<CustomerDueSummary | null>(null);
+  const [inlineUpiInput, setInlineUpiInput] = useState('');
 
   const dateRange = useMemo(() => {
     if (reportMode === 'month') {
@@ -952,17 +959,55 @@ export const DueReportsScreen = () => {
   const handleShareWhatsAppSummary = async (summary: CustomerDueSummary) => {
     Keyboard.dismiss();
     const periodName = dateRange.label;
+    const suppId = supplier?.id || 'supp_default';
+    const upiId = supplier?.settings?.upiId;
+    const cardUrl = CardSyncService.getCardUrl(suppId, summary.customer.id, false, 'customer');
 
     try {
+      CardSyncService.syncCustomerCard(summary.customer.id, supplier, customers, milkEntries, payments);
       await WhatsAppService.sendBillViaWhatsApp(
         summary.customer.phone,
         summary,
         supplier?.businessName || 'Dairy Milk Seller',
-        periodName
+        periodName,
+        upiId,
+        cardUrl
       );
     } catch {
       showAlert('त्रुटि (Error)', 'Could not launch WhatsApp.');
     }
+  };
+
+  const openQrBillModal = (summary: CustomerDueSummary) => {
+    Keyboard.dismiss();
+    setInlineUpiInput(supplier?.settings?.upiId || '');
+    setQrBillSummary(summary);
+    CardSyncService.syncCustomerCard(summary.customer.id, supplier, customers, milkEntries, payments);
+  };
+
+  const handleSaveInlineUpi = async () => {
+    if (!supplier) return;
+    const clean = inlineUpiInput.trim();
+    if (!clean || !clean.includes('@')) {
+      showAlert(
+        lang === 'hi' ? 'अमान्य UPI ID' : 'Invalid UPI ID',
+        lang === 'hi'
+          ? 'कृपया सही UPI ID दर्ज करें (जैसे: 9876543210@ybl या name@okaxis)'
+          : 'Please enter a valid UPI ID (e.g., 9876543210@ybl or name@okaxis)'
+      );
+      return;
+    }
+    const updatedSupplier: import('../../types').Supplier = {
+      ...supplier,
+      settings: {
+        ...supplier.settings,
+        upiId: clean
+      },
+      updatedAt: Date.now()
+    };
+    await StorageService.saveSupplier(updatedSupplier);
+    setSupplier(updatedSupplier);
+    CardSyncService.syncAllCards(updatedSupplier, customers, milkEntries, payments);
   };
 
   const openSubPayModal = (sub: SubSupplier) => {
@@ -1034,14 +1079,20 @@ export const DueReportsScreen = () => {
   const handleShareItemizedWhatsApp = async () => {
     if (!activeDetailSummary) return;
     const periodName = dateRange.label;
+    const suppId = supplier?.id || 'supp_default';
+    const upiId = supplier?.settings?.upiId;
+    const cardUrl = CardSyncService.getCardUrl(suppId, activeDetailSummary.customer.id, false, 'customer');
 
     try {
+      CardSyncService.syncCustomerCard(activeDetailSummary.customer.id, supplier, customers, milkEntries, payments);
       await WhatsAppService.sendItemizedDatewiseBillViaWhatsApp(
         activeDetailSummary.customer.phone,
         activeDetailSummary,
         supplier?.businessName || 'Dairy Milk Seller',
         periodName,
-        auditDateList
+        auditDateList,
+        upiId,
+        cardUrl
       );
     } catch {
       showAlert('त्रुटि (Error)', 'Could not open WhatsApp.');
@@ -1696,7 +1747,7 @@ export const DueReportsScreen = () => {
                   <Text style={styles.cardTapPromptText}>{lang === 'hi' ? 'विस्तृत रिपोर्ट ›' : 'Tap for full report ›'}</Text>
                 </View>
 
-                {/* Action Buttons: Record Payment, Live Card & WhatsApp Summary */}
+                {/* Action Buttons: Record Payment, Live Card, QR Bill & WhatsApp Summary */}
                 <View style={styles.cardActions}>
                   <TouchableOpacity
                     style={styles.payBtn}
@@ -1707,7 +1758,7 @@ export const DueReportsScreen = () => {
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   >
-                    <Text style={styles.payBtnText}>💵 {lang === 'hi' ? 'भुगतान दर्ज' : 'Record Pay'}</Text>
+                    <Text style={styles.payBtnText}>💵 {lang === 'hi' ? 'भुगतान' : 'Pay'}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1720,8 +1771,24 @@ export const DueReportsScreen = () => {
                     activeOpacity={0.7}
                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   >
-                    <Text style={styles.liveCardBtnText}>🔗 {lang === 'hi' ? 'लाइव कार्ड' : 'Live Card'}</Text>
+                    <Text style={styles.liveCardBtnText}>🔗 {lang === 'hi' ? 'कार्ड' : 'Card'}</Text>
                   </TouchableOpacity>
+
+                  {item.netDue > 0 && (
+                    <TouchableOpacity
+                      style={[styles.liveCardBtn, { backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' }]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        openQrBillModal(item);
+                      }}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                    >
+                      <Text style={[styles.liveCardBtnText, { color: '#6d28d9' }]}>
+                        📱 {lang === 'hi' ? 'QR बिल' : 'QR Bill'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
 
                   <TouchableOpacity
                     style={styles.whatsappBtn}
@@ -3493,6 +3560,129 @@ export const DueReportsScreen = () => {
               >
                 <Text style={styles.monthPickerCloseText}>{t.cancel || 'रद्द करें'}</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ------------------------------------------------------------- */}
+        {/* DYNAMIC AMOUNT UPI QR CODE SCANNER & BILL MODAL */}
+        {/* ------------------------------------------------------------- */}
+        <Modal
+          visible={!!qrBillSummary}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setQrBillSummary(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxWidth: 420, width: '100%', alignSelf: 'center' }]}>
+              {qrBillSummary && (() => {
+                const currentUpi = (supplier?.settings?.upiId || '').trim();
+                const dairyName = supplier?.businessName || 'Dairy Farm';
+                const exactAmt = qrBillSummary.netDue.toFixed(2);
+                const upiUri = currentUpi
+                  ? `upi://pay?pa=${encodeURIComponent(currentUpi)}&pn=${encodeURIComponent(dairyName)}&am=${exactAmt}&cu=INR`
+                  : '';
+                const qrImgUrl = upiUri
+                  ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(upiUri)}`
+                  : '';
+
+                return (
+                  <>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={styles.modalTitle}>
+                        📱 {lang === 'hi' ? 'UPI QR स्कैनर और बिल' : 'Dynamic UPI QR Bill'}
+                      </Text>
+                      <TouchableOpacity onPress={() => setQrBillSummary(null)} style={{ padding: 4 }}>
+                        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#64748b' }}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={{ backgroundColor: '#f8fafc', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', marginBottom: 12 }}>
+                      <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#0f172a' }}>
+                        {qrBillSummary.customer.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                        {dateRange.label}
+                      </Text>
+                      <View style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 6, marginTop: 8 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#dc2626' }}>
+                          {lang === 'hi' ? 'कुल बकाया:' : 'Exact Due:'} ₹{exactAmt}
+                        </Text>
+                      </View>
+
+                      {currentUpi ? (
+                        <View style={{ alignItems: 'center', marginTop: 12 }}>
+                          <View style={{ backgroundColor: '#ffffff', padding: 10, borderRadius: 12, borderWidth: 2, borderColor: '#0284c7' }}>
+                            <Image
+                              source={{ uri: qrImgUrl }}
+                              style={{ width: 200, height: 200 }}
+                              resizeMode="contain"
+                            />
+                          </View>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#0369a1', marginTop: 8 }}>
+                            💳 UPI ID: {currentUpi}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#475569', textAlign: 'center', marginTop: 2 }}>
+                            {lang === 'hi'
+                              ? `ग्राहक GPay / PhonePe / Paytm से स्कैन करेगा तो अपने-आप ₹${exactAmt} भर जाएगा!`
+                              : `Scanning with GPay / PhonePe / Paytm auto-fills ₹${exactAmt}!`}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={{ width: '100%', marginTop: 10, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', borderRadius: 8, padding: 10 }}>
+                          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#92400e', marginBottom: 6 }}>
+                            ⚠️ {lang === 'hi' ? 'अपना UPI ID दर्ज करें (एक बार सेटअप):' : 'Enter your UPI ID (One-time setup):'}
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TextInput
+                              style={[styles.modalInput, { flex: 1, marginBottom: 0, backgroundColor: '#ffffff' }]}
+                              placeholder="e.g. 9876543210@ybl"
+                              placeholderTextColor="#94a3b8"
+                              value={inlineUpiInput}
+                              onChangeText={setInlineUpiInput}
+                              autoCapitalize="none"
+                            />
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#0284c7', paddingHorizontal: 14, justifyContent: 'center', borderRadius: 8 }}
+                              onPress={handleSaveInlineUpi}
+                            >
+                              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>
+                                {lang === 'hi' ? 'सेव करें' : 'Save'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#16a34a',
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        marginBottom: 8
+                      }}
+                      onPress={() => {
+                        const target = qrBillSummary;
+                        setQrBillSummary(null);
+                        handleShareWhatsAppSummary(target);
+                      }}
+                    >
+                      <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 14 }}>
+                        💬 {lang === 'hi' ? 'QR स्कैनर + बिल WhatsApp पर भेजें' : 'Send Bill + QR Scanner on WhatsApp'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.modalCancelBtn, { flex: 0 }]}
+                      onPress={() => setQrBillSummary(null)}
+                    >
+                      <Text style={styles.modalCancelBtnText}>{lang === 'hi' ? 'बंद करें (Close)' : 'Close'}</Text>
+                    </TouchableOpacity>
+                  </>
+                );
+              })()}
             </View>
           </View>
         </Modal>

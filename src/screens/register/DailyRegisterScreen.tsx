@@ -8,14 +8,18 @@ import {
   Modal,
   TextInput,
   Keyboard,
-  BackHandler
+  BackHandler,
+  ScrollView,
+  Linking,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
-import { MilkEntry, MilkInwardEntry, MilkType, SessionType, Customer, SubSupplier } from '../../types';
+import { WhatsAppService } from '../../services/whatsappService';
+import { MilkEntry, MilkInwardEntry, MilkType, SessionType, CustomerShift, Customer, SubSupplier } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { formatToDisplayDate, toLocalIso } from '../../utils/dateUtils';
 
@@ -34,13 +38,22 @@ export const DailyRegisterScreen = () => {
     milkInwardEntries,
     refreshMilkInwardEntries,
     supplier,
+    setSupplier,
     requireAuth
   } = useApp();
 
   const [registerMode, setRegisterMode] = useState<'delivery' | 'procurement'>('delivery');
   const [selectedDate, setSelectedDate] = useState(() => toLocalIso(new Date()));
-  const [activeSession, setActiveSession] = useState<SessionType>('Morning');
+  // 'Custom' represents the default 'All (सभी ग्राहक)' view
+  const [activeSession, setActiveSession] = useState<SessionType>('Custom');
   const [searchFilter, setSearchFilter] = useState('');
+
+  // Broadcast Modal State
+  const [broadcastModalVisible, setBroadcastModalVisible] = useState(false);
+  const [broadcastShift, setBroadcastShift] = useState<CustomerShift>('All');
+  const [broadcastRouteGroup, setBroadcastRouteGroup] = useState<string>('ALL_GROUPS');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [sentCustomerIds, setSentCustomerIds] = useState<Record<string, boolean>>({});
 
   // Single Customer Entry Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -67,6 +80,12 @@ export const DailyRegisterScreen = () => {
   const [subLitres, setSubLitres] = useState('');
   const [subRate, setSubRate] = useState('');
   const [subNotes, setSubNotes] = useState('');
+
+  const getTargetSessionForCustomer = (c: Customer, currentTab: SessionType): SessionType => {
+    if (currentTab === 'Morning' || currentTab === 'Evening') return currentTab;
+    if (c.shift === 'Evening') return 'Evening';
+    return 'Morning';
+  };
 
   const productRates = useMemo(() => {
     const defaultRates: Record<string, number> = {
@@ -95,6 +114,10 @@ export const DailyRegisterScreen = () => {
     useCallback(() => {
       const onBackPress = () => {
         // Step 1: Close any open modal
+        if (broadcastModalVisible) {
+          setBroadcastModalVisible(false);
+          return true;
+        }
         if (modalVisible) {
           setModalVisible(false);
           return true;
@@ -124,7 +147,7 @@ export const DailyRegisterScreen = () => {
 
       const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => sub.remove();
-    }, [modalVisible, addonModalVisible, subModalVisible, registerMode])
+    }, [broadcastModalVisible, modalVisible, addonModalVisible, subModalVisible, registerMode])
   );
 
   // --- CUSTOMER DELIVERY DATA & STATS ---
@@ -134,11 +157,11 @@ export const DailyRegisterScreen = () => {
     let buffaloQty = 0;
     let packetQty = 0;
     let totalAmt = 0;
-    let count = 0;
 
     for (let i = 0; i < milkEntries.length; i++) {
       const e = milkEntries[i];
-      if (!e.isDeleted && e.date === selectedDate && e.session === activeSession) {
+      const matchesSession = activeSession === 'Custom' ? true : e.session === activeSession;
+      if (!e.isDeleted && e.date === selectedDate && matchesSession) {
         map.set(e.customerId, e);
         if (e.isPacketMilk || (e.milkType && e.milkType.startsWith('packet'))) {
           packetQty += e.quantityLitres;
@@ -155,7 +178,6 @@ export const DailyRegisterScreen = () => {
           dayAmt = e.amount + addonTotal;
         }
         totalAmt += dayAmt;
-        count++;
       }
     }
 
@@ -168,21 +190,30 @@ export const DailyRegisterScreen = () => {
         totalQty: cowQty + buffaloQty + packetQty,
         totalLitres: cowQty + buffaloQty + packetQty,
         totalAmt,
-        count
+        count: map.size
       }
     };
   }, [milkEntries, selectedDate, activeSession]);
 
   const filteredCustomers = useMemo(() => {
-    let list = customers.filter(c => !c.isDeleted);
+    let list = customers.filter(c => {
+      if (c.isDeleted) return false;
+      const cShift = c.shift || 'All';
+      if (activeSession === 'Morning') return cShift === 'Morning' || cShift === 'All';
+      if (activeSession === 'Evening') return cShift === 'Evening' || cShift === 'All';
+      return true; // 'Custom' = All tab shows 100% of customers
+    });
     if (searchFilter.trim()) {
       const q = searchFilter.trim().toLowerCase();
       list = list.filter(
-        c => c.name.toLowerCase().includes(q) || c.phone.includes(q)
+        c =>
+          c.name.toLowerCase().includes(q) ||
+          c.phone.includes(q) ||
+          (c.routeGroup && c.routeGroup.toLowerCase().includes(q))
       );
     }
     return list;
-  }, [customers, searchFilter]);
+  }, [customers, searchFilter, activeSession]);
 
   // --- SUB-SUPPLIER INWARD DATA & STATS ---
   const { inwardEntriesMap, inwardStats } = useMemo(() => {
@@ -190,16 +221,15 @@ export const DailyRegisterScreen = () => {
     let cowQty = 0;
     let buffaloQty = 0;
     let totalAmt = 0;
-    let count = 0;
 
     for (let i = 0; i < milkInwardEntries.length; i++) {
       const e = milkInwardEntries[i];
-      if (!e.isDeleted && e.date === selectedDate && e.session === activeSession) {
+      const matchesSession = activeSession === 'Custom' ? true : e.session === activeSession;
+      if (!e.isDeleted && e.date === selectedDate && matchesSession) {
         map.set(e.subSupplierId, e);
         if (e.milkType === 'cow') cowQty += e.quantityLitres;
         else buffaloQty += e.quantityLitres;
         totalAmt += e.amount;
-        count++;
       }
     }
 
@@ -211,7 +241,7 @@ export const DailyRegisterScreen = () => {
         totalQty: cowQty + buffaloQty,
         totalLitres: cowQty + buffaloQty,
         totalAmt,
-        count
+        count: map.size
       }
     };
   }, [milkInwardEntries, selectedDate, activeSession]);
@@ -292,14 +322,15 @@ export const DailyRegisterScreen = () => {
         return;
       }
 
+      const targetSession = getTargetSessionForCustomer(customer, activeSession);
       const milkAmt = customer.defaultLitres * customer.ratePerLitre;
       const newEntry: MilkEntry = {
-        id: `entry_${selectedDate}_${activeSession}_${customer.id}_${Date.now()}`,
+        id: `entry_${selectedDate}_${targetSession}_${customer.id}_${Date.now()}`,
         supplierId: supplier?.id || 'supp_default',
         customerId: customer.id,
         customerName: customer.name,
         date: selectedDate,
-        session: activeSession,
+        session: targetSession,
         milkType: customer.milkType,
         quantityLitres: customer.defaultLitres,
         ratePerLitre: customer.ratePerLitre,
@@ -321,35 +352,36 @@ export const DailyRegisterScreen = () => {
   const handleBulkFillAll = () => {
     Keyboard.dismiss();
     requireAuth(() => {
-      const activeCusts = customers.filter(c => !c.isDeleted);
+      const activeCusts = filteredCustomers;
       const unrecordedCustomers = activeCusts.filter(c => !sessionEntriesMap.has(c.id));
       if (unrecordedCustomers.length === 0) {
         showAlert(
           lang === 'hi' ? 'सबका दूध दर्ज है (All Recorded)' : 'All Recorded',
           lang === 'hi'
-            ? `सभी ${activeCusts.length} ग्राहकों का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`
-            : `All ${activeCusts.length} customers are already recorded for ${activeSession}!`
+            ? `सभी ${activeCusts.length} ग्राहकों का दूध पहले से दर्ज किया जा चुका है!`
+            : `All ${activeCusts.length} customers are already recorded!`
         );
         return;
       }
 
-      const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
+      const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '📋 सभी (All)';
 
       confirmAction(
         lang === 'hi' ? 'सभी का दूध मार्क करें (Mark All Deliveries)' : 'Mark All Deliveries',
         lang === 'hi'
-          ? `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• समय (Session): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`
-          : `Record default delivery for all ${unrecordedCustomers.length} customers?\n• Session: ${sessionLabel}\n• Date: ${formatToDisplayDate(selectedDate)}`,
+          ? `क्या आप शेष सभी ${unrecordedCustomers.length} ग्राहकों का डिफ़ॉल्ट दूध दर्ज करना चाहते हैं?\n• कुल शेष ग्राहक: ${unrecordedCustomers.length} लोग\n• शिफ्ट (Shift): ${sessionLabel}\n• तारीख (Date): ${formatToDisplayDate(selectedDate)}`
+          : `Record default delivery for all ${unrecordedCustomers.length} customers?\n• Shift: ${sessionLabel}\n• Date: ${formatToDisplayDate(selectedDate)}`,
         async () => {
           const newEntries: MilkEntry[] = unrecordedCustomers.map(c => {
+            const targetSession = getTargetSessionForCustomer(c, activeSession);
             const milkAmt = c.defaultLitres * c.ratePerLitre;
             return {
-              id: `entry_${selectedDate}_${activeSession}_${c.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+              id: `entry_${selectedDate}_${targetSession}_${c.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
               supplierId: supplier?.id || 'supp_default',
               customerId: c.id,
               customerName: c.name,
               date: selectedDate,
-              session: activeSession,
+              session: targetSession,
               milkType: c.milkType,
               quantityLitres: c.defaultLitres,
               ratePerLitre: c.ratePerLitre,
@@ -378,7 +410,7 @@ export const DailyRegisterScreen = () => {
     requireAuth(() => {
       const existing = sessionEntriesMap.get(cust.id);
       setSelectedCustomer(cust);
-      setSession(activeSession);
+      setSession(existing ? existing.session : getTargetSessionForCustomer(cust, activeSession));
       setMilkType(existing ? existing.milkType : cust.milkType);
       setLitres(existing ? existing.quantityLitres.toString() : cust.defaultLitres.toString());
       setRate(existing ? existing.ratePerLitre.toString() : cust.ratePerLitre.toString());
@@ -527,14 +559,15 @@ export const DailyRegisterScreen = () => {
 
       const milkAmt = existing ? existing.amount : 0;
       const totalDayAmt = milkAmt + totalAddonsAmount;
+      const targetSession = existing ? existing.session : getTargetSessionForCustomer(addonCustomer, activeSession);
 
       const entry: MilkEntry = {
-        id: existing ? existing.id : `entry_${selectedDate}_${activeSession}_${addonCustomer.id}_${Date.now()}`,
+        id: existing ? existing.id : `entry_${selectedDate}_${targetSession}_${addonCustomer.id}_${Date.now()}`,
         supplierId: supplier?.id || 'supp_default',
         customerId: addonCustomer.id,
         customerName: addonCustomer.name,
         date: selectedDate,
-        session: activeSession,
+        session: targetSession,
         milkType: existing ? existing.milkType : addonCustomer.milkType,
         quantityLitres: existing ? existing.quantityLitres : 0,
         ratePerLitre: existing ? existing.ratePerLitre : addonCustomer.ratePerLitre,
@@ -568,14 +601,158 @@ export const DailyRegisterScreen = () => {
     });
   };
 
+  // --- SHIFT & GROUP WHATSAPP BROADCAST HANDLERS ---
+  const routeGroupsList = useMemo(() => {
+    const groups = new Set<string>();
+    customers.forEach(c => {
+      if (!c.isDeleted && c.routeGroup && c.routeGroup.trim()) {
+        groups.add(c.routeGroup.trim());
+      }
+    });
+    return Array.from(groups);
+  }, [customers]);
+
+  const broadcastFilteredCustomers = useMemo(() => {
+    return customers.filter(c => {
+      if (c.isDeleted) return false;
+      const cShift = c.shift || 'All';
+      if (broadcastShift === 'Morning' && cShift !== 'Morning' && cShift !== 'All') return false;
+      if (broadcastShift === 'Evening' && cShift !== 'Evening' && cShift !== 'All') return false;
+      if (broadcastRouteGroup !== 'ALL_GROUPS' && (c.routeGroup || '').trim() !== broadcastRouteGroup) return false;
+      return true;
+    });
+  }, [customers, broadcastShift, broadcastRouteGroup]);
+
+  const openBroadcastModal = () => {
+    Keyboard.dismiss();
+    const initialShift: CustomerShift = activeSession === 'Morning' ? 'Morning' : activeSession === 'Evening' ? 'Evening' : 'All';
+    setBroadcastShift(initialShift);
+    setBroadcastRouteGroup('ALL_GROUPS');
+    setSentCustomerIds({});
+    const dairyName = supplier?.businessName || 'डेयरी फ़ार्म';
+    if (!broadcastMessage.trim()) {
+      setBroadcastMessage(
+        lang === 'hi'
+          ? `🥛 *${dairyName}*\nनमस्ते! हम आपके एरिया में आ गए हैं, कृपया अपना दूध ले जाएं। 🙏`
+          : `🥛 *${dairyName}*\nHello! We have arrived in your area, please collect your milk. 🙏`
+      );
+    }
+    setBroadcastModalVisible(true);
+  };
+
+  const applyBroadcastPreset = (presetKey: 'arrived' | 'onway' | 'late' | 'bill') => {
+    const dairyName = supplier?.businessName || 'डेयरी फ़ार्म';
+    if (presetKey === 'arrived') {
+      setBroadcastMessage(
+        lang === 'hi'
+          ? `🥛 *${dairyName}*\nनमस्ते! हम आपके एरिया में आ गए हैं, कृपया अपना दूध ले जाएं। 🙏`
+          : `🥛 *${dairyName}*\nHello! We have arrived in your area, please collect your milk. 🙏`
+      );
+    } else if (presetKey === 'onway') {
+      setBroadcastMessage(
+        lang === 'hi'
+          ? `🛵 *${dairyName}*\nनमस्ते! दूध की डिलीवरी के लिए हम निकल चुके हैं, कुछ ही देर में आपके यहाँ पहुँचेंगे।`
+          : `🛵 *${dairyName}*\nHello! We are out for milk delivery and will reach shortly.`
+      );
+    } else if (presetKey === 'late') {
+      setBroadcastMessage(
+        lang === 'hi'
+          ? `⏰ *${dairyName}*\nनमस्ते! आज दूध की डिलीवरी में थोड़ी देरी होगी, कृपया सहयोग करें। धन्यवाद!`
+          : `⏰ *${dairyName}*\nHello! Today's milk delivery is slightly delayed. Thank you for your patience!`
+      );
+    } else if (presetKey === 'bill') {
+      setBroadcastMessage(
+        lang === 'hi'
+          ? `💰 *${dairyName}*\nनमस्ते! कृपया इस महीने का बकाया दूध बिल समय पर जमा करने का कष्ट करें। धन्यवाद! 🙏`
+          : `💰 *${dairyName}*\nHello! Kindly clear your pending monthly milk bill at your earliest convenience. Thank you! 🙏`
+      );
+    }
+  };
+
+  const handleOneClickBroadcastShare = async () => {
+    const msg = broadcastMessage.trim();
+    if (!msg) return;
+
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(msg);
+      } catch {}
+    }
+
+    const groupLink =
+      broadcastShift === 'Morning'
+        ? supplier?.settings?.morningGroupLink
+        : broadcastShift === 'Evening'
+        ? supplier?.settings?.eveningGroupLink
+        : supplier?.settings?.morningGroupLink || supplier?.settings?.eveningGroupLink;
+
+    if (groupLink && groupLink.trim().startsWith('http')) {
+      try {
+        await Linking.openURL(groupLink.trim());
+      } catch {}
+      showAlert(
+        lang === 'hi' ? '✓ संदेश कॉपी हो गया!' : '✓ Message Copied!',
+        lang === 'hi'
+          ? 'संदेश कॉपी कर लिया गया है। अपने WhatsApp ग्रुप में बस Paste करके Send दबा दें!'
+          : 'Message copied to clipboard! Simply Paste and Send in your WhatsApp group!'
+      );
+      return;
+    }
+
+    const encoded = encodeURIComponent(msg);
+    const waUrl = `https://wa.me/?text=${encoded}`;
+    try {
+      await Linking.openURL(waUrl);
+    } catch {}
+  };
+
+  const handleUpdateLiveCardBanner = async (active: boolean) => {
+    if (!supplier) return;
+    const msg = broadcastMessage.trim();
+    const updatedSupplier: import('../../types').Supplier = {
+      ...supplier,
+      settings: {
+        ...supplier.settings,
+        liveAnnouncement: {
+          message: active ? msg : '',
+          updatedAt: Date.now(),
+          active
+        }
+      },
+      updatedAt: Date.now()
+    };
+    await StorageService.saveSupplier(updatedSupplier);
+    setSupplier(updatedSupplier);
+    CardSyncService.syncAllCards(updatedSupplier, customers, milkEntries, payments);
+    showAlert(
+      active
+        ? (lang === 'hi' ? '🟢 लाइव कार्ड अलर्ट चालू!' : '🟢 Live Card Alert Active!')
+        : (lang === 'hi' ? '⚪ लाइव कार्ड अलर्ट बंद' : '⚪ Live Card Alert Cleared'),
+      active
+        ? (lang === 'hi'
+          ? 'यह संदेश अब सभी ग्राहकों के ऑनलाइन डिजिटल दूध कार्ड के सबसे ऊपर लाइव दिख रहा है!'
+          : 'This announcement is now live at the top of all customers\' online Digital Milk Cards!')
+        : (lang === 'hi'
+          ? 'ग्राहकों के डिजिटल कार्ड से लाइव सूचना हटा दी गई है।'
+          : 'Live announcement removed from customer digital cards.')
+    );
+  };
+
+  const handleSendBroadcastToSingleCustomer = async (cust: Customer) => {
+    const msg = broadcastMessage.trim();
+    if (!msg) return;
+    setSentCustomerIds(prev => ({ ...prev, [cust.id]: true }));
+    await WhatsAppService.openWhatsAppWithText(cust.phone, msg);
+  };
+
   // --- SUB-SUPPLIER INWARD MILK ACTIONS ---
   const handleDeleteInwardEntry = (entry: MilkInwardEntry, subName: string) => {
     requireAuth(() => {
       confirmAction(
         lang === 'hi' ? 'आवक एंट्री हटाएं (Delete Inward)' : 'Delete Inward Entry',
         lang === 'hi'
-          ? `क्या आप ${subName} की ${activeSession} की आवक एंट्री हटाना चाहते हैं?`
-          : `Delete inward entry for ${subName} (${activeSession})?`,
+          ? `क्या आप ${subName} की आवक एंट्री हटाना चाहते हैं?`
+          : `Delete inward entry for ${subName}?`,
         async () => {
           await StorageService.deleteMilkInwardEntry(entry.id, supplier?.id);
           await refreshMilkInwardEntries();
@@ -595,13 +772,14 @@ export const DailyRegisterScreen = () => {
         return;
       }
 
+      const targetSubSession: SessionType = activeSession === 'Custom' ? 'Morning' : activeSession;
       const newEntry: MilkInwardEntry = {
-        id: `inward_${selectedDate}_${activeSession}_${sub.id}_${Date.now()}`,
+        id: `inward_${selectedDate}_${targetSubSession}_${sub.id}_${Date.now()}`,
         supplierId: supplier?.id || 'supp_default',
         subSupplierId: sub.id,
         subSupplierName: sub.name,
         date: selectedDate,
-        session: activeSession,
+        session: targetSubSession,
         milkType: sub.milkType,
         quantityLitres: sub.defaultLitres,
         ratePerLitre: sub.ratePerLitre,
@@ -624,13 +802,14 @@ export const DailyRegisterScreen = () => {
         showAlert(
           lang === 'hi' ? 'सबका दूध दर्ज है' : 'All Recorded',
           lang === 'hi'
-            ? `सभी ${activeSubs.length} विक्रेताओं का ${activeSession} का दूध पहले से दर्ज किया जा चुका है!`
-            : `All ${activeSubs.length} vendors already recorded for ${activeSession}!`
+            ? `सभी ${activeSubs.length} विक्रेताओं का दूध पहले से दर्ज किया जा चुका है!`
+            : `All ${activeSubs.length} vendors already recorded!`
         );
         return;
       }
 
-      const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '🕒 कस्टम (Custom)';
+      const targetSubSession: SessionType = activeSession === 'Custom' ? 'Morning' : activeSession;
+      const sessionLabel = activeSession === 'Morning' ? '🌅 सुबह (Morning)' : activeSession === 'Evening' ? '🌇 शाम (Evening)' : '📋 सभी (All)';
 
       confirmAction(
         lang === 'hi' ? 'सभी विक्रेताओं का आवक दूध मार्क करें' : 'Mark All Inward Milk',
@@ -639,12 +818,12 @@ export const DailyRegisterScreen = () => {
           : `Record default inward milk for all ${unrecordedSubs.length} vendors?\n• Session: ${sessionLabel}\n• Date: ${formatToDisplayDate(selectedDate)}`,
         async () => {
           const newEntries: MilkInwardEntry[] = unrecordedSubs.map(s => ({
-            id: `inward_${selectedDate}_${activeSession}_${s.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            id: `inward_${selectedDate}_${targetSubSession}_${s.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`,
             supplierId: supplier?.id || 'supp_default',
             subSupplierId: s.id,
             subSupplierName: s.name,
             date: selectedDate,
-            session: activeSession,
+            session: targetSubSession,
             milkType: s.milkType,
             quantityLitres: s.defaultLitres,
             ratePerLitre: s.ratePerLitre,
@@ -667,7 +846,7 @@ export const DailyRegisterScreen = () => {
     requireAuth(() => {
       const existing = inwardEntriesMap.get(sub.id);
       setSelectedSubSupplier(sub);
-      setSubSession(activeSession);
+      setSubSession(existing ? existing.session : (activeSession === 'Custom' ? 'Morning' : activeSession));
       setSubMilkType(existing ? existing.milkType : sub.milkType);
       setSubLitres(existing ? existing.quantityLitres.toString() : sub.defaultLitres.toString());
       setSubRate(existing ? existing.ratePerLitre.toString() : sub.ratePerLitre.toString());
@@ -776,6 +955,17 @@ export const DailyRegisterScreen = () => {
         {/* Session Switcher */}
         <View style={styles.sessionToggleRow}>
           <TouchableOpacity
+            style={[styles.sessionTab, activeSession === 'Custom' && styles.sessionTabActive]}
+            onPress={() => setActiveSession('Custom')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          >
+            <Text style={[styles.sessionTabText, activeSession === 'Custom' && styles.sessionTabTextActive]}>
+              📋 All (सभी)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.sessionTab, activeSession === 'Morning' && styles.sessionTabActive]}
             onPress={() => setActiveSession('Morning')}
             activeOpacity={0.7}
@@ -796,17 +986,6 @@ export const DailyRegisterScreen = () => {
               🌇 Evening (शाम)
             </Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.sessionTab, activeSession === 'Custom' && styles.sessionTabActive]}
-            onPress={() => setActiveSession('Custom')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-          >
-            <Text style={[styles.sessionTabText, activeSession === 'Custom' && styles.sessionTabTextActive]}>
-              🕒 Custom
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Session KPI Summary Banner */}
@@ -814,7 +993,7 @@ export const DailyRegisterScreen = () => {
           <View style={styles.kpiBanner}>
             <View style={styles.kpiCol}>
               <Text style={styles.kpiLabel}>Delivered</Text>
-              <Text style={styles.kpiValue}>{stats.count} / {customers.length}</Text>
+              <Text style={styles.kpiValue}>{stats.count} / {filteredCustomers.length}</Text>
             </View>
             <View style={styles.kpiDivider} />
             <View style={styles.kpiCol}>
@@ -850,26 +1029,36 @@ export const DailyRegisterScreen = () => {
           </View>
         )}
 
-        {/* Fast Action Row: Search & "Mark All" Bulk Fill Button */}
+        {/* Fast Action Row: Search, Broadcast & "Mark All" Bulk Fill Button */}
         <View style={styles.fastActionRow}>
           <TextInput
             style={styles.searchInput}
             placeholder={
               registerMode === 'delivery'
-                ? (lang === 'hi' ? `ग्राहक खोजें (${customers.length})...` : `Search ${customers.length} customers...`)
+                ? (lang === 'hi' ? `ग्राहक खोजें (${filteredCustomers.length})...` : `Search ${filteredCustomers.length} customers...`)
                 : (lang === 'hi' ? `विक्रेता / किसान खोजें (${subSuppliers.length})...` : `Search ${subSuppliers.length} vendors...`)
             }
             placeholderTextColor="#94a3b8"
             value={searchFilter}
             onChangeText={setSearchFilter}
           />
+          {registerMode === 'delivery' && (
+            <TouchableOpacity
+              style={styles.broadcastBtn}
+              onPress={openBroadcastModal}
+              activeOpacity={0.8}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            >
+              <Text style={styles.broadcastBtnText}>📢 {lang === 'hi' ? 'सूचना' : 'Alert'}</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[styles.bulkFillBtn, registerMode === 'procurement' && { backgroundColor: '#ea580c' }]}
             onPress={registerMode === 'delivery' ? handleBulkFillAll : handleBulkFillAllInward}
             activeOpacity={0.8}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
-            <Text style={styles.bulkFillBtnText}>⚡ {lang === 'hi' ? 'सबका मार्क करें' : 'Mark All'}</Text>
+            <Text style={styles.bulkFillBtnText}>⚡ {lang === 'hi' ? 'सबका मार्क' : 'Mark All'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -903,8 +1092,22 @@ export const DailyRegisterScreen = () => {
                       </Text>
                     </View>
                     <View style={{ flex: 1, marginLeft: 10 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
                         <Text style={styles.rowCustName} numberOfLines={1}>{item.name}</Text>
+                        {item.shift && item.shift !== 'All' && (
+                          <View style={{ backgroundColor: item.shift === 'Morning' ? '#fef3c7' : '#e0e7ff', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 9, fontWeight: 'bold', color: item.shift === 'Morning' ? '#b45309' : '#4338ca' }}>
+                              {item.shift === 'Morning' ? '🌅' : '🌇'}
+                            </Text>
+                          </View>
+                        )}
+                        {item.routeGroup ? (
+                          <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '600', color: '#475569' }}>
+                              📍 {item.routeGroup}
+                            </Text>
+                          </View>
+                        ) : null}
                         {(() => {
                           const bal = customerBalanceMap.get(item.id);
                           if (bal && bal.advance > 0.01) {
@@ -1487,6 +1690,262 @@ export const DailyRegisterScreen = () => {
           </View>
         </Modal>
 
+        {/* Modal: Shift & Route Group WhatsApp Broadcast & Live Alert */}
+        <Modal
+          visible={broadcastModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setBroadcastModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxHeight: '92%', paddingBottom: 14 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={styles.modalTitle}>
+                  📢 {lang === 'hi' ? 'ग्राहक ब्रॉडकास्ट / सूचना (Broadcast)' : 'Customer Broadcast & Alert'}
+                </Text>
+                <TouchableOpacity onPress={() => setBroadcastModalVisible(false)} style={{ padding: 4 }}>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#64748b' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {/* Shift Filter inside Broadcast Modal */}
+                <Text style={styles.label}>
+                  {lang === 'hi' ? '1. किस शिफ्ट के ग्राहकों को भेजना है?' : '1. Select Target Shift:'}
+                </Text>
+                <View style={styles.typeSelectorRow}>
+                  {(['All', 'Morning', 'Evening'] as CustomerShift[]).map(sh => {
+                    const active = broadcastShift === sh;
+                    const label =
+                      sh === 'All'
+                        ? (lang === 'hi' ? '📋 सभी (All)' : '📋 All')
+                        : sh === 'Morning'
+                        ? (lang === 'hi' ? '🌅 सुबह (Morning)' : '🌅 Morning')
+                        : (lang === 'hi' ? '🌇 शाम (Evening)' : '🌇 Evening');
+                    return (
+                      <TouchableOpacity
+                        key={sh}
+                        style={[
+                          styles.typeOption,
+                          active && { backgroundColor: '#0284c7', borderColor: '#0284c7' }
+                        ]}
+                        onPress={() => setBroadcastShift(sh)}
+                      >
+                        <Text style={[styles.typeOptionText, active && { color: '#ffffff' }]}>{label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Optional Route/Colony Group Filter */}
+                {routeGroupsList.length > 0 && (
+                  <>
+                    <Text style={styles.label}>
+                      {lang === 'hi' ? 'एरिया / गली ग्रुप चुनें (Route Group):' : 'Filter by Area / Route Group:'}
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4, marginBottom: 4 }}>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          style={[
+                             { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc' },
+                            broadcastRouteGroup === 'ALL_GROUPS' && { backgroundColor: '#0f172a', borderColor: '#0f172a' }
+                          ]}
+                          onPress={() => setBroadcastRouteGroup('ALL_GROUPS')}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: 'bold', color: broadcastRouteGroup === 'ALL_GROUPS' ? '#fff' : '#334155' }}>
+                            🌐 {lang === 'hi' ? 'सभी एरिया' : 'All Areas'}
+                          </Text>
+                        </TouchableOpacity>
+                        {routeGroupsList.map(grp => {
+                          const active = broadcastRouteGroup === grp;
+                          return (
+                            <TouchableOpacity
+                              key={grp}
+                              style={[
+                                { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#f8fafc' },
+                                active && { backgroundColor: '#0f172a', borderColor: '#0f172a' }
+                              ]}
+                              onPress={() => setBroadcastRouteGroup(grp)}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: 'bold', color: active ? '#fff' : '#334155' }}>
+                                📍 {grp}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                  </>
+                )}
+
+                {/* Quick 1-Tap Message Presets */}
+                <Text style={styles.label}>
+                  {lang === 'hi' ? '2. रेडीमेड संदेश चुनें (1-Tap Templates):' : '2. Quick Message Presets:'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#6ee7b7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                    onPress={() => applyBroadcastPreset('arrived')}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#065f46' }}>
+                      🥛 {lang === 'hi' ? 'मैं आ गया हूँ, दूध ले जाओ' : 'Arrived - Collect Milk'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#93c5fd', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                    onPress={() => applyBroadcastPreset('onway')}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#1e40af' }}>
+                      🛵 {lang === 'hi' ? 'रास्ते में हूँ' : 'Out for Delivery'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                    onPress={() => applyBroadcastPreset('late')}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400e' }}>
+                      ⏰ {lang === 'hi' ? 'आज थोड़ी देरी होगी' : 'Slightly Delayed'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fca5a5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                    onPress={() => applyBroadcastPreset('bill')}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#991b1b' }}>
+                      💰 {lang === 'hi' ? 'बकाया बिल रिमाइंडर' : 'Bill Reminder'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Editable Message Box */}
+                <Text style={styles.label}>
+                  {lang === 'hi' ? 'संदेश लिखें या बदलें (Message):' : 'Custom Message:'}
+                </Text>
+                <TextInput
+                  style={[styles.modalInput, { minHeight: 72, textAlignVertical: 'top' }]}
+                  multiline
+                  value={broadcastMessage}
+                  onChangeText={setBroadcastMessage}
+                  placeholder={lang === 'hi' ? 'अपना संदेश यहाँ लिखें...' : 'Type your announcement...'}
+                  placeholderTextColor="#94a3b8"
+                />
+
+                {/* Method 1: 1-Click WhatsApp Group / Broadcast Share */}
+                <View style={{ backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#86efac', borderRadius: 10, padding: 10, marginTop: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#14532d', marginBottom: 4 }}>
+                    ⚡ {lang === 'hi' ? 'तरीका 1: एक-क्लिक में सभी को भेजें (1-Click Group / Broadcast)' : 'Method 1: 1-Click Send to WhatsApp Group / Broadcast'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#166534', marginBottom: 8 }}>
+                    {lang === 'hi'
+                      ? 'नीचे बटन दबाने पर संदेश कॉपी हो जाएगा और WhatsApp खुलेगा—वहाँ अपने Morning/Evening ग्रुप या Broadcast List में एक-क्लिक में भेज दें।'
+                      : 'Copies message & opens WhatsApp so you can paste into your Morning/Evening Group or Broadcast List in 2 seconds.'}
+                  </Text>
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#16a34a', paddingVertical: 10, borderRadius: 8, alignItems: 'center' }}
+                    onPress={handleOneClickBroadcastShare}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 13 }}>
+                      📲 {lang === 'hi' ? '1-Click WhatsApp ग्रुप / ब्रॉडकास्ट में भेजें' : '1-Click Share to WhatsApp Group / Broadcast'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Method 2: Live Digital Milk Card Banner */}
+                <View style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, padding: 10, marginTop: 8 }}>
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#1e3a8a', marginBottom: 4 }}>
+                    🌐 {lang === 'hi' ? 'तरीका 2: सभी ग्राहकों के डिजिटल कार्ड पर लाइव दिखाएं' : 'Method 2: Show Live Banner on All Customer Milk Cards'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: '#0284c7', paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}
+                      onPress={() => handleUpdateLiveCardBanner(true)}
+                    >
+                      <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 12 }}>
+                        🟢 {lang === 'hi' ? 'कार्ड पर लाइव करें' : 'Post Live on Cards'}
+                      </Text>
+                    </TouchableOpacity>
+                    {supplier?.settings?.liveAnnouncement?.active && (
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}
+                        onPress={() => handleUpdateLiveCardBanner(false)}
+                      >
+                        <Text style={{ color: '#dc2626', fontWeight: 'bold', fontSize: 12 }}>
+                          {lang === 'hi' ? 'हटाएं' : 'Clear'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {/* Method 3: Individual Customer Queue */}
+                <Text style={[styles.label, { marginTop: 12 }]}>
+                  {lang === 'hi'
+                    ? `तरीका 3: एक-एक ग्राहक को पर्सनल भेजें (${broadcastFilteredCustomers.length} ग्राहक):`
+                    : `Method 3: Send Individually (${broadcastFilteredCustomers.length} Customers):`}
+                </Text>
+                <View style={{ maxHeight: 190, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 6, marginTop: 4 }}>
+                  <ScrollView nestedScrollEnabled showsVerticalScrollIndicator={true}>
+                    {broadcastFilteredCustomers.map((c, idx) => {
+                      const isSent = !!sentCustomerIds[c.id];
+                      return (
+                        <View
+                          key={c.id}
+                          style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            paddingVertical: 6,
+                            paddingHorizontal: 6,
+                            borderBottomWidth: idx < broadcastFilteredCustomers.length - 1 ? 1 : 0,
+                            borderBottomColor: '#f1f5f9',
+                            backgroundColor: isSent ? '#f0fdf4' : '#ffffff'
+                          }}
+                        >
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }} numberOfLines={1}>
+                              {idx + 1}. {c.name}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748b' }}>
+                              📞 {c.phone} {c.routeGroup ? `• 📍 ${c.routeGroup}` : ''}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={{
+                              backgroundColor: isSent ? '#dcfce7' : '#25D366',
+                              borderWidth: isSent ? 1 : 0,
+                              borderColor: '#86efac',
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: 6
+                            }}
+                            onPress={() => handleSendBroadcastToSingleCustomer(c)}
+                          >
+                            <Text style={{ color: isSent ? '#15803d' : '#ffffff', fontWeight: 'bold', fontSize: 12 }}>
+                              {isSent ? (lang === 'hi' ? '✓ भेज दिया' : '✓ Sent') : (lang === 'hi' ? 'Send ➔' : 'Send ➔')}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                    {broadcastFilteredCustomers.length === 0 && (
+                      <Text style={{ textAlign: 'center', color: '#94a3b8', paddingVertical: 14, fontSize: 12 }}>
+                        {lang === 'hi' ? 'इस शिफ्ट/ग्रुप में कोई ग्राहक नहीं है।' : 'No customers in this shift/group.'}
+                      </Text>
+                    )}
+                  </ScrollView>
+                </View>
+              </ScrollView>
+
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { flex: 0, marginTop: 10 }]}
+                onPress={() => setBroadcastModalVisible(false)}
+              >
+                <Text style={styles.modalCancelBtnText}>{lang === 'hi' ? 'बंद करें (Close)' : 'Close'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </View>
     </SafeAreaView>
   );
@@ -1566,26 +2025,34 @@ const styles = StyleSheet.create({
   kpiLabel: { fontSize: 10, color: '#64748b', fontWeight: '600', textTransform: 'uppercase' },
   kpiValue: { fontSize: 15, fontWeight: 'bold', color: '#0f172a', marginTop: 2 },
   kpiSub: { fontSize: 9, color: '#94a3b8', marginTop: 1 },
-  fastActionRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  fastActionRow: { flexDirection: 'row', gap: 6, marginBottom: 10 },
   searchInput: {
     flex: 1,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
     fontSize: 13,
     color: '#0f172a'
   },
-  bulkFillBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 16,
+  broadcastBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 12,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center'
   },
-  bulkFillBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
+  broadcastBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 12.5 },
+  bulkFillBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  bulkFillBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 12.5 },
   listContent: { paddingBottom: 30 },
   rowCard: {
     backgroundColor: '#ffffff',

@@ -14,10 +14,37 @@ const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export const WhatsAppService = {
+  buildUpiPaymentSection(
+    netDue: number,
+    supplierBusinessName: string,
+    upiId?: string,
+    cardUrl?: string
+  ): string {
+    if (netDue <= 0) return '';
+    let section = '';
+    const cleanUpi = (upiId || '').trim();
+    if (cleanUpi) {
+      const amountStr = netDue.toFixed(2);
+      const upiUri = `upi://pay?pa=${encodeURIComponent(cleanUpi)}&pn=${encodeURIComponent(supplierBusinessName)}&am=${amountStr}&cu=INR`;
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(upiUri)}`;
+      section += `\n-----------------------------\n📲 *INSTANT UPI / QR PAYMENT (₹${amountStr}):*\n💳 *UPI ID:* ${cleanUpi}`;
+      if (cardUrl) {
+        section += `\n🔗 *Scan QR & View Live Card:*\n${cardUrl}&pay=1`;
+      } else {
+        section += `\n📷 *Scan UPI QR Code (₹${amountStr}):*\n${qrImageUrl}`;
+      }
+    } else if (cardUrl) {
+      section += `\n-----------------------------\n🔗 *View Live Digital Milk Card:*\n${cardUrl}`;
+    }
+    return section;
+  },
+
   formatDueBill(
     summary: CustomerDueSummary,
     supplierBusinessName: string,
-    periodLabel: string
+    periodLabel: string,
+    upiId?: string,
+    cardUrl?: string
   ): string {
     const { customer, totalLitresCow, totalLitresBuffalo, totalLitresPacket, totalAddonsAmount, totalAmountBilled, totalPaid, netDue } = summary;
 
@@ -55,6 +82,8 @@ export const WhatsAppService = {
       ? `🔴 *Total Due Balance (कुल बकाया): ₹${netDue.toFixed(2)}*`
       : `✓ *Account Fully Settled (हिसाब चुकता): ₹0.00*`;
 
+    const upiSection = this.buildUpiPaymentSection(netDue, supplierBusinessName, upiId, cardUrl);
+
     const footerPrompt = isAdvance
       ? `Your advance payment is safe and will be adjusted against upcoming deliveries. Thank you!`
       : netDue > 0
@@ -68,7 +97,7 @@ export const WhatsAppService = {
 💰 Total Amount Billed: ₹${totalAmountBilled.toFixed(2)}
 💵 Payment Received: ₹${totalPaid.toFixed(2)}
 -----------------------------
-${balanceRow}
+${balanceRow}${upiSection}
 -----------------------------
 ${footerPrompt}`;
 
@@ -79,7 +108,9 @@ ${footerPrompt}`;
     summary: CustomerDueSummary,
     supplierBusinessName: string,
     periodLabel: string,
-    auditItems: CustomerDateAuditItem[]
+    auditItems: CustomerDateAuditItem[],
+    upiId?: string,
+    cardUrl?: string
   ): string {
     const { customer, totalLitresCow, totalLitresBuffalo, totalLitresPacket, totalAddonsAmount, totalAmountBilled, totalPaid, netDue } = summary;
 
@@ -148,6 +179,8 @@ ${footerPrompt}`;
       ? `🔴 *Net Due Balance (कुल बकाया): ₹${netDue.toFixed(2)}*`
       : `✓ *Account Fully Settled (हिसाब चुकता): ₹0.00*`;
 
+    const upiSection = this.buildUpiPaymentSection(netDue, supplierBusinessName, upiId, cardUrl);
+
     const footerPrompt = isAdvance
       ? `Your advance payment is safe and will be adjusted against upcoming deliveries. Thank you!`
       : netDue > 0
@@ -166,7 +199,7 @@ ${itemsText}${carryoverText}
 💰 Total Amount Billed: ₹${totalAmountBilled.toFixed(2)}
 💵 Payment Received: ₹${totalPaid.toFixed(2)}
 -----------------------------
-${balanceRow}
+${balanceRow}${upiSection}
 -----------------------------
 ${footerPrompt}`;
 
@@ -177,9 +210,11 @@ ${footerPrompt}`;
     phone: string,
     summary: CustomerDueSummary,
     supplierBusinessName: string,
-    periodLabel: string
+    periodLabel: string,
+    upiId?: string,
+    cardUrl?: string
   ): Promise<void> {
-    const message = this.formatDueBill(summary, supplierBusinessName, periodLabel);
+    const message = this.formatDueBill(summary, supplierBusinessName, periodLabel, upiId, cardUrl);
     await this.openWhatsAppWithText(phone, message);
   },
 
@@ -188,9 +223,11 @@ ${footerPrompt}`;
     summary: CustomerDueSummary,
     supplierBusinessName: string,
     periodLabel: string,
-    auditItems: CustomerDateAuditItem[]
+    auditItems: CustomerDateAuditItem[],
+    upiId?: string,
+    cardUrl?: string
   ): Promise<void> {
-    const message = this.formatItemizedDatewiseBill(summary, supplierBusinessName, periodLabel, auditItems);
+    const message = this.formatItemizedDatewiseBill(summary, supplierBusinessName, periodLabel, auditItems, upiId, cardUrl);
     await this.openWhatsAppWithText(phone, message);
   },
 

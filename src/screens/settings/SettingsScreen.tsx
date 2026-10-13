@@ -70,6 +70,9 @@ export const SettingsScreen = () => {
   const [curdRate, setCurdRate] = useState('70');
   const [gheeRate, setGheeRate] = useState('700');
   const [butterMilkRate, setButterMilkRate] = useState('20');
+  const [upiId, setUpiId] = useState('');
+  const [morningGroupLink, setMorningGroupLink] = useState('');
+  const [eveningGroupLink, setEveningGroupLink] = useState('');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Hardware/gesture Back button handler for modals
@@ -100,6 +103,9 @@ export const SettingsScreen = () => {
     if (supplier?.settings) {
       setEnablePacketMilk(Boolean(supplier.settings.enablePacketMilk));
       setEnableDairyAddons(Boolean(supplier.settings.enableDairyAddons));
+      setUpiId(supplier.settings.upiId || '');
+      setMorningGroupLink(supplier.settings.morningGroupLink || '');
+      setEveningGroupLink(supplier.settings.eveningGroupLink || '');
       const products = supplier.settings.customProducts || [];
       const p = products.find(i => i.id === 'prod_paneer');
       const c = products.find(i => i.id === 'prod_curd');
@@ -124,7 +130,7 @@ export const SettingsScreen = () => {
     await saveFeatureSettings(enablePacketMilk, nextVal);
   };
 
-  const saveFeatureSettings = async (packetVal: boolean, addonsVal: boolean) => {
+  const saveFeatureSettings = async (packetVal: boolean, addonsVal: boolean, customUpi?: string, customMorningLink?: string, customEveningLink?: string) => {
     if (!supplier) return;
     setIsSavingSettings(true);
     try {
@@ -135,12 +141,19 @@ export const SettingsScreen = () => {
         { id: 'prod_buttermilk', name: 'छाछ (Buttermilk)', unit: 'pkt', defaultRate: parseFloat(butterMilkRate) || 20, isActive: true }
       ];
 
+      const finalUpi = (customUpi !== undefined ? customUpi : upiId).trim();
+      const finalMorning = (customMorningLink !== undefined ? customMorningLink : morningGroupLink).trim();
+      const finalEvening = (customEveningLink !== undefined ? customEveningLink : eveningGroupLink).trim();
+
       const updatedSupplier: import('../../types').Supplier = {
         ...supplier,
         settings: {
           ...supplier.settings,
           enablePacketMilk: packetVal,
           enableDairyAddons: addonsVal,
+          upiId: finalUpi,
+          morningGroupLink: finalMorning,
+          eveningGroupLink: finalEvening,
           packetBrands: supplier.settings?.packetBrands || ['Mother Dairy', 'Amul', 'Verka', 'Saras', 'Paras', 'Custom'],
           customProducts
         },
@@ -155,6 +168,16 @@ export const SettingsScreen = () => {
     } finally {
       setIsSavingSettings(false);
     }
+  };
+
+  const handleSaveUpiAndBroadcast = async () => {
+    await saveFeatureSettings(enablePacketMilk, enableDairyAddons, upiId, morningGroupLink, eveningGroupLink);
+    showAlert(
+      lang === 'hi' ? '✓ सेटिंग्स सहेजी गईं' : '✓ Settings Saved',
+      lang === 'hi'
+        ? 'आपकी UPI ID और व्हाट्सएप ब्रॉडकास्ट सेटिंग्स सफलतापूर्वक सेव हो गई हैं। अब बिल भेजते समय ऑटोमैटिक अमाउंट वाला QR कोड जाएगा।'
+        : 'Your UPI ID and WhatsApp Broadcast settings have been saved. Due bills will now include a dynamic amount QR code.'
+    );
   };
 
   useEffect(() => {
@@ -747,6 +770,76 @@ export const SettingsScreen = () => {
               </View>
             </View>
           )}
+        </View>
+
+        {/* UPI QR Payment & WhatsApp Broadcast Setup */}
+        <Text style={styles.sectionHeader}>
+          {lang === 'hi' ? '💳 UPI QR पेमेंट एवं ब्रॉडकास्ट सेटिंग्स' : '💳 UPI QR Payment & Broadcast Setup'}
+        </Text>
+        <View style={styles.featureCard}>
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.featureTitle}>
+              {lang === 'hi' ? '📱 आपकी UPI ID (बिल के साथ ऑटो-अमाउंट QR कोड भेजने के लिए)' : '📱 Your UPI ID (For Dynamic Amount Bill QR Scanner)'}
+            </Text>
+            <Text style={[styles.featureDesc, { marginBottom: 8 }]}>
+              {lang === 'hi'
+                ? 'यहाँ अपनी UPI ID डालें (जैसे: 9876543210@ybl या @paytm)। जब आप किसी ग्राहक को बकाया बिल भेजेंगे, तो उसी बकाया राशि का QR कोड और Pay लिंक अपने-आप चला जाएगा!'
+                : 'Enter your UPI ID (e.g. 9876543210@ybl or @paytm). When you send a due bill, a dynamic QR code pre-filled with the exact due amount will be sent automatically!'}
+            </Text>
+            <TextInput
+              style={[styles.rateInputField, { textAlign: 'left', paddingHorizontal: 12 }]}
+              placeholder="e.g. 8721873433@ybl or name@okaxis"
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="none"
+              value={upiId}
+              onChangeText={setUpiId}
+            />
+          </View>
+
+          <View style={styles.featureDivider} />
+
+          <View style={{ marginTop: 10, marginBottom: 12 }}>
+            <Text style={styles.featureTitle}>
+              {lang === 'hi' ? '📢 सुबह और शाम का WhatsApp Group / Channel लिंक (वैकल्पिक)' : '📢 Morning & Evening WhatsApp Group Links (Optional)'}
+            </Text>
+            <Text style={[styles.featureDesc, { marginBottom: 8 }]}>
+              {lang === 'hi'
+                ? 'यदि आपने सुबह या शाम की शिफ्ट का WhatsApp ग्रुप बनाया है, तो उसका लिंक यहाँ सेव करें ताकि 1-क्लिक में ग्रुप खुले।'
+                : 'Save your Morning/Evening WhatsApp group invite links for 1-click daily alerts.'}
+            </Text>
+            <Text style={[styles.rateColLabel, { textAlign: 'left', marginBottom: 4 }]}>
+              🌅 {lang === 'hi' ? 'सुबह शिफ्ट ग्रुप लिंक (Morning Group Link):' : 'Morning Shift Group Link:'}
+            </Text>
+            <TextInput
+              style={[styles.rateInputField, { textAlign: 'left', paddingHorizontal: 12, marginBottom: 10 }]}
+              placeholder="https://chat.whatsapp.com/..."
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="none"
+              value={morningGroupLink}
+              onChangeText={setMorningGroupLink}
+            />
+            <Text style={[styles.rateColLabel, { textAlign: 'left', marginBottom: 4 }]}>
+              🌆 {lang === 'hi' ? 'शाम शिफ्ट ग्रुप लिंक (Evening Group Link):' : 'Evening Shift Group Link:'}
+            </Text>
+            <TextInput
+              style={[styles.rateInputField, { textAlign: 'left', paddingHorizontal: 12 }]}
+              placeholder="https://chat.whatsapp.com/..."
+              placeholderTextColor="#94a3b8"
+              autoCapitalize="none"
+              value={eveningGroupLink}
+              onChangeText={setEveningGroupLink}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={{ backgroundColor: '#0284c7', paddingVertical: 11, borderRadius: 8, alignItems: 'center' }}
+            onPress={handleSaveUpiAndBroadcast}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
+              💾 {lang === 'hi' ? 'UPI और ब्रॉडकास्ट सेटिंग्स सेव करें' : 'Save UPI & Broadcast Settings'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Permanent Storage & Database Status */}

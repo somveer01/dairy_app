@@ -22,7 +22,7 @@ import { Contact } from 'expo-contacts';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
-import { Customer, MilkType, SubSupplier } from '../../types';
+import { Customer, CustomerShift, MilkType, SubSupplier } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { parseWhatsAppText, ParsedWhatsAppCustomer, extractWhatsAppGroupName } from '../../utils/whatsappParser';
 
@@ -77,6 +77,7 @@ export const CustomerListScreen = () => {
   const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, subSuppliers, refreshSubSuppliers, milkInwardEntries, subSupplierPayments, supplier, requireAuth } = useApp();
   const [directoryMode, setDirectoryMode] = useState<'customers' | 'subSuppliers'>('customers');
   const [search, setSearch] = useState('');
+  const [shiftFilter, setShiftFilter] = useState<CustomerShift>('All');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
@@ -98,6 +99,8 @@ export const CustomerListScreen = () => {
   const [milkType, setMilkType] = useState<MilkType>('cow');
   const [defaultLitres, setDefaultLitres] = useState('2.0');
   const [ratePerLitre, setRatePerLitre] = useState('55');
+  const [customerShift, setCustomerShift] = useState<CustomerShift>('All');
+  const [routeGroup, setRouteGroup] = useState('');
   const [notes, setNotes] = useState('');
   // Packet milk state
   const [isPacketMilk, setIsPacketMilk] = useState(false);
@@ -374,6 +377,8 @@ export const CustomerListScreen = () => {
       setMilkType('cow');
       setDefaultLitres('2.0');
       setRatePerLitre('55');
+      setCustomerShift('All');
+      setRouteGroup('');
       setNotes('');
       setIsPacketMilk(false);
       setPacketBrand('Mother Dairy');
@@ -393,6 +398,8 @@ export const CustomerListScreen = () => {
       setMilkType(cust.milkType);
       setDefaultLitres(cust.defaultLitres.toString());
       setRatePerLitre(cust.ratePerLitre.toString());
+      setCustomerShift(cust.shift || 'All');
+      setRouteGroup(cust.routeGroup || '');
       setNotes(cust.notes || '');
       setIsPacketMilk(!!cust.isPacketMilk);
       const isKnownBrand = ['Mother Dairy', 'Amul', 'Verka', 'Saras', 'Paras'].includes(cust.packetBrand || '');
@@ -454,6 +461,8 @@ export const CustomerListScreen = () => {
         milkType: isPacketMilk ? (`packet_${packetVariant.toLowerCase().replace(/\s+/g, '_')}` as MilkType) : milkType,
         defaultLitres: litres,
         ratePerLitre: rate,
+        shift: customerShift || 'All',
+        routeGroup: routeGroup.trim() || undefined,
         notes: notes.trim(),
         isPacketMilk: !!isPacketMilk,
         packetBrand: isPacketMilk ? finalBrand : undefined,
@@ -1257,13 +1266,21 @@ export const CustomerListScreen = () => {
     showAlert(lang === 'hi' ? 'सफलता (Success)' : 'Success', lang === 'hi' ? msgHi : msgEn);
   };
 
-  const filteredCustomers = customers.filter(
-    c =>
-      !c.isDeleted &&
-      (c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.phone.includes(search) ||
-        (c.address && c.address.toLowerCase().includes(search.toLowerCase())))
-  );
+  const filteredCustomers = customers.filter(c => {
+    if (c.isDeleted) return false;
+    const cShift = c.shift || 'All';
+    if (shiftFilter === 'Morning' && cShift !== 'Morning' && cShift !== 'All') return false;
+    if (shiftFilter === 'Evening' && cShift !== 'Evening' && cShift !== 'All') return false;
+
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.phone.includes(search) ||
+      (c.address && c.address.toLowerCase().includes(q)) ||
+      (c.routeGroup && c.routeGroup.toLowerCase().includes(q))
+    );
+  });
 
   const filteredSubSuppliers = subSuppliers.filter(
     s =>
@@ -1339,6 +1356,39 @@ export const CustomerListScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Shift Filter Bar for Customers (Default: All) */}
+        {directoryMode === 'customers' && (
+          <View style={{ flexDirection: 'row', gap: 6, marginHorizontal: 14, marginBottom: 8 }}>
+            {([
+              { key: 'All', labelHi: '📋 सभी (All)', labelEn: '📋 All' },
+              { key: 'Morning', labelHi: '🌅 सुबह (Morning)', labelEn: '🌅 Morning' },
+              { key: 'Evening', labelHi: '🌆 शाम (Evening)', labelEn: '🌆 Evening' }
+            ] as { key: CustomerShift; labelHi: string; labelEn: string }[]).map(tab => {
+              const isActive = shiftFilter === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: isActive ? '#0284c7' : '#cbd5e1',
+                    backgroundColor: isActive ? '#e0f2fe' : '#ffffff',
+                    alignItems: 'center'
+                  }}
+                  onPress={() => setShiftFilter(tab.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: isActive ? '800' : '600', color: isActive ? '#0369a1' : '#475569' }}>
+                    {lang === 'hi' ? tab.labelHi : tab.labelEn}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         {/* Search Bar Row */}
         <View style={styles.searchRow}>
           <TextInput
@@ -1404,9 +1454,23 @@ export const CustomerListScreen = () => {
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1, marginRight: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
                       <Text style={styles.indexNum}>{index + 1}. </Text>
                       <Text style={styles.customerName}>{item.name}</Text>
+                      {item.shift && item.shift !== 'All' && (
+                        <View style={{ backgroundColor: item.shift === 'Morning' ? '#fef3c7' : '#e0e7ff', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: item.shift === 'Morning' ? '#b45309' : '#4338ca' }}>
+                            {item.shift === 'Morning' ? (lang === 'hi' ? '🌅 सुबह' : '🌅 Morning') : (lang === 'hi' ? '🌆 शाम' : '🌆 Evening')}
+                          </Text>
+                        </View>
+                      )}
+                      {item.routeGroup ? (
+                        <View style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: '#475569' }}>
+                            🏘️ {item.routeGroup}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                     <Text style={styles.customerPhone}>📞 {item.phone}</Text>
                     {item.address ? <Text style={styles.customerAddress} numberOfLines={1}>📍 {item.address}</Text> : null}
@@ -2324,6 +2388,52 @@ export const CustomerListScreen = () => {
                   />
                 </View>
               </View>
+
+              {/* Shift Selector (Default: All) */}
+              <Text style={styles.label}>
+                {lang === 'hi' ? 'डिलीवरी शिफ्ट (Shift - डिफ़ॉल्ट: सभी) *' : 'Delivery Shift (Default: All) *'}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                {([
+                  { key: 'All', labelHi: '📋 सभी (All)', labelEn: '📋 All (Default)' },
+                  { key: 'Morning', labelHi: '🌅 सुबह (Morn)', labelEn: '🌅 Morning' },
+                  { key: 'Evening', labelHi: '🌆 शाम (Eve)', labelEn: '🌆 Evening' }
+                ] as { key: CustomerShift; labelHi: string; labelEn: string }[]).map(opt => {
+                  const isSel = customerShift === opt.key;
+                  return (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: isSel ? '#0284c7' : '#cbd5e1',
+                        backgroundColor: isSel ? '#e0f2fe' : '#f8fafc',
+                        alignItems: 'center'
+                      }}
+                      onPress={() => setCustomerShift(opt.key)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: isSel ? '800' : '600', color: isSel ? '#0369a1' : '#475569' }}>
+                        {lang === 'hi' ? opt.labelHi : opt.labelEn}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Optional Route / Area Group */}
+              <Text style={styles.label}>
+                {lang === 'hi' ? 'गली / कॉलोनी / एरिया ग्रुप (वैकल्पिक)' : 'Area / Colony / Route Group (Optional)'}
+              </Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder={lang === 'hi' ? 'उदा. शिव कॉलोनी, गली नं. 2, मेन मार्केट' : 'e.g. Shiv Colony, Sector 4, Main Market'}
+                placeholderTextColor="#94a3b8"
+                value={routeGroup}
+                onChangeText={setRouteGroup}
+              />
 
               <View style={styles.modalButtonRow}>
                 <TouchableOpacity
