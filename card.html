@@ -837,6 +837,19 @@
       </div>
     </header>
 
+    <!-- Live Dairy Broadcast Announcement Banner -->
+    <div id="liveAnnouncementBanner" style="display: none; margin: 12px 16px 0; background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%); border: 1.5px solid #f59e0b; border-radius: 14px; padding: 12px 14px; box-shadow: 0 3px 10px rgba(245, 158, 11, 0.15);">
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <div style="font-size: 22px; line-height: 1;">📢</div>
+        <div style="flex: 1;">
+          <div id="liveAnnouncementTitle" style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; margin-bottom: 3px;">
+            डेयरी लाइव सूचना / Live Dairy Update
+          </div>
+          <div id="liveAnnouncementText" style="font-size: 13.5px; font-weight: 700; color: #78350f; white-space: pre-line; line-height: 1.4;"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Add to Home Screen / App Shortcut Banner -->
     <div class="shortcut-banner" id="shortcutBanner">
       <div class="shortcut-main-row">
@@ -951,6 +964,23 @@
           <div style="font-size: 10px; color: #991b1b;" id="subNetDue">कृपया समय पर भुगतान करें</div>
         </div>
         <div class="due-hero-amount" id="valNetDue">₹0.00</div>
+      </div>
+
+      <!-- Dynamic Amount UPI QR Code Scanner & 1-Tap Pay Section -->
+      <div id="upiQrPaymentSection" style="display: none; background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px; text-align: center;">
+        <div id="upiSectionTitle" style="font-size: 13px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">
+          📲 QR कोड स्कैन करके अभी बकाया भुगतान करें
+        </div>
+        <div id="upiSectionSub" style="font-size: 11px; color: #475569; margin-bottom: 10px;">
+          स्कैन करने पर बकाया राशि अपने-आप भर जाएगी (GPay / PhonePe / Paytm)
+        </div>
+        <div style="display: inline-block; background: #ffffff; padding: 10px; border-radius: 14px; border: 2px solid #0284c7; box-shadow: 0 2px 8px rgba(2,132,199,0.12);">
+          <img id="upiQrCodeImg" src="" alt="UPI QR Scanner" style="width: 190px; height: 190px; display: block;" />
+        </div>
+        <div id="upiIdDisplay" style="font-size: 12px; font-weight: 700; color: #0369a1; margin-top: 8px;"></div>
+        <a id="upiPayNowBtn" href="#" style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; background: #16a34a; color: #ffffff; text-decoration: none; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 12px; box-shadow: 0 3px 10px rgba(22, 163, 74, 0.25);">
+          💳 <span id="upiPayNowBtnText">Pay via UPI App</span>
+        </a>
       </div>
     </section>
 
@@ -1500,6 +1530,22 @@
       document.getElementById('businessName').innerText = cardData.supplierBusinessName || 'डेयरी फ़ार्म';
       document.getElementById('supplierName').innerText = (cardData.supplierName ? cardData.supplierName + ' (सप्लायर)' : 'सप्लायर');
 
+      // Live Dairy Announcement Banner
+      const liveBanner = document.getElementById('liveAnnouncementBanner');
+      const liveTitle = document.getElementById('liveAnnouncementTitle');
+      const liveText = document.getElementById('liveAnnouncementText');
+      if (liveBanner && liveText) {
+        if (cardData.liveAnnouncement && cardData.liveAnnouncement.active && cardData.liveAnnouncement.message) {
+          liveBanner.style.display = 'block';
+          if (liveTitle) {
+            liveTitle.innerText = currentLang === 'hi' ? 'डेयरी लाइव सूचना (Live Update)' : 'Live Dairy Announcement';
+          }
+          liveText.innerText = cardData.liveAnnouncement.message;
+        } else {
+          liveBanner.style.display = 'none';
+        }
+      }
+
       // Check if Card is for Customer or Vendor (Sub-Supplier)
       const paramType = (urlParams.get('type') || '').toLowerCase();
       const isVendor = (paramType === 'vendor' || (cardData && cardData.partyType === 'vendor'));
@@ -1824,6 +1870,58 @@
           document.getElementById('valNetDue').innerText = `₹${netDue.toFixed(2)}`;
         } else {
           heroBanner.style.display = 'none';
+        }
+      }
+
+      // Dynamic Amount UPI QR Code Scanner Section (Customer only, when netDue > 0 and supplierUpiId is set)
+      const upiSection = document.getElementById('upiQrPaymentSection');
+      const cleanUpi = (cardData.supplierUpiId || '').trim();
+      if (upiSection) {
+        if (!isVendor && isCurrentMonth && netDue > 0 && cleanUpi) {
+          upiSection.style.display = 'block';
+          const exactAmt = netDue.toFixed(2);
+          const dairyName = cardData.supplierBusinessName || 'Dairy Farm';
+          const upiUri = `upi://pay?pa=${encodeURIComponent(cleanUpi)}&pn=${encodeURIComponent(dairyName)}&am=${exactAmt}&cu=INR`;
+          const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(upiUri)}`;
+
+          const qrImg = document.getElementById('upiQrCodeImg');
+          if (qrImg && qrImg.src !== qrUrl) qrImg.src = qrUrl;
+
+          const upiTitle = document.getElementById('upiSectionTitle');
+          if (upiTitle) {
+            upiTitle.innerText = currentLang === 'hi'
+              ? `📲 QR कोड स्कैन करके अभी ₹${exactAmt} भुगतान करें`
+              : `📲 Scan QR Code to Pay ₹${exactAmt} Now`;
+          }
+          const upiSub = document.getElementById('upiSectionSub');
+          if (upiSub) {
+            upiSub.innerText = currentLang === 'hi'
+              ? `स्कैन करने पर ₹${exactAmt} अपने-आप भर जाएगा (GPay / PhonePe / Paytm)`
+              : `Scanning auto-fills ₹${exactAmt} in GPay / PhonePe / Paytm`;
+          }
+          const upiIdEl = document.getElementById('upiIdDisplay');
+          if (upiIdEl) upiIdEl.innerText = `💳 UPI ID: ${cleanUpi}`;
+
+          const payBtn = document.getElementById('upiPayNowBtn');
+          if (payBtn) payBtn.href = upiUri;
+
+          const payBtnTxt = document.getElementById('upiPayNowBtnText');
+          if (payBtnTxt) {
+            payBtnTxt.innerText = currentLang === 'hi'
+              ? `अभी ₹${exactAmt} UPI पेमेंट करें (Pay Now)`
+              : `Pay ₹${exactAmt} Now via UPI App`;
+          }
+
+          if (urlParams.get('pay') === '1' && !window.__didScrollToPay) {
+            window.__didScrollToPay = true;
+            setTimeout(() => {
+              try {
+                upiSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } catch (e) {}
+            }, 350);
+          }
+        } else {
+          upiSection.style.display = 'none';
         }
       }
 
