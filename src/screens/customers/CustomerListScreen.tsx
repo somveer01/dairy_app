@@ -100,7 +100,7 @@ export const CustomerListScreen = () => {
   const [milkType, setMilkType] = useState<MilkType>('cow');
   const [defaultLitres, setDefaultLitres] = useState('2.0');
   const [ratePerLitre, setRatePerLitre] = useState('55');
-  const [customerShift, setCustomerShift] = useState<CustomerShift>('All');
+  const [customerShift, setCustomerShift] = useState<CustomerShift>('Evening');
   const [routeGroup, setRouteGroup] = useState('');
   const [notes, setNotes] = useState('');
   // Packet milk state
@@ -378,7 +378,7 @@ export const CustomerListScreen = () => {
       setMilkType('cow');
       setDefaultLitres('2.0');
       setRatePerLitre('55');
-      setCustomerShift('All');
+      setCustomerShift('Evening');
       setRouteGroup('');
       setNotes('');
       setIsPacketMilk(false);
@@ -2403,13 +2403,13 @@ export const CustomerListScreen = () => {
 
               {/* Shift Selector (Default: All) */}
               <Text style={styles.label}>
-                {lang === 'hi' ? 'डिलीवरी शिफ्ट (Shift - डिफ़ॉल्ट: सभी) *' : 'Delivery Shift (Default: All) *'}
+                {lang === 'hi' ? 'डिलीवरी शिफ्ट (Shift - डिफ़ॉल्ट: शाम) *' : 'Delivery Shift (Default: Evening) *'}
               </Text>
               <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
                 {([
-                  { key: 'All', labelHi: '📋 सभी (All)', labelEn: '📋 All (Default)' },
+                  { key: 'All', labelHi: '📋 सभी (All)', labelEn: '📋 All' },
                   { key: 'Morning', labelHi: '🌅 सुबह (Morn)', labelEn: '🌅 Morning' },
-                  { key: 'Evening', labelHi: '🌆 शाम (Eve)', labelEn: '🌆 Evening' }
+                  { key: 'Evening', labelHi: '🌆 शाम (Eve - डिफ़ॉल्ट)', labelEn: '🌆 Evening (Default)' }
                 ] as { key: CustomerShift; labelHi: string; labelEn: string }[]).map(opt => {
                   const isSel = customerShift === opt.key;
                   return (
