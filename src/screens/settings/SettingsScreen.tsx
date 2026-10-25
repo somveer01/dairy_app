@@ -108,19 +108,23 @@ export const SettingsScreen = () => {
       setUpiId(supplier.settings.upiId || '');
       setMorningGroupLink(supplier.settings.morningGroupLink || '');
       setEveningGroupLink(supplier.settings.eveningGroupLink || '');
-      const products = supplier.settings.customProducts;
-      if (products && products.length > 0) {
-        setCustomProducts(products);
-      } else {
-        setCustomProducts([
-          { id: 'prod_paneer', name: 'पनीर (Paneer)', unit: 'kg', defaultRate: 360, isActive: true },
-          { id: 'prod_curd', name: 'दही (Curd/Dahi)', unit: 'kg', defaultRate: 70, isActive: true },
-          { id: 'prod_ghee', name: 'देसी घी (Ghee)', unit: 'kg', defaultRate: 700, isActive: true },
-          { id: 'prod_buttermilk', name: 'छाछ (Chhachh)', unit: 'pkt', defaultRate: 20, isActive: true },
-          { id: 'prod_khoya', name: 'खोया (Khoya)', unit: 'kg', defaultRate: 280, isActive: true },
-          { id: 'prod_malai', name: 'मलाई (Malai)', unit: 'kg', defaultRate: 120, isActive: true }
-        ]);
-      }
+      const defaultProducts: import('../../types').DairyProductItem[] = [
+        { id: 'prod_paneer', name: 'पनीर (Paneer)', unit: 'kg', defaultRate: 360, isActive: true },
+        { id: 'prod_curd', name: 'दही (Curd/Dahi)', unit: 'kg', defaultRate: 70, isActive: true },
+        { id: 'prod_ghee', name: 'देसी घी (Ghee)', unit: 'kg', defaultRate: 700, isActive: true },
+        { id: 'prod_buttermilk', name: 'छाछ (Chhachh)', unit: 'pkt', defaultRate: 20, isActive: true },
+        { id: 'prod_khoya', name: 'खोया (Khoya)', unit: 'kg', defaultRate: 280, isActive: true },
+        { id: 'prod_malai', name: 'मलाई (Malai)', unit: 'kg', defaultRate: 120, isActive: true }
+      ];
+
+      const saved = supplier.settings.customProducts || [];
+      const merged = [...saved];
+      defaultProducts.forEach(def => {
+        if (!merged.some(m => m.id === def.id || (m.name && m.name.toLowerCase().includes(def.id.replace('prod_', ''))))) {
+          merged.push(def);
+        }
+      });
+      setCustomProducts(merged);
     }
   }, [supplier]);
 

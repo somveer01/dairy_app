@@ -85,10 +85,7 @@ export const DailyRegisterScreen = () => {
   };
 
   const activeCustomProducts = useMemo<import('../../types').DairyProductItem[]>(() => {
-    if (supplier?.settings?.customProducts && supplier.settings.customProducts.length > 0) {
-      return supplier.settings.customProducts.filter(p => p.isActive !== false);
-    }
-    return [
+    const defaultList: import('../../types').DairyProductItem[] = [
       { id: 'prod_paneer', name: 'पनीर (Paneer)', unit: 'kg', defaultRate: 360, isActive: true },
       { id: 'prod_curd', name: 'दही (Curd/Dahi)', unit: 'kg', defaultRate: 70, isActive: true },
       { id: 'prod_ghee', name: 'देसी घी (Ghee)', unit: 'kg', defaultRate: 700, isActive: true },
@@ -96,6 +93,14 @@ export const DailyRegisterScreen = () => {
       { id: 'prod_khoya', name: 'खोया (Khoya)', unit: 'kg', defaultRate: 280, isActive: true },
       { id: 'prod_malai', name: 'मलाई (Malai)', unit: 'kg', defaultRate: 120, isActive: true },
     ];
+    const saved = supplier?.settings?.customProducts || [];
+    const merged = [...saved];
+    defaultList.forEach(def => {
+      if (!merged.some(m => m.id === def.id || (m.name && m.name.toLowerCase().includes(def.id.replace('prod_', ''))))) {
+        merged.push(def);
+      }
+    });
+    return merged.filter(p => p.isActive !== false);
   }, [supplier?.settings?.customProducts]);
 
   const changeDateBy = (days: number) => {
