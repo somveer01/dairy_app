@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -101,15 +101,6 @@ export const SettingsScreen = () => {
     }, [inspectorVisible, editProfileVisible, installModalVisible])
   );
 
-  const DEFAULT_PRODUCTS: import('../../types').DairyProductItem[] = [
-    { id: 'prod_paneer', name: 'पनीर (Paneer)', unit: 'kg', defaultRate: 360, isActive: true },
-    { id: 'prod_curd', name: 'दही (Curd/Dahi)', unit: 'kg', defaultRate: 70, isActive: true },
-    { id: 'prod_ghee', name: 'देसी घी (Ghee)', unit: 'kg', defaultRate: 700, isActive: true },
-    { id: 'prod_buttermilk', name: 'छाछ (Chhachh)', unit: 'pkt', defaultRate: 20, isActive: true },
-    { id: 'prod_khoya', name: 'खोया (Khoya)', unit: 'kg', defaultRate: 280, isActive: true },
-    { id: 'prod_malai', name: 'मलाई (Malai)', unit: 'kg', defaultRate: 120, isActive: true },
-  ];
-
   useEffect(() => {
     if (supplier?.settings) {
       setEnablePacketMilk(Boolean(supplier.settings.enablePacketMilk));
@@ -121,7 +112,14 @@ export const SettingsScreen = () => {
       if (products && products.length > 0) {
         setCustomProducts(products);
       } else {
-        setCustomProducts(DEFAULT_PRODUCTS);
+        setCustomProducts([
+          { id: 'prod_paneer', name: 'पनीर (Paneer)', unit: 'kg', defaultRate: 360, isActive: true },
+          { id: 'prod_curd', name: 'दही (Curd/Dahi)', unit: 'kg', defaultRate: 70, isActive: true },
+          { id: 'prod_ghee', name: 'देसी घी (Ghee)', unit: 'kg', defaultRate: 700, isActive: true },
+          { id: 'prod_buttermilk', name: 'छाछ (Chhachh)', unit: 'pkt', defaultRate: 20, isActive: true },
+          { id: 'prod_khoya', name: 'खोया (Khoya)', unit: 'kg', defaultRate: 280, isActive: true },
+          { id: 'prod_malai', name: 'मलाई (Malai)', unit: 'kg', defaultRate: 120, isActive: true }
+        ]);
       }
     }
   }, [supplier]);
@@ -176,9 +174,9 @@ export const SettingsScreen = () => {
   const handleSaveUpiAndBroadcast = async () => {
     await saveFeatureSettings(enablePacketMilk, enableDairyAddons, upiId, morningGroupLink, eveningGroupLink);
     showAlert(
-      lang === 'hi' ? 'âœ“ à¤¸à¥‡à¤Ÿà¤¿à¤‚à¤—à¥à¤¸ à¤¸à¤¹à¥‡à¤œà¥€ à¤—à¤ˆà¤‚' : 'âœ“ Settings Saved',
+      lang === 'hi' ? '✓ सेटिंग्स सहेजी गईं' : '✓ Settings Saved',
       lang === 'hi'
-        ? 'à¤†à¤ªà¤•à¥€ UPI ID à¤”à¤° à¤µà¥à¤¹à¤¾à¤Ÿà¥à¤¸à¤à¤ª à¤¬à¥à¤°à¥‰à¤¡à¤•à¤¾à¤¸à¥à¤Ÿ à¤¸à¥‡à¤Ÿà¤¿à¤‚à¤—à¥à¤¸ à¤¸à¤«à¤²à¤¤à¤¾à¤ªà¥‚à¤°à¥à¤µà¤• à¤¸à¥‡à¤µ à¤¹à¥‹ à¤—à¤ˆ à¤¹à¥ˆà¤‚à¥¤ à¤…à¤¬ à¤¬à¤¿à¤² à¤­à¥‡à¤œà¤¤à¥‡ à¤¸à¤®à¤¯ à¤‘à¤Ÿà¥‹à¤®à¥ˆà¤Ÿà¤¿à¤• à¤…à¤®à¤¾à¤‰à¤‚à¤Ÿ à¤µà¤¾à¤²à¤¾ QR à¤•à¥‹à¤¡ à¤œà¤¾à¤à¤—à¤¾à¥¤'
+        ? 'आपकी UPI ID और व्हाट्सएप ब्रॉडकास्ट सेटिंग्स सफलतापूर्वक सेव हो गई हैं। अब बिल भेजते समय ऑटोमैटिक अमाउंट वाला QR कोड जाएगा।'
         : 'Your UPI ID and WhatsApp Broadcast settings have been saved. Due bills will now include a dynamic amount QR code.'
     );
   };
@@ -204,15 +202,15 @@ export const SettingsScreen = () => {
     const cleanPhone = normalizePhoneDigits(editPhone);
     if (cleanPhone.length !== 10) {
       showAlert(
-        lang === 'hi' ? 'à¤…à¤®à¤¾à¤¨à¥à¤¯ à¤®à¥‹à¤¬à¤¾à¤‡à¤² à¤¨à¤‚à¤¬à¤°' : 'Invalid Phone Number',
-        lang === 'hi' ? 'à¤•à¥ƒà¤ªà¤¯à¤¾ à¤¸à¤¹à¥€ 10 à¤…à¤‚à¤•à¥‹à¤‚ à¤•à¤¾ à¤®à¥‹à¤¬à¤¾à¤‡à¤² à¤¨à¤‚à¤¬à¤° à¤¦à¤°à¥à¤œ à¤•à¤°à¥‡à¤‚à¥¤' : 'Please enter a valid 10-digit mobile number.'
+        lang === 'hi' ? 'अमान्य मोबाइल नंबर' : 'Invalid Phone Number',
+        lang === 'hi' ? 'कृपया सही 10 अंकों का मोबाइल नंबर दर्ज करें।' : 'Please enter a valid 10-digit mobile number.'
       );
       return;
     }
     if (!editName.trim() || !editBusinessName.trim()) {
       showAlert(
-        lang === 'hi' ? 'à¤…à¤§à¥‚à¤°à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€' : 'Incomplete Details',
-        lang === 'hi' ? 'à¤•à¥ƒà¤ªà¤¯à¤¾ à¤¸à¤ªà¥à¤²à¤¾à¤¯à¤° à¤”à¤° à¤¡à¥‡à¤¯à¤°à¥€ à¤•à¤¾ à¤¨à¤¾à¤® à¤¦à¤°à¥à¤œ à¤•à¤°à¥‡à¤‚à¥¤' : 'Please enter supplier and business name.'
+        lang === 'hi' ? 'अधूरी जानकारी' : 'Incomplete Details',
+        lang === 'hi' ? 'कृपया सप्लायर और डेयरी का नाम दर्ज करें।' : 'Please enter supplier and business name.'
       );
       return;
     }
@@ -233,8 +231,8 @@ export const SettingsScreen = () => {
       AutoSyncService.queueSync(updatedSupplier, 0);
       setEditProfileVisible(false);
       showAlert(
-        lang === 'hi' ? 'à¤ªà¥à¤°à¥‹à¤«à¤¼à¤¾à¤‡à¤² à¤…à¤ªà¤¡à¥‡à¤Ÿ' : 'Profile Updated',
-        lang === 'hi' ? 'à¤†à¤ªà¤•à¥€ à¤ªà¥à¤°à¥‹à¤«à¤¼à¤¾à¤‡à¤² à¤¸à¤«à¤²à¤¤à¤¾à¤ªà¥‚à¤°à¥à¤µà¤• à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤¹à¥‹ à¤—à¤ˆ à¤¹à¥ˆà¥¤' : 'Your supplier profile has been updated.'
+        lang === 'hi' ? 'प्रोफ़ाइल अपडेट' : 'Profile Updated',
+        lang === 'hi' ? 'आपकी प्रोफ़ाइल सफलतापूर्वक अपडेट हो गई है।' : 'Your supplier profile has been updated.'
       );
     } catch (err: any) {
       showAlert('Error', err?.message || 'Failed to update profile');
@@ -247,8 +245,8 @@ export const SettingsScreen = () => {
     requireAuth(() => {
       AutoSyncService.queueSync(supplier, 0);
       showAlert(
-        lang === 'hi' ? 'à¤‘à¤Ÿà¥‹-à¤¸à¤¿à¤‚à¤• à¤ªà¥à¤°à¤¾à¤°à¤‚à¤­' : 'Sync Initiated',
-        lang === 'hi' ? 'à¤¬à¥ˆà¤•à¤—à¥à¤°à¤¾à¤‰à¤‚à¤¡ à¤®à¥‡à¤‚ à¤•à¥à¤²à¤¾à¤‰à¤¡ à¤¸à¤¿à¤‚à¤• à¤¶à¥à¤°à¥‚ à¤•à¤° à¤¦à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤' : 'Cloud background sync started.'
+        lang === 'hi' ? 'ऑटो-सिंक प्रारंभ' : 'Sync Initiated',
+        lang === 'hi' ? 'बैकग्राउंड में क्लाउड सिंक शुरू कर दिया गया है।' : 'Cloud background sync started.'
       );
     });
   };
@@ -276,8 +274,8 @@ export const SettingsScreen = () => {
   const handleCloudDownload = async () => {
     requireAuth(() => {
       confirmAction(
-        'à¤•à¥à¤²à¤¾à¤‰à¤¡ à¤¸à¥‡ à¤°à¤¿à¤¸à¥à¤Ÿà¥‹à¤° à¤•à¤°à¥‡à¤‚ (Restore from Cloud)',
-        'à¤•à¥à¤¯à¤¾ à¤†à¤ª Firebase Cloud à¤¸à¥‡ à¤…à¤ªà¤¨à¥‡ à¤¸à¤­à¥€ à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤”à¤° à¤°à¤¿à¤¸à¥à¤Ÿà¥‹à¤° à¤•à¤°à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚?\nâ€¢ à¤¸à¥‚à¤šà¤¨à¤¾: à¤µà¤°à¥à¤¤à¤®à¤¾à¤¨ à¤¡à¥‡à¤Ÿà¤¾ à¤•à¥à¤²à¤¾à¤‰à¤¡ à¤¬à¥ˆà¤•à¤…à¤ª à¤¸à¥‡ à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤¹à¥‹ à¤œà¤¾à¤à¤—à¤¾à¥¤',
+        'क्लाउड से रिस्टोर करें (Restore from Cloud)',
+        'क्या आप Firebase Cloud से अपने सभी रिकॉर्ड डाउनलोड और रिस्टोर करना चाहते हैं?\n• सूचना: वर्तमान डेटा क्लाउड बैकअप से अपडेट हो जाएगा।',
         async () => {
           setIsSyncingCloud(true);
           const res = await FirebaseSyncService.downloadFromCloud(supplier?.id);
@@ -292,10 +290,10 @@ export const SettingsScreen = () => {
           await refreshMilkInwardEntries();
           await refreshSubSupplierPayments();
           setIsSyncingCloud(false);
-          showAlert(res.success ? 'à¤°à¤¿à¤¸à¥à¤Ÿà¥‹à¤° à¤¸à¤«à¤² (Restored)' : 'à¤¤à¥à¤°à¥à¤Ÿà¤¿ (Error)', res.message);
+          showAlert(res.success ? 'रिस्टोर सफल (Restored)' : 'त्रुटि (Error)', res.message);
         },
-        'â¬‡ï¸ à¤°à¤¿à¤¸à¥à¤Ÿà¥‹à¤° à¤•à¤°à¥‡à¤‚ (Restore)',
-        'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚ (Cancel)',
+        '⬇️ रिस्टोर करें (Restore)',
+        'रद्द करें (Cancel)',
         false
       );
     });
@@ -331,14 +329,14 @@ export const SettingsScreen = () => {
               const rawText = event.target?.result as string;
               const parsed = JSON.parse(rawText);
               if (!parsed || (!parsed.supplier && !parsed.customers && !parsed.milkEntries)) {
-                showAlert('Invalid File', 'à¤šà¤¯à¤¨à¤¿à¤¤ à¤«à¤¼à¤¾à¤‡à¤² Dairy App à¤•à¥€ à¤¸à¤¹à¥€ à¤¬à¥ˆà¤•à¤…à¤ª à¤«à¤¼à¤¾à¤‡à¤² à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤');
+                showAlert('Invalid File', 'चयनित फ़ाइल Dairy App की सही बैकअप फ़ाइल नहीं है।');
                 return;
               }
 
               const targetSuppId = parsed.supplier?.id || supplier?.id || 'supp_8721873433';
               confirmAction(
-                'à¤¡à¥‡à¤Ÿà¤¾à¤¬à¥‡à¤¸ à¤°à¥€à¤¸à¥à¤Ÿà¥‹à¤° à¤•à¤°à¥‡à¤‚ (Restore Database)',
-                `à¤•à¥à¤¯à¤¾ à¤†à¤ª à¤«à¤¼à¤¾à¤‡à¤² "${file.name}" à¤¸à¥‡ à¤ªà¥‚à¤°à¤¾ à¤¡à¥‡à¤Ÿà¤¾ à¤°à¥€à¤¸à¥à¤Ÿà¥‹à¤° à¤•à¤°à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚?\nâ€¢ à¤µà¤°à¥à¤¤à¤®à¤¾à¤¨ à¤¡à¤¿à¤µà¤¾à¤‡à¤¸ à¤¡à¥‡à¤Ÿà¤¾à¤¬à¥‡à¤¸ à¤‡à¤¸ à¤¬à¥ˆà¤•à¤…à¤ª à¤¸à¥‡ à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤¹à¥‹ à¤œà¤¾à¤à¤—à¤¾à¥¤`,
+                'डेटाबेस रीस्टोर करें (Restore Database)',
+                `क्या आप फ़ाइल "${file.name}" से पूरा डेटा रीस्टोर करना चाहते हैं?\n• वर्तमान डिवाइस डेटाबेस इस बैकअप से अपडेट हो जाएगा।`,
                 async () => {
                   try {
                     const targetSupp = parsed.supplier || supplier;
@@ -364,26 +362,26 @@ export const SettingsScreen = () => {
                       refreshSubSupplierPayments()
                     ]);
                     showAlert(
-                      'à¤°à¥€à¤¸à¥à¤Ÿà¥‹à¤° à¤¸à¤«à¤² (Restored)',
-                      `à¤¡à¥‡à¤Ÿà¤¾ à¤¸à¤«à¤²à¤¤à¤¾à¤ªà¥‚à¤°à¥à¤µà¤• à¤°à¥€à¤¸à¥à¤Ÿà¥‹à¤° à¤¹à¥‹ à¤—à¤¯à¤¾:\nâ€¢ ${parsed.customers?.length || 0} à¤—à¥à¤°à¤¾à¤¹à¤•\nâ€¢ ${parsed.milkEntries?.length || 0} à¤¦à¥‚à¤§ à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡\nâ€¢ ${parsed.payments?.length || 0} à¤­à¥à¤—à¤¤à¤¾à¤¨`
+                      'रीस्टोर सफल (Restored)',
+                      `डेटा सफलतापूर्वक रीस्टोर हो गया:\n• ${parsed.customers?.length || 0} ग्राहक\n• ${parsed.milkEntries?.length || 0} दूध रिकॉर्ड\n• ${parsed.payments?.length || 0} भुगतान`
                     );
                   } catch (err: any) {
-                    showAlert('Error', `à¤°à¥€à¤¸à¥à¤Ÿà¥‹à¤° à¤µà¤¿à¤«à¤²: ${err?.message || 'à¤…à¤œà¥à¤žà¤¾à¤¤ à¤¤à¥à¤°à¥à¤Ÿà¤¿'}`);
+                    showAlert('Error', `रीस्टोर विफल: ${err?.message || 'अज्ञात त्रुटि'}`);
                   }
                 },
-                'ðŸ“¥ à¤°à¥€à¤¸à¥à¤Ÿà¥‹à¤° à¤•à¤°à¥‡à¤‚ (Restore)',
-                'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚ (Cancel)',
+                '📥 रीस्टोर करें (Restore)',
+                'रद्द करें (Cancel)',
                 false
               );
             } catch (err: any) {
-              showAlert('Error', `à¤«à¤¼à¤¾à¤‡à¤² à¤ªà¤¢à¤¼à¤¨à¥‡ à¤®à¥‡à¤‚ à¤¤à¥à¤°à¥à¤Ÿà¤¿: ${err?.message || 'à¤…à¤®à¤¾à¤¨à¥à¤¯ JSON'}`);
+              showAlert('Error', `फ़ाइल पढ़ने में त्रुटि: ${err?.message || 'अमान्य JSON'}`);
             }
           };
           reader.readAsText(file);
         };
         input.click();
       } else {
-        showAlert('Notice', 'à¤•à¥ƒà¤ªà¤¯à¤¾ à¤µà¥‡à¤¬ à¤¬à¥à¤°à¤¾à¤‰à¤œà¤¼à¤° à¤®à¥‡à¤‚ à¤¬à¥ˆà¤•à¤…à¤ª à¤°à¥€à¤¸à¥à¤Ÿà¥‹à¤° à¤•à¤°à¥‡à¤‚à¥¤');
+        showAlert('Notice', 'कृपया वेब ब्राउज़र में बैकअप रीस्टोर करें।');
       }
     });
   };
@@ -391,15 +389,15 @@ export const SettingsScreen = () => {
   const handleClearCustomers = () => {
     requireAuth(() => {
       confirmAction(
-        'à¤¸à¤­à¥€ à¤—à¥à¤°à¤¾à¤¹à¤• à¤¹à¤Ÿà¤¾à¤à¤‚ (Remove All Customers)',
-        `à¤•à¥à¤¯à¤¾ à¤†à¤ª à¤µà¤¾à¤•à¤ˆ à¤¸à¤­à¥€ à¤—à¥à¤°à¤¾à¤¹à¤•à¥‹à¤‚ à¤•à¥‹ à¤¹à¤Ÿà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚?\nâ€¢ à¤•à¥à¤² à¤—à¥à¤°à¤¾à¤¹à¤•: ${customers.length} à¤²à¥‹à¤—\nâ€¢ à¤šà¥‡à¤¤à¤¾à¤µà¤¨à¥€: à¤¯à¤¹ à¤ªà¥‚à¤°à¥€ à¤—à¥à¤°à¤¾à¤¹à¤• à¤¸à¥‚à¤šà¥€ à¤•à¥‹ à¤–à¤¾à¤²à¥€ à¤•à¤° à¤¦à¥‡à¤—à¤¾à¥¤`,
+        'सभी ग्राहक हटाएं (Remove All Customers)',
+        `क्या आप वाकई सभी ग्राहकों को हटाना चाहते हैं?\n• कुल ग्राहक: ${customers.length} लोग\n• चेतावनी: यह पूरी ग्राहक सूची को खाली कर देगा।`,
         async () => {
           await StorageService.clearAllCustomers();
           await refreshCustomers();
-          showAlert('à¤—à¥à¤°à¤¾à¤¹à¤• à¤¹à¤Ÿà¤¾ à¤¦à¤¿à¤ à¤—à¤ (Customers Removed)', 'à¤¸à¤­à¥€ à¤—à¥à¤°à¤¾à¤¹à¤• à¤ªà¥à¤°à¥‹à¤«à¤¾à¤‡à¤² à¤¹à¤Ÿà¤¾ à¤¦à¥€ à¤—à¤ˆ à¤¹à¥ˆà¤‚à¥¤');
+          showAlert('ग्राहक हटा दिए गए (Customers Removed)', 'सभी ग्राहक प्रोफाइल हटा दी गई हैं।');
         },
-        'ðŸ—‘ï¸ à¤¸à¤­à¥€ à¤¹à¤Ÿà¤¾à¤à¤‚ (Remove All)',
-        'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚ (Cancel)',
+        '🗑️ सभी हटाएं (Remove All)',
+        'रद्द करें (Cancel)',
         true
       );
     });
@@ -408,17 +406,17 @@ export const SettingsScreen = () => {
   const handleResetData = () => {
     requireAuth(() => {
       confirmAction(
-        'à¤ªà¥‚à¤°à¤¾ à¤¡à¥‡à¤Ÿà¤¾ à¤°à¥€à¤¸à¥‡à¤Ÿ à¤•à¤°à¥‡à¤‚ (Reset All Data)',
-        'à¤•à¥à¤¯à¤¾ à¤†à¤ª à¤¸à¤­à¥€ à¤—à¥à¤°à¤¾à¤¹à¤•, à¤¦à¥‚à¤§ à¤•à¤¾ à¤°à¤œà¤¿à¤¸à¥à¤Ÿà¤° à¤”à¤° à¤ªà¥‡à¤®à¥‡à¤‚à¤Ÿ à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ à¤ªà¥‚à¤°à¥€ à¤¤à¤°à¤¹ à¤®à¤¿à¤Ÿà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚?\nâ€¢ à¤šà¥‡à¤¤à¤¾à¤µà¤¨à¥€: à¤¯à¤¹ à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤µà¤¾à¤ªà¤¸ à¤¨à¤¹à¥€à¤‚ à¤•à¥€ à¤œà¤¾ à¤¸à¤•à¤¤à¥€à¥¤ à¤¸à¤¾à¤°à¤¾ à¤¡à¥‡à¤Ÿà¤¾ à¤®à¤¿à¤Ÿ à¤œà¤¾à¤à¤—à¤¾à¥¤',
+        'पूरा डेटा रीसेट करें (Reset All Data)',
+        'क्या आप सभी ग्राहक, दूध का रजिस्टर और पेमेंट रिकॉर्ड पूरी तरह मिटाना चाहते हैं?\n• चेतावनी: यह प्रक्रिया वापस नहीं की जा सकती। सारा डेटा मिट जाएगा।',
         async () => {
           await StorageService.clearAllData();
           await refreshCustomers();
           await refreshMilkEntries();
           await refreshPayments();
-          showAlert('à¤¡à¥‡à¤Ÿà¤¾ à¤°à¥€à¤¸à¥‡à¤Ÿ à¤ªà¥‚à¤°à¥à¤£ (Reset Complete)', 'à¤¸à¤­à¥€ à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ à¤®à¤¿à¤Ÿà¤¾ à¤¦à¤¿à¤ à¤—à¤ à¤¹à¥ˆà¤‚à¥¤');
+          showAlert('डेटा रीसेट पूर्ण (Reset Complete)', 'सभी रिकॉर्ड मिटा दिए गए हैं।');
         },
-        'âš ï¸ à¤ªà¥‚à¤°à¤¾ à¤¡à¥‡à¤Ÿà¤¾ à¤®à¤¿à¤Ÿà¤¾à¤à¤‚ (Reset All)',
-        'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚ (Cancel)',
+        '⚠️ पूरा डेटा मिटाएं (Reset All)',
+        'रद्द करें (Cancel)',
         true
       );
     });
@@ -431,7 +429,7 @@ export const SettingsScreen = () => {
         prompt.prompt();
         prompt.userChoice.then((choiceResult: any) => {
           if (choiceResult.outcome === 'accepted') {
-            showAlert('à¤¸à¤«à¤² (Success)', 'Dairy App à¤†à¤ªà¤•à¥€ à¤®à¥‹à¤¬à¤¾à¤‡à¤² à¤¸à¥à¤•à¥à¤°à¥€à¤¨ à¤ªà¤° à¤œà¥‹à¤¡à¤¼ à¤¦à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾ à¤¹à¥ˆ!');
+            showAlert('सफल (Success)', 'Dairy App आपकी मोबाइल स्क्रीन पर जोड़ दिया गया है!');
           }
           (window as any).pwaDeferredPrompt = null;
         });
@@ -439,16 +437,16 @@ export const SettingsScreen = () => {
         setInstallModalVisible(true);
       }
     } else {
-      showAlert('à¤‡à¤‚à¤¸à¥à¤Ÿà¥‰à¤²à¥à¤¡ (Installed)', 'à¤†à¤ª à¤ªà¤¹à¤²à¥‡ à¤¸à¥‡ à¤‡à¤‚à¤¸à¥à¤Ÿà¥‰à¤²à¥à¤¡ Dairy App à¤•à¤¾ à¤‰à¤ªà¤¯à¥‹à¤— à¤•à¤° à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚à¥¤');
+      showAlert('इंस्टॉल्ड (Installed)', 'आप पहले से इंस्टॉल्ड Dairy App का उपयोग कर रहे हैं।');
     }
   };
 
   const handleCheckForUpdates = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       confirmAction(
-        lang === 'hi' ? 'à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤œà¤¾à¤‚à¤šà¥‡à¤‚ (Check Updates)' : 'Check for Updates',
+        lang === 'hi' ? 'अपडेट जांचें (Check Updates)' : 'Check for Updates',
         lang === 'hi'
-          ? 'à¤•à¥à¤¯à¤¾ à¤†à¤ª à¤¨à¤¯à¤¾ à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚? à¤à¤ª à¤¤à¤¾à¤œà¤¾ à¤¡à¥‡à¤Ÿà¤¾ à¤”à¤° à¤¨à¤ à¤«à¥€à¤šà¤°à¥à¤¸ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤°à¤¿à¤«à¥à¤°à¥‡à¤¶ à¤¹à¥‹ à¤œà¤¾à¤à¤—à¤¾à¥¤'
+          ? 'क्या आप नया अपडेट डाउनलोड करना चाहते हैं? ऐप ताजा डेटा और नए फीचर्स के साथ रिफ्रेश हो जाएगा।'
           : 'Do you want to check and download the latest updates? The app will refresh with the newest features.',
         async () => {
           try {
@@ -467,27 +465,27 @@ export const SettingsScreen = () => {
           }
           window.location.reload();
         },
-        lang === 'hi' ? 'à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤•à¤°à¥‡à¤‚ (Update)' : 'Update Now',
-        lang === 'hi' ? 'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚ (Cancel)' : 'Cancel',
+        lang === 'hi' ? 'अपडेट करें (Update)' : 'Update Now',
+        lang === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel',
         false
       );
     } else {
       showAlert(
-        lang === 'hi' ? 'à¤à¤ª à¤…à¤ªà¤¡à¥‡à¤Ÿ' : 'App Update',
-        lang === 'hi' ? 'à¤†à¤ª à¤ªà¤¹à¤²à¥‡ à¤¸à¥‡ à¤¨à¤µà¥€à¤¨à¤¤à¤® à¤¸à¤‚à¤¸à¥à¤•à¤°à¤£ à¤šà¤²à¤¾ à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚à¥¤' : 'You are running the latest version.'
+        lang === 'hi' ? 'ऐप अपडेट' : 'App Update',
+        lang === 'hi' ? 'आप पहले से नवीनतम संस्करण चला रहे हैं।' : 'You are running the latest version.'
       );
     }
   };
 
   const handleLogout = () => {
     confirmAction(
-      'à¤²à¥‰à¤—à¤†à¤‰à¤Ÿ (Logout)',
-      'à¤•à¥à¤¯à¤¾ à¤†à¤ª à¤µà¤¾à¤•à¤ˆ à¤¡à¥‡à¤¯à¤°à¥€ à¤à¤ª à¤¸à¥‡ à¤²à¥‰à¤—à¤†à¤‰à¤Ÿ à¤•à¤°à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚?',
+      'लॉगआउट (Logout)',
+      'क्या आप वाकई डेयरी ऐप से लॉगआउट करना चाहते हैं?',
       () => {
         setSupplier(null);
       },
-      'à¤²à¥‰à¤—à¤†à¤‰à¤Ÿ (Logout)',
-      'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚ (Cancel)',
+      'लॉगआउट (Logout)',
+      'रद्द करें (Cancel)',
       false
     );
   };
@@ -509,29 +507,29 @@ export const SettingsScreen = () => {
         {supplier?.phone && supplier.phone.length >= 10 ? (
           <View style={styles.profileCard}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>ðŸ¥›</Text>
+              <Text style={styles.avatarText}>🥛</Text>
             </View>
             <View style={styles.profileInfo}>
               <Text style={styles.supplierName}>{supplier.name || 'Dairy Supplier'}</Text>
               <Text style={styles.businessName}>{supplier.businessName || 'Fresh Milk Dairy'}</Text>
-              <Text style={styles.phoneText}>ðŸ“ž {supplier.phone}</Text>
+              <Text style={styles.phoneText}>📞 {supplier.phone}</Text>
             </View>
             <TouchableOpacity
               style={styles.editProfileBtn}
               onPress={openEditProfile}
               activeOpacity={0.7}
             >
-              <Text style={styles.editProfileBtnText}>âœï¸ {lang === 'hi' ? 'à¤¬à¤¦à¤²à¥‡à¤‚' : 'Edit'}</Text>
+              <Text style={styles.editProfileBtnText}>✏️ {lang === 'hi' ? 'बदलें' : 'Edit'}</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={[styles.profileCard, { backgroundColor: '#f0f9ff', borderColor: '#bae6fd' }]}>
             <View style={[styles.avatar, { backgroundColor: '#e0f2fe' }]}>
-              <Text style={styles.avatarText}>ðŸ‘¤</Text>
+              <Text style={styles.avatarText}>👤</Text>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.supplierName}>{lang === 'hi' ? 'à¤…à¤¤à¤¿à¤¥à¤¿ à¤®à¥‹à¤¡ (Guest Mode)' : 'Guest Mode'}</Text>
-              <Text style={styles.businessName}>{lang === 'hi' ? 'à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ à¤¸à¤¹à¥‡à¤œà¤¨à¥‡ à¤µ à¤¸à¤¿à¤‚à¤• à¤•à¥‡ à¤²à¤¿à¤ à¤²à¥‰à¤—à¤¿à¤¨ à¤•à¤°à¥‡à¤‚' : 'Login to add entries & cloud sync'}</Text>
+              <Text style={styles.supplierName}>{lang === 'hi' ? 'अतिथि मोड (Guest Mode)' : 'Guest Mode'}</Text>
+              <Text style={styles.businessName}>{lang === 'hi' ? 'रिकॉर्ड सहेजने व सिंक के लिए लॉगिन करें' : 'Login to add entries & cloud sync'}</Text>
             </View>
             <TouchableOpacity
               style={{ backgroundColor: '#0284c7', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 }}
@@ -539,7 +537,7 @@ export const SettingsScreen = () => {
               activeOpacity={0.8}
             >
               <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 13 }}>
-                ðŸ” {lang === 'hi' ? 'à¤²à¥‰à¤— à¤‡à¤¨' : 'Login'}
+                🔐 {lang === 'hi' ? 'लॉग इन' : 'Login'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -553,18 +551,18 @@ export const SettingsScreen = () => {
             activeOpacity={0.8}
           >
             <View style={styles.superAdminIconBox}>
-              <Text style={{ fontSize: 22 }}>ðŸ‘‘</Text>
+              <Text style={{ fontSize: 22 }}>👑</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.superAdminTitle}>
-                {lang === 'hi' ? 'à¤¸à¥à¤ªà¤° à¤à¤¡à¤®à¤¿à¤¨ à¤ªà¥‹à¤°à¥à¤Ÿà¤²' : 'Super Admin Portal'}
+                {lang === 'hi' ? 'सुपर एडमिन पोर्टल' : 'Super Admin Portal'}
               </Text>
               <Text style={styles.superAdminSub}>
-                {lang === 'hi' ? 'à¤¸à¤­à¥€ à¤¡à¥‡à¤¯à¤°à¤¿à¤¯à¥‹à¤‚ à¤•à¥‡ à¤¸à¤¬à¥à¤¸à¤•à¥à¤°à¤¿à¤ªà¥à¤¶à¤¨ à¤ªà¥à¤²à¤¾à¤¨à¥à¤¸ à¤®à¥ˆà¤¨à¥‡à¤œ à¤•à¤°à¥‡à¤‚' : 'Manage subscriptions across all dairies'}
+                {lang === 'hi' ? 'सभी डेयरियों के सब्सक्रिप्शन प्लान्स मैनेज करें' : 'Manage subscriptions across all dairies'}
               </Text>
             </View>
             <View style={styles.superAdminArrow}>
-              <Text style={{ fontSize: 16, color: '#b45309', fontWeight: '800' }}>âž”</Text>
+              <Text style={{ fontSize: 16, color: '#b45309', fontWeight: '800' }}>➔</Text>
             </View>
           </TouchableOpacity>
         )}
@@ -574,15 +572,15 @@ export const SettingsScreen = () => {
           <View style={styles.subPlanCard}>
             <View style={styles.subPlanHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                <Text style={{ fontSize: 20 }}>ðŸ’³</Text>
+                <Text style={{ fontSize: 20 }}>💳</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.subPlanTitle}>
-                    {lang === 'hi' ? 'à¤¡à¥‡à¤¯à¤°à¥€ à¤à¤ª à¤¸à¤¦à¤¸à¥à¤¯à¤¤à¤¾ (Subscription)' : 'Dairy App Subscription'}
+                    {lang === 'hi' ? 'डेयरी ऐप सदस्यता (Subscription)' : 'Dairy App Subscription'}
                   </Text>
                   <Text style={styles.subPlanSub}>
                     {subscriptionStatus.isLocked
-                      ? (lang === 'hi' ? 'âš ï¸ à¤®à¥à¤«à¤¼à¥à¤¤ à¤Ÿà¥à¤°à¤¾à¤¯à¤² à¤¸à¤®à¤¾à¤ªà¥à¤¤' : 'âš ï¸ Trial Expired')
-                      : `${subscriptionStatus.planNameHi} â€¢ ${subscriptionStatus.daysRemaining} ${lang === 'hi' ? 'à¤¦à¤¿à¤¨ à¤¶à¥‡à¤·' : 'days left'}`}
+                      ? (lang === 'hi' ? '⚠️ मुफ़्त ट्रायल समाप्त' : '⚠️ Trial Expired')
+                      : `${subscriptionStatus.planNameHi} • ${subscriptionStatus.daysRemaining} ${lang === 'hi' ? 'दिन शेष' : 'days left'}`}
                   </Text>
                 </View>
               </View>
@@ -594,7 +592,7 @@ export const SettingsScreen = () => {
                   styles.subStatusBadgeText,
                   subscriptionStatus.isLocked ? styles.subStatusBadgeTextLocked : styles.subStatusBadgeTextActive
                 ]}>
-                  {subscriptionStatus.isLocked ? (lang === 'hi' ? 'à¤²à¥‰à¤•à¥à¤¡' : 'Locked') : (lang === 'hi' ? 'à¤¸à¤•à¥à¤°à¤¿à¤¯' : 'Active')}
+                  {subscriptionStatus.isLocked ? (lang === 'hi' ? 'लॉक्ड' : 'Locked') : (lang === 'hi' ? 'सक्रिय' : 'Active')}
                 </Text>
               </View>
             </View>
@@ -603,7 +601,7 @@ export const SettingsScreen = () => {
 
             <View style={styles.subPlanInfoRow}>
               <Text style={styles.subPlanExpiryLabel}>
-                {lang === 'hi' ? 'à¤¸à¤®à¤¾à¤ªà¥à¤¤à¤¿ à¤¤à¤¿à¤¥à¤¿ (Valid Until):' : 'Valid Until:'}
+                {lang === 'hi' ? 'समाप्ति तिथि (Valid Until):' : 'Valid Until:'}
               </Text>
               <Text style={styles.subPlanExpiryVal}>
                 {subscriptionStatus.expiryDateStr}
@@ -617,8 +615,8 @@ export const SettingsScreen = () => {
             >
               <Text style={styles.subUpgradeBtnText}>
                 {subscriptionStatus.isLocked
-                  ? (lang === 'hi' ? 'âš¡ à¤…à¤­à¥€ à¤¸à¤•à¥à¤°à¤¿à¤¯ à¤•à¤°à¥‡à¤‚ (Activate Now)' : 'âš¡ Activate Now')
-                  : (lang === 'hi' ? 'ðŸ”„ à¤¯à¥‹à¤œà¤¨à¤¾à¤à¤‚ à¤¦à¥‡à¤–à¥‡à¤‚ à¤µ à¤°à¤¿à¤¨à¥à¤¯à¥‚ à¤•à¤°à¥‡à¤‚ (View Plans)' : 'ðŸ”„ View Plans & Renew')}
+                  ? (lang === 'hi' ? '⚡ अभी सक्रिय करें (Activate Now)' : '⚡ Activate Now')
+                  : (lang === 'hi' ? '🔄 योजनाएं देखें व रिन्यू करें (View Plans)' : '🔄 View Plans & Renew')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -637,7 +635,7 @@ export const SettingsScreen = () => {
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
             <Text style={[styles.langText, lang === 'en' && styles.langTextActive]}>
-              {lang === 'en' ? 'âœ“ ' : ''}English (EN)
+              {lang === 'en' ? '✓ ' : ''}English (EN)
             </Text>
           </TouchableOpacity>
 
@@ -645,20 +643,20 @@ export const SettingsScreen = () => {
             style={[styles.langBtn, lang === 'hi' && styles.langBtnActive]}
             onPress={async () => {
               await setLanguage('hi');
-              showAlert('à¤­à¤¾à¤·à¤¾ à¤¬à¤¦à¤²à¥€ à¤—à¤ˆ (Language Updated)', 'à¤à¤ª à¤•à¥€ à¤­à¤¾à¤·à¤¾ à¤¹à¤¿à¤‚à¤¦à¥€ à¤®à¥‡à¤‚ à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤•à¤° à¤¦à¥€ à¤—à¤ˆ à¤¹à¥ˆà¥¤');
+              showAlert('भाषा बदली गई (Language Updated)', 'ऐप की भाषा हिंदी में अपडेट कर दी गई है।');
             }}
             activeOpacity={0.7}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
             <Text style={[styles.langText, lang === 'hi' && styles.langTextActive]}>
-              {lang === 'hi' ? 'âœ“ ' : ''}à¤¹à¤¿à¤‚à¤¦à¥€ (Hindi)
+              {lang === 'hi' ? '✓ ' : ''}हिंदी (Hindi)
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Feature Permissions: Packet Milk & Dairy Add-ons */}
         <Text style={styles.sectionHeader}>
-          {lang === 'hi' ? 'ðŸ“¦ à¤ªà¥ˆà¤•à¥‡à¤Ÿ à¤¦à¥‚à¤§ à¤à¤µà¤‚ à¤¡à¥‡à¤¯à¤°à¥€ à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤¸à¥à¤µà¤¿à¤§à¤¾à¤à¤' : 'ðŸ“¦ Packet Milk & Dairy Products'}
+          {lang === 'hi' ? '📦 पैकेट दूध एवं डेयरी उत्पाद सुविधाएँ' : '📦 Packet Milk & Dairy Products'}
         </Text>
         <View style={styles.featureCard}>
           {/* Feature 1: Packet Milk Toggle */}
@@ -666,17 +664,17 @@ export const SettingsScreen = () => {
             <View style={{ flex: 1, paddingRight: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={styles.featureTitle}>
-                  {lang === 'hi' ? 'ðŸ“¦ à¤ªà¥ˆà¤•à¥‡à¤Ÿ à¤¦à¥‚à¤§ à¤¸à¥‡à¤µà¤¾' : 'ðŸ“¦ Packet Milk Service'}
+                  {lang === 'hi' ? '📦 पैकेट दूध सेवा' : '📦 Packet Milk Service'}
                 </Text>
                 {enablePacketMilk && (
                   <View style={styles.activePill}>
-                    <Text style={styles.activePillText}>{lang === 'hi' ? 'à¤¸à¤•à¥à¤°à¤¿à¤¯' : 'Active'}</Text>
+                    <Text style={styles.activePillText}>{lang === 'hi' ? 'सक्रिय' : 'Active'}</Text>
                   </View>
                 )}
               </View>
               <Text style={styles.featureDesc}>
                 {lang === 'hi'
-                  ? 'à¤®à¤¦à¤° à¤¡à¥‡à¤¯à¤°à¥€, à¤…à¤®à¥‚à¤², à¤µà¥‡à¤°à¤•à¤¾ à¤†à¤¦à¤¿ (à¤«à¥à¤² à¤•à¥à¤°à¥€à¤®, à¤Ÿà¥‹à¤¨à¥à¤¡) à¤ªà¥ˆà¤•à¥‡à¤Ÿ à¤¦à¥‚à¤§ à¤•à¥‡ à¤µà¤¿à¤•à¤²à¥à¤ª à¤—à¥à¤°à¤¾à¤¹à¤•à¥‹à¤‚ à¤•à¥‡ à¤²à¤¿à¤ à¤šà¤¾à¤²à¥‚ à¤•à¤°à¥‡à¤‚à¥¤'
+                  ? 'मदर डेयरी, अमूल, वेरका आदि (फुल क्रीम, टोन्ड) पैकेट दूध के विकल्प ग्राहकों के लिए चालू करें।'
                   : 'Enable branded packet milk options (Full Cream, Toned) like Mother Dairy, Amul, Verka for customers.'}
               </Text>
             </View>
@@ -686,7 +684,7 @@ export const SettingsScreen = () => {
               activeOpacity={0.8}
             >
               <Text style={styles.toggleBtnText}>
-                {enablePacketMilk ? (lang === 'hi' ? 'à¤šà¤¾à¤²à¥‚ âœ“' : 'ON âœ“') : (lang === 'hi' ? 'à¤¬à¤‚à¤¦ âœ•' : 'OFF âœ•')}
+                {enablePacketMilk ? (lang === 'hi' ? 'चालू ✓' : 'ON ✓') : (lang === 'hi' ? 'बंद ✕' : 'OFF ✕')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -698,17 +696,17 @@ export const SettingsScreen = () => {
             <View style={{ flex: 1, paddingRight: 10 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={styles.featureTitle}>
-                  {lang === 'hi' ? 'ðŸ§€ à¤ªà¤¨à¥€à¤°, à¤¦à¤¹à¥€, à¤˜à¥€ à¤†à¤¦à¤¿ à¤‰à¤¤à¥à¤ªà¤¾à¤¦' : 'ðŸ§€ Paneer, Dahi, Ghee Products'}
+                  {lang === 'hi' ? '🧀 पनीर, दही, घी आदि उत्पाद' : '🧀 Paneer, Dahi, Ghee Products'}
                 </Text>
                 {enableDairyAddons && (
                   <View style={styles.activePill}>
-                    <Text style={styles.activePillText}>{lang === 'hi' ? 'à¤¸à¤•à¥à¤°à¤¿à¤¯' : 'Active'}</Text>
+                    <Text style={styles.activePillText}>{lang === 'hi' ? 'सक्रिय' : 'Active'}</Text>
                   </View>
                 )}
               </View>
               <Text style={styles.featureDesc}>
                 {lang === 'hi'
-                  ? 'à¤°à¥‹à¤œà¤¼à¤¾à¤¨à¤¾ à¤¦à¥‚à¤§ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤ªà¤¨à¥€à¤°, à¤¤à¤¾à¤œà¤¾ à¤¦à¤¹à¥€, à¤¦à¥‡à¤¸à¥€ à¤˜à¥€ à¤”à¤° à¤›à¤¾à¤› à¤•à¥‹ à¤°à¤œà¤¿à¤¸à¥à¤Ÿà¤° à¤®à¥‡à¤‚ 1-à¤Ÿà¥ˆà¤ª à¤¸à¥‡ à¤œà¥‹à¤¡à¤¼à¤¨à¥‡ à¤•à¥€ à¤¸à¥à¤µà¤¿à¤§à¤¾à¥¤'
+                  ? 'रोज़ाना दूध के साथ पनीर, ताजा दही, देसी घी और छाछ को रजिस्टर में 1-टैप से जोड़ने की सुविधा।'
                   : 'Enable 1-tap add-on recording for Paneer, fresh Curd, Ghee, and Buttermilk on daily delivery.'}
               </Text>
             </View>
@@ -718,7 +716,7 @@ export const SettingsScreen = () => {
               activeOpacity={0.8}
             >
               <Text style={styles.toggleBtnText}>
-                {enableDairyAddons ? (lang === 'hi' ? 'à¤šà¤¾à¤²à¥‚ âœ“' : 'ON âœ“') : (lang === 'hi' ? 'à¤¬à¤‚à¤¦ âœ•' : 'OFF âœ•')}
+                {enableDairyAddons ? (lang === 'hi' ? 'चालू ✓' : 'ON ✓') : (lang === 'hi' ? 'बंद ✕' : 'OFF ✕')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -728,7 +726,7 @@ export const SettingsScreen = () => {
             <View style={styles.rateSetupBox}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={styles.rateSetupTitle}>
-                  âš™ï¸ {lang === 'hi' ? 'à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤¸à¥‚à¤šà¥€ (Products List)' : 'Manage Products'}
+                  ⚙️ {lang === 'hi' ? 'उत्पाद सूची (Products List)' : 'Manage Products'}
                 </Text>
                 <TouchableOpacity
                   style={{ backgroundColor: '#0f172a', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
@@ -741,7 +739,7 @@ export const SettingsScreen = () => {
                   }}
                 >
                   <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>
-                    + {lang === 'hi' ? 'à¤¨à¤¯à¤¾ à¤‰à¤¤à¥à¤ªà¤¾à¤¦' : 'Add Product'}
+                    + {lang === 'hi' ? 'नया उत्पाद' : 'Add Product'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -755,11 +753,11 @@ export const SettingsScreen = () => {
                     }}
                     style={{ marginRight: 8 }}
                   >
-                    <Text style={{ fontSize: 18 }}>{prod.isActive ? 'âœ…' : 'â¬œ'}</Text>
+                    <Text style={{ fontSize: 18 }}>{prod.isActive ? '✅' : '⬜'}</Text>
                   </TouchableOpacity>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{prod.name}</Text>
-                    <Text style={{ fontSize: 11, color: '#64748b' }}>â‚¹{prod.defaultRate} / {prod.unit}</Text>
+                    <Text style={{ fontSize: 11, color: '#64748b' }}>₹{prod.defaultRate} / {prod.unit}</Text>
                   </View>
                   <TouchableOpacity
                     style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 7, marginRight: 6 }}
@@ -771,32 +769,32 @@ export const SettingsScreen = () => {
                       setProductModalVisible(true);
                     }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#1e40af' }}>âœï¸ {lang === 'hi' ? 'à¤¬à¤¦à¤²à¥‡à¤‚' : 'Edit'}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#1e40af' }}>✏️ {lang === 'hi' ? 'बदलें' : 'Edit'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
                       confirmAction(
-                        lang === 'hi' ? 'à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤¹à¤Ÿà¤¾à¤à¤‚' : 'Delete Product',
-                        lang === 'hi' ? `"${prod.name}" à¤•à¥‹ à¤¸à¥‚à¤šà¥€ à¤¸à¥‡ à¤¹à¤Ÿà¤¾à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚?` : `Remove "${prod.name}" from list?`,
+                        lang === 'hi' ? 'उत्पाद हटाएं' : 'Delete Product',
+                        lang === 'hi' ? `"${prod.name}" को सूची से हटाना चाहते हैं?` : `Remove "${prod.name}" from list?`,
                         () => {
                           const updated = customProducts.filter(p => p.id !== prod.id);
                           setCustomProducts(updated);
                           saveFeatureSettings(enablePacketMilk, enableDairyAddons, undefined, undefined, undefined, updated);
                         },
-                        undefined,
-                        lang === 'hi' ? 'à¤¹à¤Ÿà¤¾à¤à¤‚' : 'Delete',
+                        lang === 'hi' ? 'हटाएं' : 'Delete',
+                        lang === 'hi' ? 'रद्द करें' : 'Cancel',
                         true
                       );
                     }}
                     style={{ backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fca5a5', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7 }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>ðŸ—‘ï¸</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>🗑️</Text>
                   </TouchableOpacity>
                 </View>
               ))}
               {customProducts.length === 0 && (
                 <Text style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, paddingVertical: 10 }}>
-                  {lang === 'hi' ? 'à¤•à¥‹à¤ˆ à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤¨à¤¹à¥€à¤‚à¥¤ "+ à¤¨à¤¯à¤¾ à¤‰à¤¤à¥à¤ªà¤¾à¤¦" à¤¸à¥‡ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚à¥¤' : 'No products. Tap "+ Add Product" to add.'}
+                  {lang === 'hi' ? 'कोई उत्पाद नहीं। "+ नया उत्पाद" से जोड़ें।' : 'No products. Tap "+ Add Product" to add.'}
                 </Text>
               )}
             </View>
@@ -805,16 +803,16 @@ export const SettingsScreen = () => {
 
         {/* UPI QR Payment & WhatsApp Broadcast Setup */}
         <Text style={styles.sectionHeader}>
-          {lang === 'hi' ? 'ðŸ’³ UPI QR à¤ªà¥‡à¤®à¥‡à¤‚à¤Ÿ à¤à¤µà¤‚ à¤¬à¥à¤°à¥‰à¤¡à¤•à¤¾à¤¸à¥à¤Ÿ à¤¸à¥‡à¤Ÿà¤¿à¤‚à¤—à¥à¤¸' : 'ðŸ’³ UPI QR Payment & Broadcast Setup'}
+          {lang === 'hi' ? '💳 UPI QR पेमेंट एवं ब्रॉडकास्ट सेटिंग्स' : '💳 UPI QR Payment & Broadcast Setup'}
         </Text>
         <View style={styles.featureCard}>
           <View style={{ marginBottom: 12 }}>
             <Text style={styles.featureTitle}>
-              {lang === 'hi' ? 'ðŸ“± à¤†à¤ªà¤•à¥€ UPI ID (à¤¬à¤¿à¤² à¤•à¥‡ à¤¸à¤¾à¤¥ à¤‘à¤Ÿà¥‹-à¤…à¤®à¤¾à¤‰à¤‚à¤Ÿ QR à¤•à¥‹à¤¡ à¤­à¥‡à¤œà¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤)' : 'ðŸ“± Your UPI ID (For Dynamic Amount Bill QR Scanner)'}
+              {lang === 'hi' ? '📱 आपकी UPI ID (बिल के साथ ऑटो-अमाउंट QR कोड भेजने के लिए)' : '📱 Your UPI ID (For Dynamic Amount Bill QR Scanner)'}
             </Text>
             <Text style={[styles.featureDesc, { marginBottom: 8 }]}>
               {lang === 'hi'
-                ? 'à¤¯à¤¹à¤¾à¤ à¤…à¤ªà¤¨à¥€ UPI ID à¤¡à¤¾à¤²à¥‡à¤‚ (à¤œà¥ˆà¤¸à¥‡: 9876543210@ybl à¤¯à¤¾ @paytm)à¥¤ à¤œà¤¬ à¤†à¤ª à¤•à¤¿à¤¸à¥€ à¤—à¥à¤°à¤¾à¤¹à¤• à¤•à¥‹ à¤¬à¤•à¤¾à¤¯à¤¾ à¤¬à¤¿à¤² à¤­à¥‡à¤œà¥‡à¤‚à¤—à¥‡, à¤¤à¥‹ à¤‰à¤¸à¥€ à¤¬à¤•à¤¾à¤¯à¤¾ à¤°à¤¾à¤¶à¤¿ à¤•à¤¾ QR à¤•à¥‹à¤¡ à¤”à¤° Pay à¤²à¤¿à¤‚à¤• à¤…à¤ªà¤¨à¥‡-à¤†à¤ª à¤šà¤²à¤¾ à¤œà¤¾à¤à¤—à¤¾!'
+                ? 'यहाँ अपनी UPI ID डालें (जैसे: 9876543210@ybl या @paytm)। जब आप किसी ग्राहक को बकाया बिल भेजेंगे, तो उसी बकाया राशि का QR कोड और Pay लिंक अपने-आप चला जाएगा!'
                 : 'Enter your UPI ID (e.g. 9876543210@ybl or @paytm). When you send a due bill, a dynamic QR code pre-filled with the exact due amount will be sent automatically!'}
             </Text>
             <TextInput
@@ -831,15 +829,15 @@ export const SettingsScreen = () => {
 
           <View style={{ marginTop: 10, marginBottom: 12 }}>
             <Text style={styles.featureTitle}>
-              {lang === 'hi' ? 'ðŸ“¢ à¤¸à¥à¤¬à¤¹ à¤”à¤° à¤¶à¤¾à¤® à¤•à¤¾ WhatsApp Group / Channel à¤²à¤¿à¤‚à¤• (à¤µà¥ˆà¤•à¤²à¥à¤ªà¤¿à¤•)' : 'ðŸ“¢ Morning & Evening WhatsApp Group Links (Optional)'}
+              {lang === 'hi' ? '📢 सुबह और शाम का WhatsApp Group / Channel लिंक (वैकल्पिक)' : '📢 Morning & Evening WhatsApp Group Links (Optional)'}
             </Text>
             <Text style={[styles.featureDesc, { marginBottom: 8 }]}>
               {lang === 'hi'
-                ? 'à¤¯à¤¦à¤¿ à¤†à¤ªà¤¨à¥‡ à¤¸à¥à¤¬à¤¹ à¤¯à¤¾ à¤¶à¤¾à¤® à¤•à¥€ à¤¶à¤¿à¤«à¥à¤Ÿ à¤•à¤¾ WhatsApp à¤—à¥à¤°à¥à¤ª à¤¬à¤¨à¤¾à¤¯à¤¾ à¤¹à¥ˆ, à¤¤à¥‹ à¤‰à¤¸à¤•à¤¾ à¤²à¤¿à¤‚à¤• à¤¯à¤¹à¤¾à¤ à¤¸à¥‡à¤µ à¤•à¤°à¥‡à¤‚ à¤¤à¤¾à¤•à¤¿ 1-à¤•à¥à¤²à¤¿à¤• à¤®à¥‡à¤‚ à¤—à¥à¤°à¥à¤ª à¤–à¥à¤²à¥‡à¥¤'
+                ? 'यदि आपने सुबह या शाम की शिफ्ट का WhatsApp ग्रुप बनाया है, तो उसका लिंक यहाँ सेव करें ताकि 1-क्लिक में ग्रुप खुले।'
                 : 'Save your Morning/Evening WhatsApp group invite links for 1-click daily alerts.'}
             </Text>
             <Text style={[styles.rateColLabel, { textAlign: 'left', marginBottom: 4 }]}>
-              ðŸŒ… {lang === 'hi' ? 'à¤¸à¥à¤¬à¤¹ à¤¶à¤¿à¤«à¥à¤Ÿ à¤—à¥à¤°à¥à¤ª à¤²à¤¿à¤‚à¤• (Morning Group Link):' : 'Morning Shift Group Link:'}
+              🌅 {lang === 'hi' ? 'सुबह शिफ्ट ग्रुप लिंक (Morning Group Link):' : 'Morning Shift Group Link:'}
             </Text>
             <TextInput
               style={[styles.rateInputField, { textAlign: 'left', paddingHorizontal: 12, marginBottom: 10 }]}
@@ -850,7 +848,7 @@ export const SettingsScreen = () => {
               onChangeText={setMorningGroupLink}
             />
             <Text style={[styles.rateColLabel, { textAlign: 'left', marginBottom: 4 }]}>
-              ðŸŒ† {lang === 'hi' ? 'à¤¶à¤¾à¤® à¤¶à¤¿à¤«à¥à¤Ÿ à¤—à¥à¤°à¥à¤ª à¤²à¤¿à¤‚à¤• (Evening Group Link):' : 'Evening Shift Group Link:'}
+              🌆 {lang === 'hi' ? 'शाम शिफ्ट ग्रुप लिंक (Evening Group Link):' : 'Evening Shift Group Link:'}
             </Text>
             <TextInput
               style={[styles.rateInputField, { textAlign: 'left', paddingHorizontal: 12 }]}
@@ -868,18 +866,18 @@ export const SettingsScreen = () => {
             activeOpacity={0.8}
           >
             <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>
-              ðŸ’¾ {lang === 'hi' ? 'UPI à¤”à¤° à¤¬à¥à¤°à¥‰à¤¡à¤•à¤¾à¤¸à¥à¤Ÿ à¤¸à¥‡à¤Ÿà¤¿à¤‚à¤—à¥à¤¸ à¤¸à¥‡à¤µ à¤•à¤°à¥‡à¤‚' : 'Save UPI & Broadcast Settings'}
+              💾 {lang === 'hi' ? 'UPI और ब्रॉडकास्ट सेटिंग्स सेव करें' : 'Save UPI & Broadcast Settings'}
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Permanent Storage & Database Status */}
-        <Text style={styles.sectionHeader}>ðŸ“ Permanent Storage & Database</Text>
+        <Text style={styles.sectionHeader}>📁 Permanent Storage & Database</Text>
         <View style={styles.storageStatusCard}>
           <View style={styles.storageHeaderRow}>
             <Text style={styles.storageTitle}>Device Database Status</Text>
             <View style={styles.persistentBadge}>
-              <Text style={styles.persistentBadgeText}>â— Permanent (Offline)</Text>
+              <Text style={styles.persistentBadgeText}>● Permanent (Offline)</Text>
             </View>
           </View>
           <Text style={styles.storageSubtext}>
@@ -907,7 +905,7 @@ export const SettingsScreen = () => {
               onPress={() => setInspectorVisible(true)}
               activeOpacity={0.7}
             >
-              <Text style={styles.inspectBtnText}>ðŸ” Inspect</Text>
+              <Text style={styles.inspectBtnText}>🔍 Inspect</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -915,7 +913,7 @@ export const SettingsScreen = () => {
               onPress={handleExportBackup}
               activeOpacity={0.7}
             >
-              <Text style={styles.shareBackupBtnText}>ðŸ“¤ Backup</Text>
+              <Text style={styles.shareBackupBtnText}>📤 Backup</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -923,20 +921,20 @@ export const SettingsScreen = () => {
               onPress={handleImportBackup}
               activeOpacity={0.7}
             >
-              <Text style={styles.restoreBackupBtnText}>ðŸ“¥ Restore</Text>
+              <Text style={styles.restoreBackupBtnText}>📥 Restore</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Firebase Cloud Auto-Sync Card */}
         <Text style={styles.sectionHeader}>
-          {lang === 'hi' ? 'â˜ï¸ à¤•à¥à¤²à¤¾à¤‰à¤¡ à¤‘à¤Ÿà¥‹-à¤¸à¤¿à¤‚à¤• à¤à¤µà¤‚ à¤¬à¥ˆà¤•à¤…à¤ª' : 'â˜ï¸ Cloud Auto-Sync & Backup'}
+          {lang === 'hi' ? '☁️ क्लाउड ऑटो-सिंक एवं बैकअप' : '☁️ Cloud Auto-Sync & Backup'}
         </Text>
         <View style={styles.cloudCard}>
           <View style={styles.storageHeaderRow}>
             <View>
               <Text style={styles.storageTitle}>
-                {lang === 'hi' ? 'à¤•à¥à¤²à¤¾à¤‰à¤¡ à¤‘à¤Ÿà¥‹-à¤¸à¤¿à¤‚à¤•' : 'Firebase Cloud Sync'}
+                {lang === 'hi' ? 'क्लाउड ऑटो-सिंक' : 'Firebase Cloud Sync'}
               </Text>
               <Text style={styles.cloudProjectText}>
                 {supplier?.phone ? `ID: supp_${supplier.phone}` : 'Project: diaryapp-28278'}
@@ -957,24 +955,24 @@ export const SettingsScreen = () => {
                 syncStatus === 'error' && styles.badgeErrorText,
               ]}>
                 {syncStatus === 'syncing'
-                  ? (lang === 'hi' ? 'â— à¤¸à¤¿à¤‚à¤• à¤¹à¥‹ à¤°à¤¹à¤¾ à¤¹à¥ˆ...' : 'â— Syncing...')
+                  ? (lang === 'hi' ? '● सिंक हो रहा है...' : '● Syncing...')
                   : syncStatus === 'offline'
-                  ? (lang === 'hi' ? 'â— à¤‘à¤«à¤¼à¤²à¤¾à¤‡à¤¨ (à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤)' : 'â— Offline (Saved)')
+                  ? (lang === 'hi' ? '● ऑफ़लाइन (सुरक्षित)' : '● Offline (Saved)')
                   : syncStatus === 'error'
-                  ? (lang === 'hi' ? 'â— à¤¸à¤¿à¤‚à¤• à¤¤à¥à¤°à¥à¤Ÿà¤¿' : 'â— Sync Error')
-                  : (lang === 'hi' ? 'â— à¤¸à¤¿à¤‚à¤• à¤ªà¥‚à¤°à¥à¤£' : 'â— Live Synced')}
+                  ? (lang === 'hi' ? '● सिंक त्रुटि' : '● Sync Error')
+                  : (lang === 'hi' ? '● सिंक पूर्ण' : '● Live Synced')}
               </Text>
             </View>
           </View>
           <Text style={styles.storageSubtext}>
             {lang === 'hi'
-              ? 'à¤†à¤ªà¤•à¥‡ à¤¸à¤­à¥€ à¤—à¥à¤°à¤¾à¤¹à¤•, à¤¦à¥‚à¤§ à¤•à¥€ à¤à¤‚à¤Ÿà¥à¤°à¥€ à¤”à¤° à¤­à¥à¤—à¤¤à¤¾à¤¨ à¤¬à¥ˆà¤•à¤—à¥à¤°à¤¾à¤‰à¤‚à¤¡ à¤®à¥‡à¤‚ à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤ à¤¸à¤¿à¤‚à¤• à¤¹à¥‹à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤ à¤œà¤¬ à¤†à¤ª à¤‘à¤«à¤¼à¤²à¤¾à¤‡à¤¨ à¤¹à¥‹à¤¤à¥‡ à¤¹à¥ˆà¤‚, à¤¤à¤¬ à¤­à¥€ à¤¡à¥‡à¤Ÿà¤¾ à¤¡à¤¿à¤µà¤¾à¤‡à¤¸ à¤®à¥‡à¤‚ 100% à¤¸à¥à¤°à¤•à¥à¤·à¤¿à¤¤ à¤°à¤¹à¤¤à¤¾ à¤¹à¥ˆà¥¤'
+              ? 'आपके सभी ग्राहक, दूध की एंट्री और भुगतान बैकग्राउंड में सुरक्षित सिंक होते हैं। जब आप ऑफ़लाइन होते हैं, तब भी डेटा डिवाइस में 100% सुरक्षित रहता है।'
               : 'All customers, milk entries, and dues sync automatically to the cloud in real-time. Full offline support guaranteed.'}
           </Text>
 
           {lastSyncedAt && (
             <Text style={styles.lastSyncText}>
-              ðŸ•’ {lang === 'hi' ? 'à¤…à¤‚à¤¤à¤¿à¤® à¤¸à¤¿à¤‚à¤•:' : 'Last Synced:'} {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              🕒 {lang === 'hi' ? 'अंतिम सिंक:' : 'Last Synced:'} {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </Text>
           )}
 
@@ -982,7 +980,7 @@ export const SettingsScreen = () => {
             <View style={styles.syncingBox}>
               <ActivityIndicator size="small" color="#ea580c" />
               <Text style={styles.syncingText}>
-                {lang === 'hi' ? 'à¤•à¥à¤²à¤¾à¤‰à¤¡ à¤¸à¥‡ à¤¡à¥‡à¤Ÿà¤¾ à¤ªà¥à¤°à¥‹à¤¸à¥‡à¤¸ à¤¹à¥‹ à¤°à¤¹à¤¾ à¤¹à¥ˆ...' : 'Processing with Cloud...'}
+                {lang === 'hi' ? 'क्लाउड से डेटा प्रोसेस हो रहा है...' : 'Processing with Cloud...'}
               </Text>
             </View>
           ) : (
@@ -993,7 +991,7 @@ export const SettingsScreen = () => {
                 activeOpacity={0.8}
               >
                 <Text style={styles.cloudUploadBtnText}>
-                  ðŸ”„ {lang === 'hi' ? 'à¤…à¤­à¥€ à¤¸à¤¿à¤‚à¤• à¤•à¤°à¥‡à¤‚' : 'Sync Now'}
+                  🔄 {lang === 'hi' ? 'अभी सिंक करें' : 'Sync Now'}
                 </Text>
               </TouchableOpacity>
 
@@ -1003,7 +1001,7 @@ export const SettingsScreen = () => {
                 activeOpacity={0.8}
               >
                 <Text style={styles.cloudDownloadBtnText}>
-                  â¬‡ï¸ {lang === 'hi' ? 'à¤°à¤¿à¤¸à¥à¤Ÿà¥‹à¤°' : 'Restore'}
+                  ⬇️ {lang === 'hi' ? 'रिस्टोर' : 'Restore'}
                 </Text>
               </TouchableOpacity>
 
@@ -1012,7 +1010,7 @@ export const SettingsScreen = () => {
                 onPress={handleTestCloudConnection}
                 activeOpacity={0.8}
               >
-                <Text style={styles.cloudPingBtnText}>âš¡ Ping</Text>
+                <Text style={styles.cloudPingBtnText}>⚡ Ping</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1027,12 +1025,12 @@ export const SettingsScreen = () => {
           activeOpacity={0.7}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Text style={styles.menuIcon}>ðŸ‘¥</Text>
+          <Text style={styles.menuIcon}>👥</Text>
           <View style={styles.menuContent}>
             <Text style={[styles.menuTitle, { color: '#f59e0b' }]}>{t.removeAllCustomers || 'Remove All Customers'}</Text>
             <Text style={styles.menuSubtitle}>Wipe customer list clean ({customers.length} currently)</Text>
           </View>
-          <Text style={styles.chevron}>â€º</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1041,12 +1039,12 @@ export const SettingsScreen = () => {
           activeOpacity={0.7}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Text style={styles.menuIcon}>ðŸ”„</Text>
+          <Text style={styles.menuIcon}>🔄</Text>
           <View style={styles.menuContent}>
             <Text style={[styles.menuTitle, { color: '#ef4444' }]}>{t.resetAllRecords || 'Reset All Records'}</Text>
             <Text style={styles.menuSubtitle}>Clear all customers, milk register & payments</Text>
           </View>
-          <Text style={styles.chevron}>â€º</Text>
+          <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
 
 
@@ -1057,7 +1055,7 @@ export const SettingsScreen = () => {
           activeOpacity={0.7}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Text style={styles.menuIcon}>ðŸ“²</Text>
+          <Text style={styles.menuIcon}>📲</Text>
           <View style={styles.menuContent}>
             <Text style={[styles.menuTitle, { color: '#16a34a', fontWeight: 'bold' }]}>Install App on Phone</Text>
             <Text style={styles.menuSubtitle}>Add to Home Screen for 1-tap offline use</Text>
@@ -1072,24 +1070,24 @@ export const SettingsScreen = () => {
           activeOpacity={0.7}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Text style={styles.menuIcon}>ðŸ”„</Text>
+          <Text style={styles.menuIcon}>🔄</Text>
           <View style={styles.menuContent}>
             <Text style={[styles.menuTitle, { color: '#0284c7', fontWeight: 'bold' }]}>
-              {lang === 'hi' ? 'à¤¨à¤¯à¤¾ à¤…à¤ªà¤¡à¥‡à¤Ÿ à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚ (Check Updates)' : 'Check for Updates'}
+              {lang === 'hi' ? 'नया अपडेट लोड करें (Check Updates)' : 'Check for Updates'}
             </Text>
             <Text style={styles.menuSubtitle}>
-              {lang === 'hi' ? 'à¤¤à¤¾à¤œà¤¾ à¤¬à¤¦à¤²à¤¾à¤µ à¤”à¤° à¤¨à¤ à¤«à¥€à¤šà¤°à¥à¤¸ à¤¤à¥à¤°à¤‚à¤¤ à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚' : 'Get latest features, fixes & screen layouts'}
+              {lang === 'hi' ? 'ताजा बदलाव और नए फीचर्स तुरंत लोड करें' : 'Get latest features, fixes & screen layouts'}
             </Text>
           </View>
           <Text style={[styles.chevron, { color: '#0284c7', fontWeight: 'bold' }]}>
-            {lang === 'hi' ? 'à¤…à¤ªà¤¡à¥‡à¤Ÿ' : 'Update'}
+            {lang === 'hi' ? 'अपडेट' : 'Update'}
           </Text>
         </TouchableOpacity>
 
         {/* App Version Info */}
         <View style={styles.infoCard}>
           <Text style={styles.infoTitle}>Dairy App v1.2.0</Text>
-          <Text style={styles.infoSubtitle}>React Native â€¢ Instant Touch & Responsive</Text>
+          <Text style={styles.infoSubtitle}>React Native • Instant Touch & Responsive</Text>
         </View>
 
         {/* Logout / Login Action Button */}
@@ -1110,7 +1108,7 @@ export const SettingsScreen = () => {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={[styles.logoutText, { color: '#ffffff' }]}>
-              ðŸ” {lang === 'hi' ? 'à¤²à¥‰à¤— à¤‡à¤¨ à¤¯à¤¾ à¤¸à¤¾à¤‡à¤¨ à¤…à¤ª à¤•à¤°à¥‡à¤‚ (Login / Sign Up)' : 'Login or Sign Up'}
+              🔐 {lang === 'hi' ? 'लॉग इन या साइन अप करें (Login / Sign Up)' : 'Login or Sign Up'}
             </Text>
           </TouchableOpacity>
         )}
@@ -1121,17 +1119,17 @@ export const SettingsScreen = () => {
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
             <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 16 }}>
-              {editingProduct ? (lang === 'hi' ? 'âœï¸ à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤¬à¤¦à¤²à¥‡à¤‚' : 'âœï¸ Edit Product') : (lang === 'hi' ? '+ à¤¨à¤¯à¤¾ à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚' : '+ Add New Product')}
+              {editingProduct ? (lang === 'hi' ? '✏️ उत्पाद बदलें' : '✏️ Edit Product') : (lang === 'hi' ? '+ नया उत्पाद जोड़ें' : '+ Add New Product')}
             </Text>
-            <Text style={styles.rateColLabel}>{lang === 'hi' ? 'à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤•à¤¾ à¤¨à¤¾à¤®:' : 'Product Name:'}</Text>
+            <Text style={styles.rateColLabel}>{lang === 'hi' ? 'उत्पाद का नाम:' : 'Product Name:'}</Text>
             <TextInput
               style={[styles.rateInputField, { textAlign: 'left', paddingHorizontal: 12, marginBottom: 12 }]}
-              placeholder={lang === 'hi' ? 'à¤œà¥ˆà¤¸à¥‡: à¤–à¥‹à¤¯à¤¾, à¤²à¤¸à¥à¤¸à¥€, à¤®à¤•à¥à¤–à¤¨...' : 'e.g. Khoya, Lassi, Butter...'}
+              placeholder={lang === 'hi' ? 'जैसे: खोया, लस्सी, मक्खन...' : 'e.g. Khoya, Lassi, Butter...'}
               placeholderTextColor="#94a3b8"
               value={prodName}
               onChangeText={setProdName}
             />
-            <Text style={styles.rateColLabel}>{lang === 'hi' ? 'à¤‡à¤•à¤¾à¤ˆ (Unit):' : 'Unit:'}</Text>
+            <Text style={styles.rateColLabel}>{lang === 'hi' ? 'इकाई (Unit):' : 'Unit:'}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
               {(['kg', 'gm', 'pkt', 'litre', 'piece', 'cup'] as const).map(u => (
                 <TouchableOpacity
@@ -1143,7 +1141,7 @@ export const SettingsScreen = () => {
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.rateColLabel}>{lang === 'hi' ? `à¤¡à¤¿à¤«à¤¼à¥‰à¤²à¥à¤Ÿ à¤°à¥‡à¤Ÿ (â‚¹ per ${prodUnit}):` : `Default Rate (â‚¹ per ${prodUnit}):`}</Text>
+            <Text style={styles.rateColLabel}>{lang === 'hi' ? `डिफ़ॉल्ट रेट (₹ per ${prodUnit}):` : `Default Rate (₹ per ${prodUnit}):`}</Text>
             <TextInput
               style={[styles.rateInputField, { textAlign: 'left', paddingHorizontal: 12, marginBottom: 16 }]}
               placeholder="e.g. 360"
@@ -1157,14 +1155,14 @@ export const SettingsScreen = () => {
                 style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
                 onPress={() => setProductModalVisible(false)}
               >
-                <Text style={{ fontWeight: '700', color: '#64748b' }}>{lang === 'hi' ? 'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚' : 'Cancel'}</Text>
+                <Text style={{ fontWeight: '700', color: '#64748b' }}>{lang === 'hi' ? 'रद्द करें' : 'Cancel'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ flex: 2, backgroundColor: '#16a34a', paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
                 onPress={() => {
                   const trimName = prodName.trim();
                   if (!trimName) {
-                    showAlert(lang === 'hi' ? 'à¤¨à¤¾à¤® à¤œà¤¼à¤°à¥‚à¤°à¥€ à¤¹à¥ˆ' : 'Name Required', lang === 'hi' ? 'à¤‰à¤¤à¥à¤ªà¤¾à¤¦ à¤•à¤¾ à¤¨à¤¾à¤® à¤²à¤¿à¤–à¥‡à¤‚à¥¤' : 'Please enter product name.');
+                    showAlert(lang === 'hi' ? 'नाम ज़रूरी है' : 'Name Required', lang === 'hi' ? 'उत्पाद का नाम लिखें।' : 'Please enter product name.');
                     return;
                   }
                   const rate = parseFloat(prodRate) || 0;
@@ -1187,7 +1185,7 @@ export const SettingsScreen = () => {
                 }}
               >
                 <Text style={{ fontWeight: '800', color: '#fff', fontSize: 14 }}>
-                  {lang === 'hi' ? 'âœ“ à¤¸à¥‡à¤µ à¤•à¤°à¥‡à¤‚' : 'âœ“ Save Product'}
+                  {lang === 'hi' ? '✓ सेव करें' : '✓ Save Product'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1214,7 +1212,7 @@ export const SettingsScreen = () => {
                 style={styles.closeBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.closeBtnText}>âœ•</Text>
+                <Text style={styles.closeBtnText}>✕</Text>
               </TouchableOpacity>
             </View>
 
@@ -1222,13 +1220,13 @@ export const SettingsScreen = () => {
             <View style={styles.inspectorBanner}>
               <Text style={styles.bannerBold}>Where is data permanently saved?</Text>
               <Text style={styles.bannerText}>
-                â€¢ Device Storage: Internal Android SQLite sandbox (`/data/data/.../databases/RKStorage`).
+                • Device Storage: Internal Android SQLite sandbox (`/data/data/.../databases/RKStorage`).
               </Text>
               <Text style={styles.bannerText}>
-                â€¢ Survives: App closing, phone reboot, battery death, and offline usage.
+                • Survives: App closing, phone reboot, battery death, and offline usage.
               </Text>
               <Text style={styles.bannerText}>
-                â€¢ Cloud: Pre-configured for Firebase Firestore sync in `src/config/firebase.ts`.
+                • Cloud: Pre-configured for Firebase Firestore sync in `src/config/firebase.ts`.
               </Text>
             </View>
 
@@ -1268,7 +1266,7 @@ export const SettingsScreen = () => {
                     <Text style={styles.verifyTestStep}>1. Notice customer count above ({customers.length}).</Text>
                     <Text style={styles.verifyTestStep}>2. Swipe app away from Android Recent Apps to kill it.</Text>
                     <Text style={styles.verifyTestStep}>3. Turn off Wi-Fi and Mobile Data.</Text>
-                    <Text style={styles.verifyTestStep}>4. Reopen the app â€” all customers, entries, and dues remain 100% intact!</Text>
+                    <Text style={styles.verifyTestStep}>4. Reopen the app — all customers, entries, and dues remain 100% intact!</Text>
                   </View>
                 </View>
               )}
@@ -1298,7 +1296,7 @@ export const SettingsScreen = () => {
                 onPress={handleExportBackup}
                 activeOpacity={0.8}
               >
-                <Text style={styles.footerShareBtnText}>ðŸ“¤ Share Full Backup (.json)</Text>
+                <Text style={styles.footerShareBtnText}>📤 Share Full Backup (.json)</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1321,28 +1319,28 @@ export const SettingsScreen = () => {
         <View style={styles.editModalOverlay}>
           <View style={styles.editModalContent}>
             <Text style={styles.editModalTitle}>
-              {lang === 'hi' ? 'à¤¡à¥‡à¤¯à¤°à¥€ à¤ªà¥à¤°à¥‹à¤«à¤¼à¤¾à¤‡à¤² à¤¸à¤‚à¤ªà¤¾à¤¦à¤¿à¤¤ à¤•à¤°à¥‡à¤‚' : 'Edit Dairy Profile'}
+              {lang === 'hi' ? 'डेयरी प्रोफ़ाइल संपादित करें' : 'Edit Dairy Profile'}
             </Text>
 
-            <Text style={styles.inputLabel}>{lang === 'hi' ? 'à¤¸à¤ªà¥à¤²à¤¾à¤¯à¤° à¤•à¤¾ à¤¨à¤¾à¤®' : 'Supplier Name'} *</Text>
+            <Text style={styles.inputLabel}>{lang === 'hi' ? 'सप्लायर का नाम' : 'Supplier Name'} *</Text>
             <TextInput
               style={styles.inputField}
               value={editName}
               onChangeText={setEditName}
-              placeholder={lang === 'hi' ? 'à¤‰à¤¦à¤¾. à¤¸à¥‹à¤®à¥‡à¤µà¥€à¤°' : 'e.g. Ramesh'}
+              placeholder={lang === 'hi' ? 'उदा. सोमेवीर' : 'e.g. Ramesh'}
               placeholderTextColor="#94a3b8"
             />
 
-            <Text style={styles.inputLabel}>{lang === 'hi' ? 'à¤¡à¥‡à¤¯à¤°à¥€ / à¤¬à¤¿à¤œà¤¼à¤¨à¥‡à¤¸ à¤•à¤¾ à¤¨à¤¾à¤®' : 'Dairy / Farm Name'} *</Text>
+            <Text style={styles.inputLabel}>{lang === 'hi' ? 'डेयरी / बिज़नेस का नाम' : 'Dairy / Farm Name'} *</Text>
             <TextInput
               style={styles.inputField}
               value={editBusinessName}
               onChangeText={setEditBusinessName}
-              placeholder={lang === 'hi' ? 'à¤‰à¤¦à¤¾. à¤•à¥ƒà¤·à¥à¤£à¤¾ à¤¡à¥‡à¤¯à¤°à¥€' : 'e.g. Krishna Dairy'}
+              placeholder={lang === 'hi' ? 'उदा. कृष्णा डेयरी' : 'e.g. Krishna Dairy'}
               placeholderTextColor="#94a3b8"
             />
 
-            <Text style={styles.inputLabel}>{lang === 'hi' ? 'à¤®à¥‹à¤¬à¤¾à¤‡à¤² à¤¨à¤‚à¤¬à¤° (10 à¤…à¤‚à¤•)' : 'Phone Number (10 Digits)'} *</Text>
+            <Text style={styles.inputLabel}>{lang === 'hi' ? 'मोबाइल नंबर (10 अंक)' : 'Phone Number (10 Digits)'} *</Text>
             <TextInput
               style={styles.inputField}
               value={editPhone}
@@ -1360,7 +1358,7 @@ export const SettingsScreen = () => {
                 disabled={isSavingProfile}
                 activeOpacity={0.7}
               >
-                <Text style={styles.cancelBtnText}>{lang === 'hi' ? 'à¤°à¤¦à¥à¤¦ à¤•à¤°à¥‡à¤‚' : 'Cancel'}</Text>
+                <Text style={styles.cancelBtnText}>{lang === 'hi' ? 'रद्द करें' : 'Cancel'}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1372,7 +1370,7 @@ export const SettingsScreen = () => {
                 {isSavingProfile ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text style={styles.saveBtnText}>{lang === 'hi' ? 'à¤¸à¤¹à¥‡à¤œà¥‡à¤‚' : 'Save'}</Text>
+                  <Text style={styles.saveBtnText}>{lang === 'hi' ? 'सहेजें' : 'Save'}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -2007,4 +2005,3 @@ const styles = StyleSheet.create({
     color: '#ffffff'
   }
 });
-
