@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
   BackHandler
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import * as Contacts from 'expo-contacts';
 import { Contact } from 'expo-contacts';
 import { useApp } from '../../context/AppContext';
@@ -74,6 +74,7 @@ const cleanPhoneInput = (raw?: string | null): string => {
 };
 
 export const CustomerListScreen = () => {
+  const route = useRoute<any>();
   const { t, lang, customers, refreshCustomers, milkEntries, refreshMilkEntries, payments, refreshPayments, subSuppliers, refreshSubSuppliers, milkInwardEntries, subSupplierPayments, supplier, requireAuth } = useApp();
   const [directoryMode, setDirectoryMode] = useState<'customers' | 'subSuppliers'>('customers');
   const [search, setSearch] = useState('');
@@ -612,6 +613,24 @@ export const CustomerListScreen = () => {
         setImportLitres('2.0');
         setImportRate('55');
       }
+
+  // Handle direct tab and modal opening from Dashboard quick links
+  useEffect(() => {
+    if (route?.params) {
+      const { action, directoryMode: targetDirMode } = route.params;
+      if (targetDirMode === 'subSuppliers') {
+        setDirectoryMode('subSuppliers');
+      } else if (targetDirMode === 'customers') {
+        setDirectoryMode('customers');
+      }
+
+      if (action === 'add_customer') {
+        openAddModal();
+      } else if (action === 'import_contacts') {
+        openContactsImportModal();
+      }
+    }
+  }, [route?.params]);
 
       if (Platform.OS === 'web') {
         // On Web/PWA, browser security does not allow silent background contact reading.

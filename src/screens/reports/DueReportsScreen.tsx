@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
@@ -83,9 +83,30 @@ export const DueReportsScreen = () => {
     requireAuth
   } = useApp();
   
+  const route = useRoute<any>();
   const now = new Date();
   const [partyMode, setPartyMode] = useState<'customers' | 'subSuppliers'>('customers');
   const [reportMode, setReportMode] = useState<ReportMode>('month');
+
+  // Handle direct navigation from Dashboard quick actions
+  useEffect(() => {
+    if (route?.params) {
+      const { reportMode: targetReportMode, partyMode: targetPartyMode, dueFilter: targetDueFilter } = route.params;
+      if (targetPartyMode === 'subSuppliers') {
+        setPartyMode('subSuppliers');
+      } else if (targetPartyMode === 'customers') {
+        setPartyMode('customers');
+      }
+
+      if (targetReportMode === 'month' || targetReportMode === 'custom' || targetReportMode === 'all') {
+        setReportMode(targetReportMode);
+      }
+
+      if (targetDueFilter) {
+        setDueFilter(targetDueFilter);
+      }
+    }
+  }, [route?.params]);
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth()); // 0-11
   const [pickerYear, setPickerYear] = useState<number>(now.getFullYear());

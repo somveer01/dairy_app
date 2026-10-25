@@ -567,7 +567,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '👤',
       bg: '#ecfdf5',
       border: '#a7f3d0',
-      onPress: () => navigation.navigate('CustomersTab')
+      onPress: () => navigation.navigate('CustomersTab', { action: 'add_customer', directoryMode: 'customers', _t: Date.now() })
     },
     {
       id: 'contacts',
@@ -576,7 +576,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '📱',
       bg: '#eff6ff',
       border: '#bfdbfe',
-      onPress: () => navigation.navigate('CustomersTab')
+      onPress: () => navigation.navigate('CustomersTab', { action: 'import_contacts', directoryMode: 'customers', _t: Date.now() })
     },
     {
       id: 'monthly_rep',
@@ -585,7 +585,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '📅',
       bg: '#f5f3ff',
       border: '#ddd6fe',
-      onPress: () => navigation.navigate('ReportsTab')
+      onPress: () => navigation.navigate('ReportsTab', { reportMode: 'month', partyMode: 'customers', _t: Date.now() })
     },
     {
       id: 'wa_bill',
@@ -594,7 +594,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '💬',
       bg: '#f0fdf4',
       border: '#bbf7d0',
-      onPress: () => navigation.navigate('ReportsTab')
+      onPress: () => navigation.navigate('ReportsTab', { reportMode: 'month', partyMode: 'customers', dueFilter: 'dueOnly', _t: Date.now() })
     },
     {
       id: 'procure',
@@ -612,7 +612,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '🚜',
       bg: '#fef9c3',
       border: '#fef08a',
-      onPress: () => navigation.navigate('CustomersTab')
+      onPress: () => navigation.navigate('CustomersTab', { directoryMode: 'subSuppliers', _t: Date.now() })
     }
   ];
 
