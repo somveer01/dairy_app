@@ -624,57 +624,10 @@ export const DashboardScreen = ({ navigation }: any) => {
         keyboardShouldPersistTaps="always"
         showsVerticalScrollIndicator={false}
       >
-        {/* Subscription / Free Trial Status Banner */}
-        {subscriptionStatus && (
-          <TouchableOpacity
-            style={[
-              styles.trialBanner,
-              subscriptionStatus.isLocked
-                ? styles.trialBannerLocked
-                : subscriptionStatus.status === 'trial_active'
-                ? styles.trialBannerTrial
-                : styles.trialBannerActive
-            ]}
-            onPress={openSubscriptionModal}
-            activeOpacity={0.8}
-          >
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.trialBannerTitle}>
-                  {subscriptionStatus.isLocked
-                    ? (isHindi ? '🔒 मुफ़्त ट्रायल समाप्त • नया दूध दर्ज करने के लिए प्लान चुनें' : '🔒 Free Trial Expired • Choose Plan to Continue')
-                    : subscriptionStatus.status === 'trial_active'
-                    ? (isHindi ? `⏳ 30 दिन मुफ़्त ट्रायल: ${subscriptionStatus.daysRemaining} दिन शेष` : `⏳ 30-Day Free Trial: ${subscriptionStatus.daysRemaining} days left`)
-                    : (isHindi ? `✓ सदस्यता सक्रिय: ${subscriptionStatus.planNameHi}` : `✓ Active Plan: ${subscriptionStatus.planNameEn}`)}
-                </Text>
-              </View>
-              <Text style={styles.trialBannerSub}>
-                {subscriptionStatus.isLocked
-                  ? (isHindi ? 'प्लान्स देखने और सक्रिय करने के लिए यहाँ टैप करें' : 'Tap here to view plans and activate')
-                  : subscriptionStatus.status === 'trial_active'
-                  ? (isHindi ? 'सभी सुविधाएँ चालू हैं • कभी भी अपग्रेड करें' : 'All features active • Tap to view plans')
-                  : (isHindi ? `समाप्ति: ${subscriptionStatus.expiryDateStr}` : `Valid until: ${subscriptionStatus.expiryDateStr}`)}
-              </Text>
-            </View>
-            <View style={[
-              styles.trialUpgradeBtn,
-              subscriptionStatus.isLocked && { backgroundColor: '#dc2626' }
-            ]}>
-              <Text style={styles.trialUpgradeBtnText}>
-                {subscriptionStatus.isLocked
-                  ? (isHindi ? 'सक्रिय करें' : 'Renew')
-                  : subscriptionStatus.status === 'trial_active'
-                  ? (isHindi ? 'अपग्रेड' : 'Upgrade')
-                  : (isHindi ? 'विवरण' : 'Details')}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Header greeting */}
+        {/* Dairy Name Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            style={{ flex: 1 }}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}
             onPress={() => {
               requireAuth(() => {
                 setDairyNameInput(supplier?.businessName === 'Om Fresh Dairy Farm' ? '' : (supplier?.businessName || ''));
@@ -684,23 +637,10 @@ export const DashboardScreen = ({ navigation }: any) => {
             }}
             activeOpacity={0.7}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.greeting} numberOfLines={1}>
-                {isHindi ? `नमस्ते, ${supplier?.name || 'दूध विक्रेता'}` : `Hello, ${supplier?.name || 'Dairy Supplier'}`}
-              </Text>
-              <Text style={{ fontSize: 13 }}>✏️</Text>
-            </View>
-            <Text style={styles.businessName} numberOfLines={1}>
-              {supplier?.businessName || (isHindi ? 'डेयरी का नाम सेट करें (Tap to set)' : 'Set Dairy Name (Tap to set)')}
+            <Text style={styles.greeting} numberOfLines={1}>
+              {supplier?.businessName || supplier?.name || (isHindi ? 'डेयरी का नाम सेट करें' : 'Set Dairy Name')}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.profileBadge}
-            onPress={() => navigation.navigate('SettingsTab')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.profileBadgeText}>⚙️</Text>
+            <Text style={{ fontSize: 13 }}>✏️</Text>
           </TouchableOpacity>
         </View>
 
