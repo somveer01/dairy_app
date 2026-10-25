@@ -549,7 +549,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '🌅',
       bg: '#fef3c7',
       border: '#fde68a',
-      onPress: () => navigation.navigate('RegisterTab')
+      onPress: () => navigation.navigate('RegisterTab', { session: 'Morning', mode: 'delivery', _t: Date.now() })
     },
     {
       id: 'evening',
@@ -558,7 +558,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '🌇',
       bg: '#ffedd5',
       border: '#fed7aa',
-      onPress: () => navigation.navigate('RegisterTab')
+      onPress: () => navigation.navigate('RegisterTab', { session: 'Evening', mode: 'delivery', _t: Date.now() })
     },
     {
       id: 'add_cust',
@@ -603,7 +603,7 @@ export const DashboardScreen = ({ navigation }: any) => {
       icon: '📥',
       bg: '#f0fdf4',
       border: '#bbf7d0',
-      onPress: () => navigation.navigate('RegisterTab')
+      onPress: () => navigation.navigate('RegisterTab', { mode: 'procurement', _t: Date.now() })
     },
     {
       id: 'sub_suppliers',
@@ -792,7 +792,7 @@ export const DashboardScreen = ({ navigation }: any) => {
               </Text>
             </View>
             <TouchableOpacity
-              onPress={() => navigation.navigate('RegisterTab')}
+              onPress={() => navigation.navigate('RegisterTab', { mode: 'procurement', _t: Date.now() })}
               activeOpacity={0.7}
             >
               <Text style={styles.procurementLinkText}>

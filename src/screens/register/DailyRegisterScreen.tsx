@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { CardSyncService } from '../../services/cardSyncService';
@@ -42,10 +42,31 @@ export const DailyRegisterScreen = () => {
     requireAuth
   } = useApp();
 
+  const route = useRoute<any>();
   const [registerMode, setRegisterMode] = useState<'delivery' | 'procurement'>('delivery');
   const [selectedDate, setSelectedDate] = useState(() => toLocalIso(new Date()));
   // 'Custom' represents the default 'All (सभी ग्राहक)' view
   const [activeSession, setActiveSession] = useState<SessionType>('Custom');
+
+  // Handle direct tab/session selection from Dashboard navigation
+  useEffect(() => {
+    if (route?.params) {
+      const { session, mode } = route.params;
+      if (session === 'Morning') {
+        setActiveSession('Morning');
+      } else if (session === 'Evening') {
+        setActiveSession('Evening');
+      } else if (session === 'All' || session === 'Custom') {
+        setActiveSession('Custom');
+      }
+
+      if (mode === 'procurement' || mode === 'inward') {
+        setRegisterMode('procurement');
+      } else if (mode === 'delivery' || mode === 'outward') {
+        setRegisterMode('delivery');
+      }
+    }
+  }, [route?.params]);
   const [searchFilter, setSearchFilter] = useState('');
 
   // Broadcast Modal State
