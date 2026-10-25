@@ -941,7 +941,7 @@
           <span class="summary-val" style="color: #ea580c;" id="valPrevDue">₹0.00</span>
         </div>
         <div class="summary-row" id="rowDairyProducts" style="display: none;">
-          <span id="labelDairyProducts">🧀 डेयरी उत्पाद (पनीर/दही/घी):</span>
+          <span id="labelDairyProducts">🧀 डेयरी उत्पाद (पनीर, दही, घी, छाछ, खोया आदि):</span>
           <span class="summary-val" style="color: #b45309;" id="valDairyProducts">₹0.00</span>
         </div>
         <div class="summary-row">
@@ -1047,7 +1047,7 @@
         summaryRange: '01 से अंत तक',
         totalDelivered: 'कुल डिलीवर दूध:',
         packetDelivered: 'कुल पैकेट दूध:',
-        dairyProductsBill: '🧀 डेयरी उत्पाद (पनीर/दही/घी/छाछ):',
+        dairyProductsBill: '🧀 डेयरी उत्पाद (पनीर, दही, घी, छाछ, खोया आदि):',
         packetRateLabel: 'पैकेट का भाव',
         perPacket: '/ पैकेट',
         packetUnit: 'Pkt',
@@ -1115,7 +1115,7 @@
         summaryRange: '01 to Month End',
         totalDelivered: 'Total Milk Delivered:',
         packetDelivered: 'Total Packet Milk:',
-        dairyProductsBill: '🧀 Dairy Products (Paneer/Curd/Ghee):',
+        dairyProductsBill: '🧀 Dairy Products (Paneer, Curd, Ghee, Buttermilk, Khoya, etc.):',
         packetRateLabel: 'Packet Rate',
         perPacket: '/ Pkt',
         packetUnit: 'Pkt',
@@ -1843,7 +1843,7 @@
       if (rowDairyProducts) {
         if (totalMonthProductsAmount > 0) {
           rowDairyProducts.style.display = 'flex';
-          document.getElementById('labelDairyProducts').innerText = t.dairyProductsBill || '🧀 डेयरी उत्पाद (पनीर/दही/घी/छाछ):';
+          document.getElementById('labelDairyProducts').innerText = t.dairyProductsBill || '🧀 डेयरी उत्पाद (पनीर, दही, घी, छाछ, खोया आदि):';
           document.getElementById('valDairyProducts').innerText = `₹${totalMonthProductsAmount.toFixed(2)}`;
         } else {
           rowDairyProducts.style.display = 'none';
@@ -1950,6 +1950,20 @@
       }
     }
 
+    
+    function getAddonDisplayName(a) {
+      if (a && a.productName && !a.productName.startsWith('prod_')) return a.productName;
+      const map = {
+        prod_paneer: 'पनीर (Paneer)',
+        prod_curd: 'दही (Curd)',
+        prod_ghee: 'देसी घी (Ghee)',
+        prod_buttermilk: 'छाछ (Buttermilk)',
+        prod_khoya: 'खोया (Khoya)',
+        prod_malai: 'मलाई (Malai)'
+      };
+      return (a && (map[a.productId || a.id] || a.productName || a.id)) || 'उत्पाद';
+    }
+
     function openDayModal(dayNum, dateStr, entries, litres, amount, isCustomerPacket) {
       const t = I18N[currentLang];
       const paramType = (urlParams.get('type') || '').toLowerCase();
@@ -2004,7 +2018,7 @@
               dayTotalAddonsAmt += amt;
               addonHtml += `
                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: #92400e; font-weight: 600; margin-bottom: 2px;">
-                  <span>🧀 ${a.productName || a.id} (${a.quantity} ${a.unit})</span>
+                  <span>🧀 ${getAddonDisplayName(a)} (${a.quantity} ${a.unit})</span>
                   <span>₹${amt.toFixed(0)}</span>
                 </div>
               `;
