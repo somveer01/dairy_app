@@ -1431,7 +1431,7 @@ export const CustomerListScreen = () => {
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-            <Text style={styles.contactImportBtnText}>📱 {t.contacts || 'Contacts'}</Text>
+            <Text style={styles.contactImportBtnText} numberOfLines={1}>📱 {t.contacts || 'Contacts'}</Text>
           </TouchableOpacity>
 
           {directoryMode === 'customers' && (
@@ -1441,7 +1441,7 @@ export const CustomerListScreen = () => {
               activeOpacity={0.8}
               hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
             >
-              <Text style={styles.whatsappImportBtnText}>💬 {t.whatsappImport || 'WhatsApp'}</Text>
+              <Text style={styles.whatsappImportBtnText} numberOfLines={1}>💬 {t.whatsappImport || 'WhatsApp'}</Text>
             </TouchableOpacity>
           )}
 
@@ -1451,8 +1451,8 @@ export const CustomerListScreen = () => {
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-            <Text style={styles.addButtonText}>
-              + {directoryMode === 'customers' ? (t.addCustomer || 'Add') : (lang === 'hi' ? 'नया विक्रेता' : 'Add Vendor')}
+            <Text style={styles.addButtonText} numberOfLines={1}>
+              + {directoryMode === 'customers' ? (lang === 'hi' ? 'नया ग्राहक' : 'Add Customer') : (lang === 'hi' ? 'नया विक्रेता' : 'Add Vendor')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -2675,17 +2675,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#38bdf8',
     paddingVertical: 9,
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center'
   },
   contactImportBtnText: { color: '#0284c7', fontWeight: 'bold', fontSize: 13 },
   addButton: {
-    flex: 1.2,
+    flex: 1.15,
     backgroundColor: '#0284c7',
     paddingVertical: 9,
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center'
@@ -3015,7 +3015,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#22c55e',
     paddingVertical: 9,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center'

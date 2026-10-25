@@ -229,7 +229,7 @@ export const translations = {
     sessionTotal: 'पाली का कुल योग',
     totalMilk: 'कुल दूध',
     addCustomer: 'नया ग्राहक जोड़ें',
-    contacts: 'संपर्क (Contacts)',
+    contacts: 'संपर्क',
     dateWiseReport: 'तारीख-वार दूध रिपोर्ट',
     tapHint: '💡 किसी भी ग्राहक कार्ड पर टैप करके तारीख-वार दूध वितरण व छूटे दिनों की रिपोर्ट देखें',
     dataManagement: 'डेटा प्रबंधन',
