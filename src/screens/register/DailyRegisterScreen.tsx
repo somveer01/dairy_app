@@ -67,10 +67,7 @@ export const DailyRegisterScreen = () => {
   // Add-on Dairy Products Modal State
   const [addonModalVisible, setAddonModalVisible] = useState(false);
   const [addonCustomer, setAddonCustomer] = useState<Customer | null>(null);
-  const [paneerQty, setPaneerQty] = useState('');
-  const [curdQty, setCurdQty] = useState('');
-  const [gheeQty, setGheeQty] = useState('');
-  const [butterMilkQty, setButterMilkQty] = useState('');
+  const [addonQuantities, setAddonQuantities] = useState<Record<string, string>>({});
 
   // Sub-Supplier Inward Entry Modal State
   const [subModalVisible, setSubModalVisible] = useState(false);
@@ -87,19 +84,18 @@ export const DailyRegisterScreen = () => {
     return 'Morning';
   };
 
-  const productRates = useMemo(() => {
-    const defaultRates: Record<string, number> = {
-      prod_paneer: 360,
-      prod_curd: 70,
-      prod_ghee: 700,
-      prod_buttermilk: 20
-    };
-    if (supplier?.settings?.customProducts) {
-      supplier.settings.customProducts.forEach(p => {
-        defaultRates[p.id] = p.defaultRate;
-      });
+  const activeCustomProducts = useMemo<import('../../types').DairyProductItem[]>(() => {
+    if (supplier?.settings?.customProducts && supplier.settings.customProducts.length > 0) {
+      return supplier.settings.customProducts.filter(p => p.isActive !== false);
     }
-    return defaultRates;
+    return [
+      { id: 'prod_paneer', name: 'पनीर (Paneer)', unit: 'kg', defaultRate: 360, isActive: true },
+      { id: 'prod_curd', name: 'दही (Curd/Dahi)', unit: 'kg', defaultRate: 70, isActive: true },
+      { id: 'prod_ghee', name: 'देसी घी (Ghee)', unit: 'kg', defaultRate: 700, isActive: true },
+      { id: 'prod_buttermilk', name: 'छाछ (Chhachh)', unit: 'pkt', defaultRate: 20, isActive: true },
+      { id: 'prod_khoya', name: 'खोया (Khoya)', unit: 'kg', defaultRate: 280, isActive: true },
+      { id: 'prod_malai', name: 'मलाई (Malai)', unit: 'kg', defaultRate: 120, isActive: true },
+    ];
   }, [supplier?.settings?.customProducts]);
 
   const changeDateBy = (days: number) => {
@@ -470,22 +466,15 @@ export const DailyRegisterScreen = () => {
     Keyboard.dismiss();
     setAddonCustomer(cust);
     const existing = sessionEntriesMap.get(cust.id);
-    let pQty = '';
-    let cQty = '';
-    let gQty = '';
-    let bQty = '';
+    const qtyMap: Record<string, string> = {};
     if (existing?.addons) {
       for (const a of existing.addons) {
-        if (a.productId === 'prod_paneer') pQty = a.quantity > 0 ? a.quantity.toString() : '';
-        if (a.productId === 'prod_curd') cQty = a.quantity > 0 ? a.quantity.toString() : '';
-        if (a.productId === 'prod_ghee') gQty = a.quantity > 0 ? a.quantity.toString() : '';
-        if (a.productId === 'prod_buttermilk') bQty = a.quantity > 0 ? a.quantity.toString() : '';
+        if (a.quantity > 0) {
+          qtyMap[a.productId] = a.quantity.toString();
+        }
       }
     }
-    setPaneerQty(pQty);
-    setCurdQty(cQty);
-    setGheeQty(gQty);
-    setButterMilkQty(bQty);
+    setAddonQuantities(qtyMap);
     setAddonModalVisible(true);
   };
 
@@ -497,65 +486,23 @@ export const DailyRegisterScreen = () => {
       const newAddons: import('../../types').DairyEntryAddon[] = [];
       let totalAddonsAmount = 0;
 
-      const pQ = parseFloat(paneerQty) || 0;
-      if (pQ > 0) {
-        const rateP = productRates.prod_paneer || 360;
-        const amt = pQ * rateP;
-        newAddons.push({
-          productId: 'prod_paneer',
-          productName: 'पनीर (Paneer)',
-          quantity: pQ,
-          unit: 'kg',
-          rate: rateP,
-          totalAmount: amt
-        });
-        totalAddonsAmount += amt;
-      }
-
-      const cQ = parseFloat(curdQty) || 0;
-      if (cQ > 0) {
-        const rateC = productRates.prod_curd || 70;
-        const amt = cQ * rateC;
-        newAddons.push({
-          productId: 'prod_curd',
-          productName: 'दही (Curd)',
-          quantity: cQ,
-          unit: 'kg',
-          rate: rateC,
-          totalAmount: amt
-        });
-        totalAddonsAmount += amt;
-      }
-
-      const gQ = parseFloat(gheeQty) || 0;
-      if (gQ > 0) {
-        const rateG = productRates.prod_ghee || 700;
-        const amt = gQ * rateG;
-        newAddons.push({
-          productId: 'prod_ghee',
-          productName: 'देसी घी (Ghee)',
-          quantity: gQ,
-          unit: 'kg',
-          rate: rateG,
-          totalAmount: amt
-        });
-        totalAddonsAmount += amt;
-      }
-
-      const bQ = parseFloat(butterMilkQty) || 0;
-      if (bQ > 0) {
-        const rateB = productRates.prod_buttermilk || 20;
-        const amt = bQ * rateB;
-        newAddons.push({
-          productId: 'prod_buttermilk',
-          productName: 'छाछ (Buttermilk)',
-          quantity: bQ,
-          unit: 'pkt',
-          rate: rateB,
-          totalAmount: amt
-        });
-        totalAddonsAmount += amt;
-      }
+      activeCustomProducts.forEach(prod => {
+        const qStr = addonQuantities[prod.id] || '';
+        const qty = parseFloat(qStr) || 0;
+        if (qty > 0) {
+          const rate = prod.defaultRate;
+          const amt = qty * rate;
+          newAddons.push({
+            productId: prod.id,
+            productName: prod.name,
+            quantity: qty,
+            unit: prod.unit,
+            rate: rate,
+            totalAmount: amt
+          });
+          totalAddonsAmount += amt;
+        }
+      });
 
       const milkAmt = existing ? existing.amount : 0;
       const totalDayAmt = milkAmt + totalAddonsAmount;
@@ -1443,104 +1390,50 @@ export const DailyRegisterScreen = () => {
                 {activeSession} • {formatToDisplayDate(selectedDate)}
               </Text>
 
-              {/* Paneer Input */}
-              <View style={styles.addonInputRow}>
-                <View style={{ flex: 1.4 }}>
-                  <Text style={styles.addonProdTitle}>🧀 पनीर (Paneer)</Text>
-                  <Text style={styles.addonProdRate}>₹{productRates.prod_paneer || 360} / kg</Text>
-                </View>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <TextInput
-                    style={styles.addonNumberInput}
-                    placeholder="0.0"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="decimal-pad"
-                    value={paneerQty}
-                    onChangeText={setPaneerQty}
-                  />
-                  <Text style={styles.addonUnitText}>kg</Text>
-                </View>
-                <Text style={styles.addonSubtotalText}>
-                  ₹{((parseFloat(paneerQty) || 0) * (productRates.prod_paneer || 360)).toFixed(0)}
-                </Text>
-              </View>
-
-              {/* Curd / Dahi Input */}
-              <View style={styles.addonInputRow}>
-                <View style={{ flex: 1.4 }}>
-                  <Text style={styles.addonProdTitle}>🥣 ताजा दही (Curd)</Text>
-                  <Text style={styles.addonProdRate}>₹{productRates.prod_curd || 70} / kg</Text>
-                </View>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <TextInput
-                    style={styles.addonNumberInput}
-                    placeholder="0.0"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="decimal-pad"
-                    value={curdQty}
-                    onChangeText={setCurdQty}
-                  />
-                  <Text style={styles.addonUnitText}>kg</Text>
-                </View>
-                <Text style={styles.addonSubtotalText}>
-                  ₹{((parseFloat(curdQty) || 0) * (productRates.prod_curd || 70)).toFixed(0)}
-                </Text>
-              </View>
-
-              {/* Desi Ghee Input */}
-              <View style={styles.addonInputRow}>
-                <View style={{ flex: 1.4 }}>
-                  <Text style={styles.addonProdTitle}>🧈 देसी घी (Ghee)</Text>
-                  <Text style={styles.addonProdRate}>₹{productRates.prod_ghee || 700} / kg</Text>
-                </View>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <TextInput
-                    style={styles.addonNumberInput}
-                    placeholder="0.0"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="decimal-pad"
-                    value={gheeQty}
-                    onChangeText={setGheeQty}
-                  />
-                  <Text style={styles.addonUnitText}>kg</Text>
-                </View>
-                <Text style={styles.addonSubtotalText}>
-                  ₹{((parseFloat(gheeQty) || 0) * (productRates.prod_ghee || 700)).toFixed(0)}
-                </Text>
-              </View>
-
-              {/* Buttermilk / Chhachh Input */}
-              <View style={styles.addonInputRow}>
-                <View style={{ flex: 1.4 }}>
-                  <Text style={styles.addonProdTitle}>🥛 छाछ (Buttermilk)</Text>
-                  <Text style={styles.addonProdRate}>₹{productRates.prod_buttermilk || 20} / pkt</Text>
-                </View>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <TextInput
-                    style={styles.addonNumberInput}
-                    placeholder="0"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={butterMilkQty}
-                    onChangeText={setButterMilkQty}
-                  />
-                  <Text style={styles.addonUnitText}>pkt</Text>
-                </View>
-                <Text style={styles.addonSubtotalText}>
-                  ₹{((parseFloat(butterMilkQty) || 0) * (productRates.prod_buttermilk || 20)).toFixed(0)}
-                </Text>
-              </View>
+              {/* Dynamic Products Input List */}
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={true}>
+                {activeCustomProducts.map((prod) => {
+                  const qStr = addonQuantities[prod.id] || '';
+                  const qVal = parseFloat(qStr) || 0;
+                  const subtotal = qVal * prod.defaultRate;
+                  return (
+                    <View key={prod.id} style={styles.addonInputRow}>
+                      <View style={{ flex: 1.4 }}>
+                        <Text style={styles.addonProdTitle}>🧀 {prod.name}</Text>
+                        <Text style={styles.addonProdRate}>₹{prod.defaultRate} / {prod.unit}</Text>
+                      </View>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TextInput
+                          style={styles.addonNumberInput}
+                          placeholder={prod.unit === 'pkt' || prod.unit === 'piece' ? '0' : '0.0'}
+                          placeholderTextColor="#94a3b8"
+                          keyboardType={prod.unit === 'pkt' || prod.unit === 'piece' ? 'numeric' : 'decimal-pad'}
+                          value={qStr}
+                          onChangeText={(v) => {
+                            setAddonQuantities(prev => ({
+                              ...prev,
+                              [prod.id]: v
+                            }));
+                          }}
+                        />
+                        <Text style={styles.addonUnitText}>{prod.unit}</Text>
+                      </View>
+                      <Text style={styles.addonSubtotalText}>
+                        ₹{subtotal.toFixed(0)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
 
               {/* Total Addons Summary */}
               <View style={styles.addonTotalBar}>
                 <Text style={styles.addonTotalBarLabel}>{lang === 'hi' ? 'उत्पाद कुल जोड़:' : 'Total Addons:'}</Text>
                 <Text style={styles.addonTotalBarValue}>
-                  ₹{(
-                    (parseFloat(paneerQty) || 0) * (productRates.prod_paneer || 360) +
-                    (parseFloat(curdQty) || 0) * (productRates.prod_curd || 70) +
-                    (parseFloat(gheeQty) || 0) * (productRates.prod_ghee || 700) +
-                    (parseFloat(butterMilkQty) || 0) * (productRates.prod_buttermilk || 20)
-                  ).toFixed(0)}
+                  ₹{activeCustomProducts.reduce((sum, prod) => {
+                    const q = parseFloat(addonQuantities[prod.id] || '0') || 0;
+                    return sum + (q * prod.defaultRate);
+                  }, 0).toFixed(0)}
                 </Text>
               </View>
 
