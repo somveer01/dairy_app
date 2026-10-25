@@ -875,7 +875,10 @@ export const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Permanent Storage & Database Status */}
+                {/* Permanent Storage & Database Status (Super Admin Only) */}
+        {SubscriptionService.isAdmin(supplier?.phone) && (
+          <>
+  {/* Permanent Storage & Database Status */}
         <Text style={styles.sectionHeader}>📁 Permanent Storage & Database</Text>
         <View style={styles.storageStatusCard}>
           <View style={styles.storageHeaderRow}>
@@ -929,6 +932,8 @@ export const SettingsScreen = () => {
             </TouchableOpacity>
           </View>
         </View>
+          </>
+        )}
 
         {/* Firebase Cloud Auto-Sync Card */}
         <Text style={styles.sectionHeader}>
@@ -1020,7 +1025,10 @@ export const SettingsScreen = () => {
           )}
         </View>
 
-        {/* Data Management */}
+                {/* Data Management (Super Admin Only) */}
+        {SubscriptionService.isAdmin(supplier?.phone) && (
+          <>
+  {/* Data Management */}
         <Text style={styles.sectionHeader}>{t.dataManagement || 'Data Management'}</Text>
 
         <TouchableOpacity
@@ -1050,7 +1058,8 @@ export const SettingsScreen = () => {
           </View>
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
-
+          </>
+        )}
 
         {/* Install App on Device */}
         <TouchableOpacity
