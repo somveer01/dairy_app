@@ -350,15 +350,28 @@ Thank you for your milk supply! 🙏`;
     const whatsappAppUrl = `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`;
     const webUrl = `https://wa.me/${cleanPhone}?text=${encodedText}`;
 
-    try {
-      const canOpen = await Linking.canOpenURL(whatsappAppUrl);
-      if (canOpen) {
-        await Linking.openURL(whatsappAppUrl);
-      } else {
-        await Linking.openURL(webUrl);
+    // On Web / PWA, browser popups or canOpenURL hang if blocked. Use window.open or window.location directly!
+    if (typeof window !== 'undefined') {
+      try {
+        const w = window.open(webUrl, '_blank');
+        if (!w || w.closed || typeof w.closed === 'undefined') {
+          window.location.href = webUrl;
+        }
+      } catch {
+        window.location.href = webUrl;
       }
+      return;
+    }
+
+    // Native Android / iOS fallback
+    try {
+      await Linking.openURL(whatsappAppUrl);
     } catch {
-      await Linking.openURL(webUrl);
+      try {
+        await Linking.openURL(webUrl);
+      } catch (e) {
+        console.warn('Could not open WhatsApp URL:', e);
+      }
     }
   }
 };
