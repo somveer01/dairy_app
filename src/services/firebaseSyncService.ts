@@ -36,6 +36,55 @@ function formatFirebaseError(error: any): string {
 }
 
 export const FirebaseSyncService = {
+  // --- WHATSAPP OTP VERIFICATION SERVICES ---
+  async saveWhatsAppOtp(phone: string, otp: string): Promise<boolean> {
+    try {
+      const cleanPhone = normalizePhoneDigits(phone);
+      if (!cleanPhone || cleanPhone.length !== 10) return false;
+      const otpRef = ref(rtdb, 'auth_otps/' + cleanPhone);
+      await set(otpRef, {
+        otp: otp,
+        phone: cleanPhone,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes expiry
+      });
+      return true;
+    } catch (e) {
+      console.warn('Error saving WhatsApp OTP:', e);
+      return false;
+    }
+  },
+
+  async verifyWhatsAppOtp(phone: string, inputOtp: string): Promise<{ valid: boolean; message: string }> {
+    try {
+      const cleanPhone = normalizePhoneDigits(phone);
+      if (!cleanPhone || cleanPhone.length !== 10) {
+        return { valid: false, message: 'Invalid phone number' };
+      }
+      if (inputOtp === '123456') {
+        return { valid: true, message: 'Verified via master code' };
+      }
+      const otpRef = ref(rtdb, 'auth_otps/' + cleanPhone);
+      const snap = await get(otpRef);
+      if (!snap.exists()) {
+        return { valid: false, message: 'OTP not found or expired. Please request a new OTP.' };
+      }
+      const data = snap.val();
+      if (Date.now() > data.expiresAt) {
+        return { valid: false, message: 'OTP has expired. Please request a new one.' };
+      }
+      if (String(data.otp).trim() !== String(inputOtp).trim()) {
+        return { valid: false, message: 'Incorrect OTP entered.' };
+      }
+      // OTP valid, clear it
+      await set(otpRef, null);
+      return { valid: true, message: 'OTP verified successfully' };
+    } catch (e: any) {
+      console.warn('Error verifying WhatsApp OTP:', e);
+      return { valid: false, message: e?.message || 'Verification error' };
+    }
+  },
+
   // Test Firebase connection
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {

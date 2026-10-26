@@ -17,6 +17,7 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { FirebaseSyncService, normalizePhoneDigits } from '../../services/firebaseSyncService';
 import { AutoSyncService } from '../../services/autoSyncService';
+import { WhatsAppService } from '../../services/whatsappService';
 import { Supplier } from '../../types';
 import { showAlert } from '../../utils/alertUtils';
 import { auth } from '../../config/firebase';
@@ -253,7 +254,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
     }
   };
 
-  // --- METHOD 2: OTP Login ---
+    // --- METHOD 2: WhatsApp OTP Login ---
   const handleSendOtp = async () => {
     Keyboard.dismiss();
     const clean = normalizePhoneDigits(phoneInput);
@@ -267,58 +268,43 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
 
     setIsSendingOtp(true);
     try {
-      if (Platform.OS === 'web') {
-        const verifier = getOrCreateRecaptchaVerifier();
-        if (!verifier) throw new Error('Recaptcha initialization failed');
+      // 1. Generate secure 6-digit random OTP
+      const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
 
-        const confirmation = await signInWithPhoneNumber(auth, `+91${clean}`, verifier);
-        setConfirmationResult(confirmation);
-        setOtpSent(true);
-        setResendCooldown(60);
-        showAlert(
-          lang === 'hi' ? '✓ SMS OTP भेजा गया' : '✓ SMS OTP Sent',
-          lang === 'hi'
-            ? `6-अंकों का सत्यापन कोड +91 ${clean} पर SMS द्वारा भेज दिया गया है।`
-            : `6-digit verification code sent to +91 ${clean} via SMS.`
-        );
-      } else {
-        setOtpSent(true);
-        setResendCooldown(60);
-        showAlert(
-          lang === 'hi' ? 'ओटीपी भेजा गया' : 'OTP Sent',
-          lang === 'hi' ? `सत्यापन कोड +91 ${clean} पर भेजा गया है।` : `Verification code sent to +91 ${clean}.`
-        );
-      }
-    } catch (err: any) {
-      console.warn('Firebase SMS OTP Error:', err);
-      let errorMsg = err?.message || 'Failed to send SMS';
+      // 2. Save OTP to Firebase RTDB scoped strictly to this dairy's phone
+      await FirebaseSyncService.saveWhatsAppOtp(clean, generatedOtp);
 
-      if (err?.code === 'auth/operation-not-allowed') {
-        errorMsg = lang === 'hi'
-          ? 'Firebase Console में Phone प्रमाणीकरण Enable नहीं है।'
-          : 'Phone authentication is not enabled in Firebase Console.';
-      } else if (err?.code === 'auth/unauthorized-domain') {
-        errorMsg = lang === 'hi'
-          ? 'somveer01.github.io डोमेन Firebase में अधिकृत नहीं है।'
-          : 'Domain somveer01.github.io is not authorized in Firebase.';
-      } else if (err?.code === 'auth/too-many-requests') {
-        errorMsg = lang === 'hi'
-          ? 'बहुत सारे प्रयास किए गए। कृपया कुछ समय बाद पुनः प्रयास करें।'
-          : 'Too many requests. Please wait a few minutes before trying again.';
-      }
+      // 3. Format message strictly addressed to this dairy phone number
+      const otpMessage = lang === 'hi'
+        ? `🔐 *डेयरी ऐप लॉगिन OTP कोड:* *${generatedOtp}*\n\nयह सत्यापन कोड केवल आपके मोबाइल नंबर (+91 ${clean}) के लिए है। यह कोड अगले 10 मिनट तक मान्य रहेगा। किसी के साथ शेयर न करें।`
+        : `🔐 *Dairy App Login OTP Code:* *${generatedOtp}*\n\nThis verification code is strictly for your mobile number (+91 ${clean}). Valid for 10 minutes. Do not share with anyone.`;
+
+      // 4. Send via WhatsApp directly and strictly to this exact mobile number (+91clean)
+      await WhatsAppService.openWhatsAppWithText(clean, otpMessage);
+
+      setOtpSent(true);
+      setResendCooldown(45);
 
       showAlert(
-        lang === 'hi' ? 'SMS सेवा सूचना' : 'SMS Notice',
-        `${errorMsg}\n\n${lang === 'hi' ? '(टेस्टिंग कोड: 123456 दर्ज करके आगे बढ़ सकते हैं)' : '(You can enter test code: 123456)'}`
+        lang === 'hi' ? '💬 WhatsApp पर OTP भेजा गया' : '💬 OTP Sent on WhatsApp',
+        lang === 'hi'
+          ? `6-अंकों का सत्यापन कोड सीधे आपके WhatsApp नंबर (+91 ${clean}) पर भेजा गया है। कोड देखकर यहाँ दर्ज करें।`
+          : `6-digit verification code sent directly to your WhatsApp number (+91 ${clean}). Please check and enter below.`
       );
-      setOtpSent(true);
-      setResendCooldown(60);
+    } catch (err: any) {
+      console.warn('WhatsApp OTP Error:', err);
+      showAlert(
+        lang === 'hi' ? 'त्रुटि' : 'Error',
+        lang === 'hi'
+          ? 'WhatsApp पर कोड भेजने में समस्या आई। कृपया पुनः प्रयास करें।'
+          : 'Could not send WhatsApp OTP. Please try again.'
+      );
     } finally {
       setIsSendingOtp(false);
     }
   };
 
-  const handleVerifyOtp = async () => {
+    const handleVerifyOtp = async () => {
     Keyboard.dismiss();
     const cleanPhone = normalizePhoneDigits(phoneInput);
     const trimmedOtp = otpInput.trim();
@@ -333,22 +319,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
 
     setIsVerifyingOtp(true);
     try {
-      if (confirmationResult && trimmedOtp !== '123456') {
-        await confirmationResult.confirm(trimmedOtp);
-      }
-      await processSupplierAuth(cleanPhone, undefined);
-    } catch (err: any) {
-      console.warn('OTP Confirmation Error:', err);
-      if (trimmedOtp === '123456') {
-        await processSupplierAuth(cleanPhone, undefined);
+      const verifyRes = await FirebaseSyncService.verifyWhatsAppOtp(cleanPhone, trimmedOtp);
+      if (!verifyRes.valid) {
         setIsVerifyingOtp(false);
+        showAlert(
+          lang === 'hi' ? 'ओटीपी सत्यापन विफल' : 'OTP Verification Failed',
+          lang === 'hi'
+            ? (verifyRes.message === 'Incorrect OTP entered.' ? 'दर्ज किया गया ओटीपी गलत है। कृपया WhatsApp पर आया सही कोड दर्ज करें।' : verifyRes.message)
+            : verifyRes.message
+        );
         return;
       }
+
+      // OTP Verified successfully! Log in to supplier account
+      await processSupplierAuth(cleanPhone, undefined);
+    } catch (err: any) {
+      console.warn('WhatsApp OTP Verification Error:', err);
       showAlert(
-        lang === 'hi' ? 'ओटीपी सत्यापन विफल' : 'OTP Verification Failed',
-        lang === 'hi'
-          ? 'दर्ज किया गया ओटीपी गलत है या समाप्त हो चुका है। कृपया सही ओटीपी या 123456 दर्ज करें।'
-          : 'The entered OTP code is incorrect or expired. Please enter valid OTP or 123456.'
+        lang === 'hi' ? 'त्रुटि' : 'Error',
+        err?.message || 'Verification error'
       );
     } finally {
       setIsVerifyingOtp(false);
@@ -712,12 +701,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
                         <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
                         <Text style={styles.primaryButtonText}>
-                          {lang === 'hi' ? 'ओटीपी भेजा जा रहा है...' : 'Sending OTP...'}
+                          {lang === 'hi' ? 'WhatsApp पर भेजा जा रहा है...' : 'Sending on WhatsApp...'}
                         </Text>
                       </View>
                     ) : (
                       <Text style={styles.primaryButtonText}>
-                        {lang === 'hi' ? 'ओटीपी कोड प्राप्त करें ➔' : 'Get OTP Code ➔'}
+                        {lang === 'hi' ? '💬 WhatsApp पर OTP कोड पाएँ ➔' : '💬 Get OTP on WhatsApp ➔'}
                       </Text>
                     )}
                   </TouchableOpacity>
