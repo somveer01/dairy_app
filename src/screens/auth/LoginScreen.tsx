@@ -18,6 +18,7 @@ import { StorageService } from '../../services/storageService';
 import { FirebaseSyncService, normalizePhoneDigits } from '../../services/firebaseSyncService';
 import { AutoSyncService } from '../../services/autoSyncService';
 import { WhatsAppService } from '../../services/whatsappService';
+import { GoogleDriveBackupService } from '../../services/googleDriveBackupService';
 import { Supplier } from '../../types';
 import { showAlert } from '../../utils/alertUtils';
 import { auth } from '../../config/firebase';
@@ -290,7 +291,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onClose }) => {
         ? `🔐 *डेयरी ऐप लॉगिन OTP कोड:* *${generatedOtp}*\n\nयह सत्यापन कोड केवल आपके मोबाइल नंबर (+91 ${clean}) के लिए है। यह कोड अगले 10 मिनट तक मान्य रहेगा। किसी के साथ शेयर न करें।`
         : `🔐 *Dairy App Login OTP Code:* *${generatedOtp}*\n\nThis verification code is strictly for your mobile number (+91 ${clean}). Valid for 10 minutes. Do not share with anyone.`;
 
-      // 4. Send via WhatsApp directly and strictly to this exact mobile number (+91clean)
+      // 4. Dispatch securely via Google Apps Script server webhook (Plan 1)
+      GoogleDriveBackupService.sendOtpViaWebhook(clean, generatedOtp).catch(e => {
+        console.warn('Server webhook dispatch note:', e);
+      });
+
+      // 5. Send via WhatsApp directly and strictly to this exact registered mobile number (+91clean)
       await WhatsAppService.openWhatsAppWithText(clean, otpMessage);
 
       setOtpSent(true);
