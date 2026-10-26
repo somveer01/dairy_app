@@ -44,30 +44,6 @@ if (typeof window !== 'undefined' && window.localStorage) {
 }
 
 export const GoogleDriveBackupService = {
-  async sendOtpViaWebhook(phone: string, otp: string, businessName?: string): Promise<{ success: boolean; message: string }> {
-    const webhookUrl = this.getWebhookUrl();
-    if (!webhookUrl) {
-      return { success: false, message: 'Google Apps Script Webhook is not configured' };
-    }
-    try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'send_whatsapp_otp',
-          phone,
-          otp,
-          businessName: businessName || 'Dairy'
-        })
-      });
-      const text = await res.text();
-      const json = JSON.parse(text);
-      return { success: !!json.success, message: json.message || '' };
-    } catch (e: any) {
-      return { success: false, message: e?.message || 'Webhook communication error' };
-    }
-  },
-
   getWebhookUrl(): string {
     return activeWebhookUrl;
   },

@@ -85,63 +85,6 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // --- SECURE PLAN 1: SERVER-SIDE WHATSAPP OTP ROUTING ---
-    if (action === 'send_whatsapp_otp') {
-      const phone = (json.phone || '').replace(/\D/g, '').slice(-10);
-      const otp = String(json.otp || '');
-      const businessName = json.businessName || 'Dairy Farm';
-
-      if (!phone || phone.length !== 10 || !otp) {
-        return ContentService.createTextOutput(JSON.stringify({
-          success: false,
-          message: 'Invalid phone or OTP code provided.'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-
-      // Record dispatched OTP in Drive logs for security audit
-      try {
-        const rootFolder = getRootBackupFolder();
-        const auditLogFile = 'Security_Dispatched_OTPs.log';
-        const files = rootFolder.getFilesByName(auditLogFile);
-        const logLine = `[${new Date().toISOString()}] Dispatched OTP for dairy +91${phone}\n`;
-        if (files.hasNext()) {
-          const f = files.next();
-          f.setContent(f.getBlob().getDataAsString() + logLine);
-        } else {
-          rootFolder.createFile(auditLogFile, logLine, MimeType.PLAIN_TEXT);
-        }
-      } catch (e) {
-        Logger.warn('Audit log write note: ' + e);
-      }
-
-      // If you configure a WhatsApp Gateway (e.g. Meta Cloud API or UltraMsg webhook in script properties):
-      const scriptProps = PropertiesService.getScriptProperties();
-      const gatewayUrl = scriptProps.getProperty('WHATSAPP_GATEWAY_URL'); // Optional custom gateway
-      const gatewayToken = scriptProps.getProperty('WHATSAPP_GATEWAY_TOKEN');
-
-      if (gatewayUrl) {
-        try {
-          UrlFetchApp.fetch(gatewayUrl, {
-            method: 'post',
-            contentType: 'application/json',
-            payload: JSON.stringify({
-              to: '91' + phone,
-              body: `🔐 आपकी डेयरी ऐप का लॉगिन OTP कोड है: *${otp}*\n\nयह कोड अगले 10 मिनट तक मान्य है।`
-            }),
-            muteHttpExceptions: true
-          });
-        } catch (gwErr) {
-          Logger.warn('Gateway delivery note: ' + gwErr);
-        }
-      }
-
-      return ContentService.createTextOutput(JSON.stringify({
-        success: true,
-        phone: phone,
-        message: `Security OTP dispatched to registered WhatsApp of +91 ${phone}`
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-
     if (action === 'trigger_all_backup') {
       const runResult = autoBackupAllAtMidnight();
       return ContentService.createTextOutput(JSON.stringify(runResult)).setMimeType(ContentService.MimeType.JSON);
