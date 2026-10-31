@@ -373,6 +373,87 @@ Thank you for your milk supply! 🙏`;
         console.warn('Could not open WhatsApp URL:', e);
       }
     }
+  },
+
+  async sendPaymentAcceptedWhatsApp(
+    phone: string,
+    customerName: string,
+    amount: number,
+    displayDate: string,
+    supplierBusinessName: string,
+    lang: 'hi' | 'en' = 'hi'
+  ): Promise<void> {
+    if (!phone) return;
+    const amountStr = amount.toFixed(2);
+    const isHi = lang === 'hi';
+
+    const message = isHi
+      ? `✅ *भुगतान प्राप्त हुआ (Payment Received)*
+-----------------------------
+🥛 डेयरी: *${supplierBusinessName}*
+👤 ग्राहक: *${customerName}*
+💰 राशि: *₹${amountStr}*
+📅 दिनांक: *${displayDate}*
+✓ स्थिति: *सफलतापूर्वक दर्ज (Approved)*
+-----------------------------
+आपकी UPI पेमेंट पुष्टि स्वीकार कर ली गई है और आपके डिजिटल दूध कार्ड में जमा कर दी गई है।
+समय पर भुगतान के लिए आपका बहुत-बहुत धन्यवाद! 🙏`
+      : `✅ *Payment Approved & Recorded*
+-----------------------------
+🥛 Dairy: *${supplierBusinessName}*
+👤 Customer: *${customerName}*
+💰 Amount: *₹${amountStr}*
+📅 Date: *${displayDate}*
+✓ Status: *Approved & Credited*
+-----------------------------
+Your online UPI payment has been verified and added to your Digital Milk Card.
+Thank you for your prompt payment! 🙏`;
+
+    await this.openWhatsAppWithText(phone, message);
+  },
+
+  async sendPaymentRejectedWhatsApp(
+    phone: string,
+    customerName: string,
+    amount: number,
+    displayDate: string,
+    supplierBusinessName: string,
+    reason?: string,
+    lang: 'hi' | 'en' = 'hi'
+  ): Promise<void> {
+    if (!phone) return;
+    const amountStr = amount.toFixed(2);
+    const isHi = lang === 'hi';
+
+    const reasonSection = reason
+      ? (isHi ? `\n⚠️ कारण: ${reason}` : `\n⚠️ Reason: ${reason}`)
+      : '';
+
+    const message = isHi
+      ? `⚠️ *भुगतान सत्यापन सूचना (Payment Notice)*
+-----------------------------
+🥛 डेयरी: *${supplierBusinessName}*
+👤 ग्राहक: *${customerName}*
+💰 दावा की गई राशि: *₹${amountStr}*
+📅 दिनांक: *${displayDate}*
+✕ स्थिति: *अस्वीकृत (Not Verified)*${reasonSection}
+-----------------------------
+आपके द्वारा भेजी गई पेमेंट की पुष्टि हमारे बैंक खाते में नहीं हो सकी है।
+कृपया भुगतान का स्क्रीनशॉट या बैंक UTR नंबर व्हाट्सएप पर साझा करें अथवा हमसे संपर्क करें।
+धन्यवाद।`
+      : `⚠️ *Payment Verification Notice*
+-----------------------------
+🥛 Dairy: *${supplierBusinessName}*
+👤 Customer: *${customerName}*
+💰 Claimed Amount: *₹${amountStr}*
+📅 Date: *${displayDate}*
+✕ Status: *Not Verified / Rejected*${reasonSection}
+-----------------------------
+We could not verify this payment in our bank account.
+Please share your payment screenshot or bank UTR reference on WhatsApp or contact us.
+Thank you.`;
+
+    await this.openWhatsAppWithText(phone, message);
   }
 };
 

@@ -981,6 +981,15 @@
         <a id="upiPayNowBtn" href="#" style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 10px; background: #16a34a; color: #ffffff; text-decoration: none; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 12px; box-shadow: 0 3px 10px rgba(22, 163, 74, 0.25);">
           💳 <span id="upiPayNowBtnText">Pay via UPI App</span>
         </a>
+        <button id="openConfirmPaymentBtn" type="button" onclick="openPaymentConfirmModal()" style="display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; background: #0284c7; color: #ffffff; border: none; font-weight: 800; font-size: 13px; padding: 12px 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);">
+          ✅ <span id="openConfirmPaymentBtnText">मैंने भुगतान कर दिया (पुष्टि भेजें)</span>
+        </button>
+
+        <!-- Live Payment Request Status Banner -->
+        <div id="paymentRequestStatusBanner" style="display: none; margin-top: 12px; padding: 12px 14px; border-radius: 12px; font-size: 12px; line-height: 1.5; text-align: left;">
+          <div id="paymentRequestStatusTitle" style="font-weight: 800; font-size: 13px; margin-bottom: 3px;"></div>
+          <div id="paymentRequestStatusMsg" style="font-size: 11px;"></div>
+        </div>
       </div>
     </section>
 
@@ -1090,7 +1099,17 @@
         installSuccessText: '✓ Milk Card ऐप सफलतापूर्वक इंस्टॉल हो गया!',
         installGuideText: 'ब्राउज़र मेनू (⋮) से "Install app" चुनें',
         weekdays: ['सोम', 'मंगल', 'बुध', 'गुरु', 'शुक्र', 'शनि', 'रवि'],
-        months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर']
+        months: ['जनवरी', 'फ़रवरी', 'मार्च', 'अप्रैल', 'मई', 'जून', 'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर'],
+        openConfirmPaymentBtnText: '✅ मैंने भुगतान कर दिया (पुष्टि भेजें)',
+        confirmPaymentModalTitle: '📲 भुगतान पुष्टि भेजें',
+        confirmPaymentModalSub: 'डेयरी को सूचित करें ताकि आपका कार्ड तुरंत अपडेट हो जाए।',
+        lblCustName: 'ग्राहक का नाम',
+        lblPayAmount: 'भुगतान की गई राशि (₹) *',
+        lblPayDate: 'भुगतान की तारीख *',
+        lblPayUtr: 'बैंक UTR / रेफरेंस नंबर (वैकल्पिक)',
+        btnCancelConfirm: 'रद्द करें',
+        btnSubmitPaymentConfirm: '✓ पुष्टि भेजें',
+        sendingText: 'भेज रहे हैं...'
       },
       en: {
         langToggleText: 'हिंदी',
@@ -1158,7 +1177,17 @@
         installSuccessText: '✓ Milk Card app successfully installed!',
         installGuideText: 'Select "Install app" from browser menu (⋮)',
         weekdays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-        months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+        months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+        openConfirmPaymentBtnText: '✅ I Have Paid (Send Confirmation)',
+        confirmPaymentModalTitle: '📲 Send Payment Confirmation',
+        confirmPaymentModalSub: 'Notify dairy owner so your card is updated immediately.',
+        lblCustName: 'Customer Name',
+        lblPayAmount: 'Amount Paid (₹) *',
+        lblPayDate: 'Payment Date *',
+        lblPayUtr: 'Bank UTR / Ref No (Optional)',
+        btnCancelConfirm: 'Cancel',
+        btnSubmitPaymentConfirm: '✓ Submit Request',
+        sendingText: 'Sending...'
       }
     };
 
@@ -1873,6 +1902,7 @@
         }
       }
 
+      window.__lastCalculatedNetDue = netDue;
       // Dynamic Amount UPI QR Code Scanner Section (Customer only, when netDue > 0 and supplierUpiId is set)
       const upiSection = document.getElementById('upiQrPaymentSection');
       const cleanUpi = (cardData.supplierUpiId || '').trim();
@@ -2076,8 +2106,247 @@
     // Auto load on start
     fetchCardData();
 
+    // --- CUSTOMER UPI PAYMENT CONFIRMATION LOGIC ---
+    function getTodayIso() {
+      const d = new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    const MONTHS_SHORT_EN = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    function formatIsoToDisplay(iso) {
+      if (!iso || !iso.includes('-')) return iso || '';
+      const p = iso.split('-');
+      const y = p[0];
+      const mIdx = parseInt(p[1], 10) - 1;
+      const d = p[2];
+      return `${d}-${MONTHS_SHORT_EN[mIdx] || 'MMM'}-${y}`;
+    }
+
+    function openPaymentConfirmModal() {
+      const modal = document.getElementById('confirmPaymentModal');
+      const nameEl = document.getElementById('confirmCustNameDisplay');
+      const amtInput = document.getElementById('confirmPayAmountInput');
+      const dateInput = document.getElementById('confirmPayDateInput');
+      const utrInput = document.getElementById('confirmPayUtrInput');
+
+      if (nameEl) nameEl.innerText = cardData ? (cardData.customerName || '') : '';
+      if (amtInput) {
+        // Pre-fill with current calculated netDue
+        const dueVal = window.__lastCalculatedNetDue || 0;
+        amtInput.value = dueVal > 0 ? dueVal.toFixed(2) : '';
+      }
+      if (dateInput) {
+        dateInput.value = getTodayIso();
+      }
+      if (utrInput) {
+        utrInput.value = '';
+      }
+
+      modal.style.display = 'flex';
+    }
+
+    function closePaymentConfirmModal(e) {
+      if (e && e.target && e.target !== e.currentTarget && !e.target.classList.contains('modal-close')) return;
+      const modal = document.getElementById('confirmPaymentModal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function showPaymentRequestStatus(status, amount, dateStr, extraReason) {
+      const banner = document.getElementById('paymentRequestStatusBanner');
+      const titleEl = document.getElementById('paymentRequestStatusTitle');
+      const msgEl = document.getElementById('paymentRequestStatusMsg');
+      if (!banner || !titleEl || !msgEl) return;
+
+      const isHi = currentLang === 'hi';
+      const amtStr = typeof amount === 'number' ? amount.toFixed(2) : amount;
+
+      if (status === 'pending') {
+        banner.style.display = 'block';
+        banner.style.background = '#fef3c7';
+        banner.style.border = '1px solid #f59e0b';
+        banner.style.color = '#92400e';
+        titleEl.innerText = isHi ? `⏳ ₹${amtStr} की पेमेंट पुष्टि भेजी गई है` : `⏳ Payment confirmation of ₹${amtStr} sent`;
+        msgEl.innerText = isHi
+          ? `डेयरी मालिक द्वारा बैंक खाते में जांच की जा रही है। पुष्टि होते ही आपका कार्ड यहाँ तुरंत अपडेट हो जाएगा।`
+          : `Dairy owner is verifying payment. Your card will automatically update once approved.`;
+      } else if (status === 'accepted') {
+        banner.style.display = 'block';
+        banner.style.background = '#ecfdf5';
+        banner.style.border = '1px solid #10b981';
+        banner.style.color = '#065f46';
+        titleEl.innerText = isHi ? `🎉 बधाई! ₹${amtStr} की पेमेंट स्वीकार हो गई!` : `🎉 Approved! Payment of ₹${amtStr} Accepted!`;
+        msgEl.innerText = isHi
+          ? `डेयरी द्वारा आपके खाते में भुगतान दर्ज कर दिया गया है और कार्ड अपडेट हो चुका है। धन्यवाद! 🙏`
+          : `Dairy has credited this payment to your account and card is updated. Thank you! 🙏`;
+      } else if (status === 'rejected') {
+        banner.style.display = 'block';
+        banner.style.background = '#fee2e2';
+        banner.style.border = '1px solid #ef4444';
+        banner.style.color = '#991b1b';
+        titleEl.innerText = isHi ? `⚠️ पेमेंट पुष्टि अस्वीकृत (Not Verified)` : `⚠️ Payment Not Verified`;
+        const reasonTxt = extraReason ? (isHi ? `\nकारण: ${extraReason}` : `\nReason: ${extraReason}`) : '';
+        msgEl.innerText = (isHi
+          ? `बैंक खाते में भुगतान की पुष्टि नहीं हो सकी। कृपया UTR/स्क्रीनशॉट व्हाट्सएप पर भेजें या संपर्क करें।`
+          : `Could not verify payment in bank account. Please share screenshot/UTR on WhatsApp or contact dairy.`) + reasonTxt;
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+
+    let statusPollInterval = null;
+    function startPaymentStatusPolling(reqId, amount, dateStr) {
+      if (statusPollInterval) clearInterval(statusPollInterval);
+
+      let attempts = 0;
+      const maxAttempts = 150; // ~10 minutes
+
+      statusPollInterval = setInterval(async () => {
+        attempts++;
+        if (attempts > maxAttempts) {
+          clearInterval(statusPollInterval);
+          return;
+        }
+
+        try {
+          const res = await fetch(`${FIREBASE_RTDB_BASE}/payment_requests/${encodeURIComponent(supplierId)}/${encodeURIComponent(reqId)}.json`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data) return;
+
+          if (data.status === 'accepted') {
+            clearInterval(statusPollInterval);
+            statusPollInterval = null;
+            localStorage.removeItem(`dairy_pending_req_${supplierId}_${customerId}`);
+            showPaymentRequestStatus('accepted', data.amount || amount, dateStr);
+            // Refresh live card data
+            setTimeout(() => {
+              fetchCardData();
+            }, 1000);
+          } else if (data.status === 'rejected') {
+            clearInterval(statusPollInterval);
+            statusPollInterval = null;
+            localStorage.removeItem(`dairy_pending_req_${supplierId}_${customerId}`);
+            showPaymentRequestStatus('rejected', data.amount || amount, dateStr, data.rejectReason);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }, 4000);
+    }
+
+    async function checkPendingPaymentRequest() {
+      if (!supplierId || !customerId) return;
+      const savedReqId = localStorage.getItem(`dairy_pending_req_${supplierId}_${customerId}`);
+
+      try {
+        if (savedReqId) {
+          const res = await fetch(`${FIREBASE_RTDB_BASE}/payment_requests/${encodeURIComponent(supplierId)}/${encodeURIComponent(savedReqId)}.json`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data) {
+              if (data.status === 'pending') {
+                showPaymentRequestStatus('pending', data.amount, data.displayDate);
+                startPaymentStatusPolling(savedReqId, data.amount, data.displayDate);
+                return;
+              } else if (data.status === 'accepted') {
+                showPaymentRequestStatus('accepted', data.amount, data.displayDate);
+                localStorage.removeItem(`dairy_pending_req_${supplierId}_${customerId}`);
+                return;
+              } else if (data.status === 'rejected') {
+                showPaymentRequestStatus('rejected', data.amount, data.displayDate, data.rejectReason);
+                localStorage.removeItem(`dairy_pending_req_${supplierId}_${customerId}`);
+                return;
+              }
+            }
+          }
+        }
+
+        // Check if there is an active pending request in Firebase for this customer
+        const allRes = await fetch(`${FIREBASE_RTDB_BASE}/payment_requests/${encodeURIComponent(supplierId)}.json`);
+        if (allRes.ok) {
+          const allData = await allRes.json();
+          if (allData && typeof allData === 'object') {
+            const pendingReq = Object.values(allData).find(r => r && r.customerId === customerId && r.status === 'pending');
+            if (pendingReq) {
+              localStorage.setItem(`dairy_pending_req_${supplierId}_${customerId}`, pendingReq.id);
+              showPaymentRequestStatus('pending', pendingReq.amount, pendingReq.displayDate);
+              startPaymentStatusPolling(pendingReq.id, pendingReq.amount, pendingReq.displayDate);
+            }
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    async function submitPaymentConfirmation() {
+      const btn = document.getElementById('btnSubmitPaymentConfirm');
+      const amountInput = document.getElementById('confirmPayAmountInput');
+      const dateInput = document.getElementById('confirmPayDateInput');
+      const utrInput = document.getElementById('confirmPayUtrInput');
+
+      const amt = parseFloat(amountInput.value);
+      if (isNaN(amt) || amt <= 0) {
+        alert(currentLang === 'hi' ? 'कृपया सही राशि दर्ज करें' : 'Please enter a valid amount');
+        return;
+      }
+
+      const payDate = dateInput.value || getTodayIso();
+      const utr = (utrInput.value || '').trim();
+
+      btn.disabled = true;
+      btn.innerText = currentLang === 'hi' ? 'भेज रहे हैं...' : 'Submitting...';
+
+      const reqId = 'req_' + Date.now();
+      const displayDateStr = formatIsoToDisplay(payDate);
+      const payload = {
+        id: reqId,
+        supplierId: supplierId,
+        customerId: customerId,
+        customerName: cardData.customerName || '',
+        customerPhone: cardData.customerPhone || '',
+        amount: amt,
+        date: payDate,
+        displayDate: displayDateStr,
+        utrOrNote: utr,
+        status: 'pending',
+        requestedAt: Date.now()
+      };
+
+      try {
+        const res = await fetch(`${FIREBASE_RTDB_BASE}/payment_requests/${encodeURIComponent(supplierId)}/${encodeURIComponent(reqId)}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          localStorage.setItem(`dairy_pending_req_${supplierId}_${customerId}`, reqId);
+          closePaymentConfirmModal();
+          showPaymentRequestStatus('pending', amt, displayDateStr);
+          startPaymentStatusPolling(reqId, amt, displayDateStr);
+        } else {
+          alert(currentLang === 'hi' ? 'अनुरोध भेजने में त्रुटि हुई। कृपया पुनः प्रयास करें।' : 'Failed to submit request. Please try again.');
+        }
+      } catch (e) {
+        console.error('Error submitting payment request:', e);
+        alert(currentLang === 'hi' ? 'इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।' : 'Network error. Please check your connection.');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = currentLang === 'hi' ? '✓ पुष्टि भेजें' : '✓ Submit Request';
+      }
+    }
+
+    // Also store netDue on window for the confirmation modal
+
     // Auto poll updates every 30 seconds
     setInterval(fetchCardData, 30000);
+
+    // Check pending payment status on start
+    setTimeout(checkPendingPaymentRequest, 1000);
   </script>
 </body>
 </html>

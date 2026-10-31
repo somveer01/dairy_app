@@ -122,6 +122,22 @@ export interface Payment {
   isDeleted?: boolean;
 }
 
+export interface OnlinePaymentRequest {
+  id: string;
+  supplierId: string;
+  customerId: string;
+  customerName: string;
+  customerPhone?: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  displayDate?: string; // DD-MMM-YYYY
+  status: 'pending' | 'accepted' | 'rejected';
+  utrOrNote?: string;
+  requestedAt: number;
+  respondedAt?: number;
+  rejectReason?: string;
+}
+
 export interface CustomerDueSummary {
   customer: Customer;
   totalLitresCow: number;

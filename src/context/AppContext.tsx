@@ -3,7 +3,8 @@ import { translations, Language } from '../localization/i18n';
 import { StorageService } from '../services/storageService';
 import { AutoSyncService } from '../services/autoSyncService';
 import { SubscriptionService, SubscriptionStatusResult } from '../services/subscriptionService';
-import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment } from '../types';
+import { Customer, MilkEntry, Payment, Supplier, SubSupplier, MilkInwardEntry, SubSupplierPayment, OnlinePaymentRequest } from '../types';
+import { PaymentRequestService } from '../services/paymentRequestService';
 
 interface AppContextType {
   lang: Language;
@@ -23,6 +24,8 @@ interface AppContextType {
   refreshMilkInwardEntries: () => Promise<void>;
   subSupplierPayments: SubSupplierPayment[];
   refreshSubSupplierPayments: () => Promise<void>;
+  onlinePaymentRequests: OnlinePaymentRequest[];
+  pendingPaymentRequestsCount: number;
   isLoading: boolean;
   isAuthModalVisible: boolean;
   openAuthModal: () => void;
@@ -73,8 +76,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [subSuppliers, setSubSuppliers] = useState<SubSupplier[]>([]);
   const [milkInwardEntries, setMilkInwardEntries] = useState<MilkInwardEntry[]>([]);
   const [subSupplierPayments, setSubSupplierPayments] = useState<SubSupplierPayment[]>([]);
+  const [onlinePaymentRequests, setOnlinePaymentRequests] = useState<OnlinePaymentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalVisible, setIsAuthModalVisible] = useState(false);
+
+  useEffect(() => {
+    if (supplier?.id) {
+      const unsub = PaymentRequestService.listenToPaymentRequests(supplier.id, (requests) => {
+        setOnlinePaymentRequests(requests);
+      });
+      return unsub;
+    } else {
+      setOnlinePaymentRequests([]);
+    }
+  }, [supplier?.id]);
+
+  const pendingPaymentRequestsCount = React.useMemo(() => {
+    return onlinePaymentRequests.filter(r => r.status === 'pending').length;
+  }, [onlinePaymentRequests]);
 
   useEffect(() => {
     loadInitialData();
@@ -288,6 +307,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshMilkInwardEntries,
         subSupplierPayments,
         refreshSubSupplierPayments,
+        onlinePaymentRequests,
+        pendingPaymentRequestsCount,
         isLoading,
         isAuthModalVisible,
         openAuthModal,

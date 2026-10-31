@@ -21,7 +21,9 @@ import { StorageService } from '../../services/storageService';
 import { InstallAppModal } from '../../components/InstallAppModal';
 import { formatToDisplayDate } from '../../utils/dateUtils';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
-import { Payment, SubSupplierPayment } from '../../types';
+import { Payment, SubSupplierPayment, OnlinePaymentRequest } from '../../types';
+import { PaymentRequestService } from '../../services/paymentRequestService';
+import { WhatsAppService } from '../../services/whatsappService';
 
 const toLocalIso = (d: Date): string => {
   const y = d.getFullYear();
@@ -64,7 +66,9 @@ export const DashboardScreen = ({ navigation }: any) => {
     subSupplierPayments,
     refreshSubSupplierPayments,
     subscriptionStatus,
-    openSubscriptionModal
+    openSubscriptionModal,
+    onlinePaymentRequests,
+    pendingPaymentRequestsCount
   } = useApp();
 
   const isHindi = lang === 'hi';
@@ -489,6 +493,144 @@ export const DashboardScreen = ({ navigation }: any) => {
     setInstallModalVisible(true);
   };
 
+  // Online Payment Request States & Logic
+  const [onlinePayModalVisible, setOnlinePayModalVisible] = useState(false);
+  const [onlinePayActiveTab, setOnlinePayActiveTab] = useState<'pending' | 'history'>('pending');
+  const [isProcessingRequestId, setIsProcessingRequestId] = useState<string | null>(null);
+  const [rejectPromptModalVisible, setRejectPromptModalVisible] = useState(false);
+  const [requestToReject, setRequestToReject] = useState<OnlinePaymentRequest | null>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState('');
+
+  const pendingRequestsList = useMemo(() => {
+    return (onlinePaymentRequests || []).filter(r => r.status === 'pending');
+  }, [onlinePaymentRequests]);
+
+  const historyRequestsList = useMemo(() => {
+    return (onlinePaymentRequests || []).filter(r => r.status !== 'pending');
+  }, [onlinePaymentRequests]);
+
+  const formatTimeAgo = (ts?: number): string => {
+    if (!ts) return '';
+    const diffSec = Math.floor((Date.now() - ts) / 1000);
+    if (diffSec < 60) return isHindi ? 'अभी-अभी' : 'Just now';
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return isHindi ? `${diffMin} मिनट पहले` : `${diffMin}m ago`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return isHindi ? `${diffHour} घंटे पहले` : `${diffHour}h ago`;
+    const diffDays = Math.floor(diffHour / 24);
+    return isHindi ? `${diffDays} दिन पहले` : `${diffDays}d ago`;
+  };
+
+  const handleAcceptOnlinePayment = async (req: OnlinePaymentRequest) => {
+    requireAuth(async () => {
+      try {
+        setIsProcessingRequestId(req.id);
+        await PaymentRequestService.acceptPaymentRequest(
+          req,
+          supplier!,
+          customers,
+          milkEntries,
+          payments
+        );
+        await refreshPayments();
+
+        // Send WhatsApp confirmation to the customer
+        if (req.customerPhone) {
+          const displayDate = req.displayDate || formatToDisplayDate(req.date);
+          await WhatsAppService.sendPaymentAcceptedWhatsApp(
+            req.customerPhone,
+            req.customerName,
+            req.amount,
+            displayDate,
+            supplier?.businessName || 'Dairy Farm',
+            isHindi ? 'hi' : 'en'
+          );
+        }
+
+        showAlert(
+          isHindi ? '✓ भुगतान दर्ज किया गया' : '✓ Payment Recorded',
+          isHindi
+            ? `${req.customerName} की ₹${req.amount.toFixed(2)} की UPI पेमेंट सफलतापूर्वक ऐप में जोड़ दी गई है और ग्राहक का कार्ड अपडेट कर दिया गया है।`
+            : `Payment of ₹${req.amount.toFixed(2)} for ${req.customerName} has been recorded and the customer's card is updated.`
+        );
+      } catch (e: any) {
+        console.error('Error accepting payment request:', e);
+        showAlert(
+          isHindi ? 'त्रुटि' : 'Error',
+          isHindi ? 'भुगतान स्वीकार करने में समस्या आई। कृपया पुनः प्रयास करें।' : 'Could not accept payment request. Please try again.'
+        );
+      } finally {
+        setIsProcessingRequestId(null);
+      }
+    });
+  };
+
+  const handleOpenRejectPrompt = (req: OnlinePaymentRequest) => {
+    setRequestToReject(req);
+    setRejectReasonInput(isHindi ? 'बैंक खाते में राशि प्राप्त नहीं हुई / mismatch' : 'Payment not credited to bank account');
+    setRejectPromptModalVisible(true);
+  };
+
+  const handleConfirmRejectOnlinePayment = async () => {
+    if (!requestToReject || !supplier?.id) return;
+    const req = requestToReject;
+    const reason = rejectReasonInput.trim();
+
+    try {
+      setIsProcessingRequestId(req.id);
+      setRejectPromptModalVisible(false);
+
+      await PaymentRequestService.rejectPaymentRequest(supplier.id, req.id, reason);
+
+      if (req.customerPhone) {
+        const displayDate = req.displayDate || formatToDisplayDate(req.date);
+        await WhatsAppService.sendPaymentRejectedWhatsApp(
+          req.customerPhone,
+          req.customerName,
+          req.amount,
+          displayDate,
+          supplier?.businessName || 'Dairy Farm',
+          reason,
+          isHindi ? 'hi' : 'en'
+        );
+      }
+
+      showAlert(
+        isHindi ? 'भुगतान अस्वीकृत' : 'Payment Rejected',
+        isHindi
+          ? `${req.customerName} का भुगतान अनुरोध अस्वीकृत कर दिया गया है और ग्राहक को व्हाट्सएप पर सूचना भेजी गई है।`
+          : `Payment request for ${req.customerName} was rejected and customer was notified via WhatsApp.`
+      );
+    } catch (e) {
+      console.error('Error rejecting payment request:', e);
+      showAlert(
+        isHindi ? 'त्रुटि' : 'Error',
+        isHindi ? 'अस्वीकृत करने में समस्या आई।' : 'Could not reject payment request.'
+      );
+    } finally {
+      setIsProcessingRequestId(null);
+      setRequestToReject(null);
+    }
+  };
+
+  const handleDeleteOnlinePaymentRequest = (req: OnlinePaymentRequest) => {
+    if (!supplier?.id) return;
+    confirmAction(
+      isHindi ? 'अनुरोध हटाएं?' : 'Delete Request?',
+      isHindi ? `क्या आप ${req.customerName} का यह अनुरोध हटाना चाहते हैं?` : `Do you want to remove this request for ${req.customerName}?`,
+      async () => {
+        await PaymentRequestService.deletePaymentRequest(supplier.id, req.id);
+        showAlert(
+          isHindi ? 'हटा दिया गया' : 'Deleted',
+          isHindi ? 'अनुरोध हटा दिया गया है।' : 'Request removed.'
+        );
+      },
+      isHindi ? 'हटाएं' : 'Delete',
+      isHindi ? 'रद्द करें' : 'Cancel',
+      true
+    );
+  };
+
   // 1-Tap Customer Call
   const handleCallCustomer = (phone: string) => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
@@ -642,7 +784,63 @@ export const DashboardScreen = ({ navigation }: any) => {
             </Text>
             <Text style={{ fontSize: 13 }}>✏️</Text>
           </TouchableOpacity>
+
+          {/* Quick Notification Bell for Online Payments */}
+          <TouchableOpacity
+            style={[
+              styles.headerBellBtn,
+              pendingPaymentRequestsCount > 0 && styles.headerBellBtnActive
+            ]}
+            onPress={() => {
+              setOnlinePayActiveTab('pending');
+              setOnlinePayModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={{ fontSize: 18 }}>🔔</Text>
+            {pendingPaymentRequestsCount > 0 && (
+              <View style={styles.headerBellBadge}>
+                <Text style={styles.headerBellBadgeText}>{pendingPaymentRequestsCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
+
+        {/* Active Online Payment Request Notification Banner */}
+        {pendingPaymentRequestsCount > 0 && (
+          <TouchableOpacity
+            style={styles.onlinePayBannerCard}
+            onPress={() => {
+              setOnlinePayActiveTab('pending');
+              setOnlinePayModalVisible(true);
+            }}
+            activeOpacity={0.88}
+          >
+            <View style={styles.onlinePayIconBadge}>
+              <Text style={{ fontSize: 20 }}>📲</Text>
+              <View style={styles.onlinePayCountBubble}>
+                <Text style={styles.onlinePayCountBubbleText}>{pendingPaymentRequestsCount}</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1, paddingHorizontal: 8 }}>
+              <Text style={styles.onlinePayBannerTitle}>
+                {isHindi
+                  ? `${pendingPaymentRequestsCount} नए ऑनलाइन UPI भुगतान प्राप्त`
+                  : `${pendingPaymentRequestsCount} New Online UPI Payment(s)`}
+              </Text>
+              <Text style={styles.onlinePayBannerSub}>
+                {isHindi
+                  ? 'ग्राहकों ने कार्ड से पेमेंट की पुष्टि भेजी है — 1-टैप में जांचें व दर्ज करें'
+                  : 'Customer confirmed UPI payment on Milk Card — 1-Tap review & save'}
+              </Text>
+            </View>
+            <View style={styles.onlinePayActionPill}>
+              <Text style={styles.onlinePayActionPillText}>
+                {isHindi ? 'जांचें' : 'Review'} →
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* App Installation Prompt Card (Web browser mode) */}
         {showInstallBanner && (
@@ -1548,6 +1746,281 @@ export const DashboardScreen = ({ navigation }: any) => {
         </View>
       </Modal>
 
+      {/* Online Payment Requests Modal */}
+      <Modal
+        visible={onlinePayModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setOnlinePayModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '90%', paddingBottom: 16 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalIcon}>📲</Text>
+              <Text style={styles.modalTitle}>
+                {isHindi ? 'ऑनलाइन UPI भुगतान अनुरोध' : 'Online UPI Payment Requests'}
+              </Text>
+              <Text style={styles.modalSubtitle}>
+                {isHindi
+                  ? 'ग्राहकों द्वारा डिजिटल दूध कार्ड से भेजे गए भुगतान'
+                  : 'Customer payments submitted from Digital Milk Card'}
+              </Text>
+            </View>
+
+            {/* Filter Tabs: Pending vs Processed */}
+            <View style={styles.onlinePayTabsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.onlinePayTabBtn,
+                  onlinePayActiveTab === 'pending' && styles.onlinePayTabBtnActive
+                ]}
+                onPress={() => setOnlinePayActiveTab('pending')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.onlinePayTabBtnText,
+                    onlinePayActiveTab === 'pending' && styles.onlinePayTabBtnTextActive
+                  ]}
+                >
+                  {isHindi ? `लंबित (${pendingRequestsList.length})` : `Pending (${pendingRequestsList.length})`}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.onlinePayTabBtn,
+                  onlinePayActiveTab === 'history' && styles.onlinePayTabBtnActive
+                ]}
+                onPress={() => setOnlinePayActiveTab('history')}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.onlinePayTabBtnText,
+                    onlinePayActiveTab === 'history' && styles.onlinePayTabBtnTextActive
+                  ]}
+                >
+                  {isHindi ? `इतिहास (${historyRequestsList.length})` : `History (${historyRequestsList.length})`}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Requests List */}
+            <ScrollView style={{ maxHeight: 380, marginVertical: 6 }} showsVerticalScrollIndicator={false}>
+              {onlinePayActiveTab === 'pending' ? (
+                pendingRequestsList.length === 0 ? (
+                  <View style={styles.onlinePayEmptyBox}>
+                    <Text style={{ fontSize: 32, marginBottom: 8 }}>✓</Text>
+                    <Text style={styles.onlinePayEmptyTitle}>
+                      {isHindi ? 'कोई नया लंबित अनुरोध नहीं है' : 'No Pending Requests'}
+                    </Text>
+                    <Text style={styles.onlinePayEmptySub}>
+                      {isHindi
+                        ? 'जैसे ही कोई ग्राहक कार्ड से UPI पेमेंट पुष्टि भेजेगा, वह यहाँ दिखेगा।'
+                        : 'When a customer submits a UPI payment from their milk card, it will appear here.'}
+                    </Text>
+                  </View>
+                ) : (
+                  pendingRequestsList.map(req => {
+                    const isProcessing = isProcessingRequestId === req.id;
+                    const displayDate = req.displayDate || formatToDisplayDate(req.date);
+
+                    return (
+                      <View key={req.id} style={styles.onlinePayReqCard}>
+                        <View style={styles.onlinePayReqTopRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.onlinePayReqCustName}>👤 {req.customerName}</Text>
+                            {req.customerPhone ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                                <Text style={styles.onlinePayReqPhone}>📞 {req.customerPhone}</Text>
+                                <TouchableOpacity
+                                  onPress={() => handleCallCustomer(req.customerPhone!)}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <Text style={{ fontSize: 13 }}>📞</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => handleWhatsAppCustomer(req.customerPhone!, req.customerName)}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <Text style={{ fontSize: 13 }}>💬</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ) : null}
+                          </View>
+                          <View style={styles.onlinePayReqAmountBadge}>
+                            <Text style={styles.onlinePayReqAmountText}>₹{req.amount.toFixed(2)}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.onlinePayReqDetailsRow}>
+                          <Text style={styles.onlinePayReqDetailItem}>📅 {displayDate}</Text>
+                          {req.requestedAt ? (
+                            <Text style={styles.onlinePayReqDetailItem}>⏱️ {formatTimeAgo(req.requestedAt)}</Text>
+                          ) : null}
+                        </View>
+
+                        {req.utrOrNote ? (
+                          <View style={styles.onlinePayReqUtrBox}>
+                            <Text style={styles.onlinePayReqUtrText}>
+                              💳 {isHindi ? 'UTR / संदर्भ:' : 'UTR / Ref:'} {req.utrOrNote}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {/* Action Buttons: Accept & Reject */}
+                        <View style={styles.onlinePayReqActionRow}>
+                          <TouchableOpacity
+                            style={[styles.onlinePayRejectBtn, isProcessing && { opacity: 0.5 }]}
+                            onPress={() => handleOpenRejectPrompt(req)}
+                            disabled={isProcessing}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.onlinePayRejectBtnText}>
+                              ✕ {isHindi ? 'अस्वीकार' : 'Reject'}
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.onlinePayAcceptBtn, isProcessing && { opacity: 0.5 }]}
+                            onPress={() => handleAcceptOnlinePayment(req)}
+                            disabled={isProcessing}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.onlinePayAcceptBtnText}>
+                              {isProcessing
+                                ? (isHindi ? 'सहेज रहे हैं...' : 'Saving...')
+                                : (isHindi ? '✓ स्वीकार करें (Accept)' : '✓ Accept & Record')}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })
+                )
+              ) : (
+                historyRequestsList.length === 0 ? (
+                  <View style={styles.onlinePayEmptyBox}>
+                    <Text style={{ fontSize: 32, marginBottom: 8 }}>📋</Text>
+                    <Text style={styles.onlinePayEmptyTitle}>
+                      {isHindi ? 'कोई पुराना इतिहास नहीं है' : 'No History Records'}
+                    </Text>
+                  </View>
+                ) : (
+                  historyRequestsList.map(req => {
+                    const isAccepted = req.status === 'accepted';
+                    const displayDate = req.displayDate || formatToDisplayDate(req.date);
+
+                    return (
+                      <View key={req.id} style={styles.onlinePayHistoryCard}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={styles.onlinePayReqCustName}>👤 {req.customerName}</Text>
+                            <View
+                              style={[
+                                styles.onlinePayStatusBadge,
+                                isAccepted ? styles.onlinePayStatusAccepted : styles.onlinePayStatusRejected
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.onlinePayStatusBadgeText,
+                                  isAccepted ? styles.onlinePayStatusTextAccepted : styles.onlinePayStatusTextRejected
+                                ]}
+                              >
+                                {isAccepted
+                                  ? (isHindi ? '✓ स्वीकृत' : '✓ Accepted')
+                                  : (isHindi ? '✕ अस्वीकृत' : '✕ Rejected')}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', marginTop: 3 }}>
+                            ₹{req.amount.toFixed(2)} • {displayDate}
+                          </Text>
+                          {req.rejectReason ? (
+                            <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>
+                              ⚠️ {req.rejectReason}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <TouchableOpacity
+                          style={{ padding: 6, marginLeft: 8 }}
+                          onPress={() => handleDeleteOnlinePaymentRequest(req)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={{ fontSize: 16 }}>🗑️</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })
+                )
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => setOnlinePayModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalCancelBtnText}>{isHindi ? 'बंद करें (Close)' : 'Close'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Rejection Reason Modal */}
+      <Modal
+        visible={rejectPromptModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRejectPromptModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 360 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalIcon}>⚠️</Text>
+              <Text style={styles.modalTitle}>
+                {isHindi ? 'भुगतान अस्वीकार करें' : 'Reject Payment Request'}
+              </Text>
+              <Text style={styles.modalSubtitle}>
+                {isHindi
+                  ? 'अस्वीकार करने का कारण लिखें (यह ग्राहक को व्हाट्सएप पर भी भेजा जाएगा):'
+                  : 'Enter rejection reason (will be included in WhatsApp message):'}
+              </Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <TextInput
+                style={[styles.modalInput, { minHeight: 70, textAlignVertical: 'top' }]}
+                value={rejectReasonInput}
+                onChangeText={setRejectReasonInput}
+                placeholder={isHindi ? 'उदा. बैंक खाते में राशि नहीं मिली...' : 'e.g. Payment not credited...'}
+                placeholderTextColor="#94a3b8"
+                multiline
+              />
+            </View>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setRejectPromptModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCancelBtnText}>{isHindi ? 'रद्द करें' : 'Cancel'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: '#ef4444', flex: 1 }]}
+                onPress={handleConfirmRejectOnlinePayment}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalSaveBtnText}>{isHindi ? 'अस्वीकार करें' : 'Reject'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* App Installation Process Guide Modal */}
       <InstallAppModal
         visible={installModalVisible}
@@ -2266,5 +2739,281 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#ffffff'
+  },
+
+  // Header Bell Notification
+  headerBellBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    position: 'relative'
+  },
+  headerBellBtnActive: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#f59e0b'
+  },
+  headerBellBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#ffffff'
+  },
+  headerBellBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900'
+  },
+
+  // Active Online Payment Notification Banner
+  onlinePayBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    borderWidth: 1.5,
+    borderColor: '#f59e0b',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    shadowColor: '#f59e0b',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3
+  },
+  onlinePayIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#fde68a'
+  },
+  onlinePayCountBubble: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    backgroundColor: '#ef4444',
+    borderRadius: 9,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  onlinePayCountBubbleText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold'
+  },
+  onlinePayBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#78350f'
+  },
+  onlinePayBannerSub: {
+    fontSize: 11,
+    color: '#92400e',
+    marginTop: 2
+  },
+  onlinePayActionPill: {
+    backgroundColor: '#d97706',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  onlinePayActionPillText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800'
+  },
+
+  // Online Pay Modal Tabs
+  onlinePayTabsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 10
+  },
+  onlinePayTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center'
+  },
+  onlinePayTabBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1
+  },
+  onlinePayTabBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  onlinePayTabBtnTextActive: {
+    color: '#0f172a',
+    fontWeight: '800'
+  },
+
+  // Online Pay Cards
+  onlinePayEmptyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 20
+  },
+  onlinePayEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#475569'
+  },
+  onlinePayEmptySub: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 4
+  },
+  onlinePayReqCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1
+  },
+  onlinePayReqTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start'
+  },
+  onlinePayReqCustName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  onlinePayReqPhone: {
+    fontSize: 11,
+    color: '#64748b'
+  },
+  onlinePayReqAmountBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#a7f3d0'
+  },
+  onlinePayReqAmountText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#047857'
+  },
+  onlinePayReqDetailsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8
+  },
+  onlinePayReqDetailItem: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '500'
+  },
+  onlinePayReqUtrBox: {
+    backgroundColor: '#f8fafc',
+    padding: 6,
+    borderRadius: 6,
+    marginTop: 6
+  },
+  onlinePayReqUtrText: {
+    fontSize: 11,
+    color: '#334155'
+  },
+  onlinePayReqActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10
+  },
+  onlinePayRejectBtn: {
+    flex: 1,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  onlinePayRejectBtnText: {
+    color: '#dc2626',
+    fontWeight: '700',
+    fontSize: 12
+  },
+  onlinePayAcceptBtn: {
+    flex: 2,
+    backgroundColor: '#16a34a',
+    paddingVertical: 9,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  onlinePayAcceptBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 12
+  },
+  onlinePayHistoryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 10,
+    marginBottom: 8
+  },
+  onlinePayStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  onlinePayStatusAccepted: {
+    backgroundColor: '#ecfdf5'
+  },
+  onlinePayStatusRejected: {
+    backgroundColor: '#fef2f2'
+  },
+  onlinePayStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '800'
+  },
+  onlinePayStatusTextAccepted: {
+    color: '#059669'
+  },
+  onlinePayStatusTextRejected: {
+    color: '#dc2626'
   }
 });
