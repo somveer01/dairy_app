@@ -1027,6 +1027,44 @@
   </div>
 
 
+  <!-- Confirm Payment Modal -->
+  <div class="modal-overlay" id="confirmPaymentModal" onclick="closePaymentConfirmModal(event)" style="display: none;">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title" id="confirmPaymentModalTitle">📲 भुगतान पुष्टि भेजें</div>
+        <button class="modal-close" onclick="closePaymentConfirmModal()">✕</button>
+      </div>
+      <div style="font-size: 12px; color: #64748b; margin-bottom: 12px;" id="confirmPaymentModalSub">
+        डेयरी को सूचित करें ताकि आपका कार्ड तुरंत अपडेट हो जाए।
+      </div>
+      
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;" id="lblCustName">ग्राहक का नाम</label>
+        <div id="confirmCustNameDisplay" style="font-size: 13px; font-weight: 800; color: #0f172a; background: #f1f5f9; padding: 8px 12px; border-radius: 8px;"></div>
+      </div>
+
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;" id="lblPayAmount">भुगतान की गई राशि (₹) *</label>
+        <input type="number" id="confirmPayAmountInput" step="any" style="width: 100%; font-size: 16px; font-weight: 800; color: #0f172a; padding: 9px 12px; border: 1.5px solid #0284c7; border-radius: 8px; box-sizing: border-box; outline: none;" placeholder="0.00" />
+      </div>
+
+      <div style="margin-bottom: 10px;">
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;" id="lblPayDate">भुगतान की तारीख *</label>
+        <input type="date" id="confirmPayDateInput" style="width: 100%; font-size: 13px; font-weight: 600; color: #0f172a; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; outline: none;" />
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;" id="lblPayUtr">बैंक UTR / रेफरेंस नंबर (वैकल्पिक)</label>
+        <input type="text" id="confirmPayUtrInput" style="width: 100%; font-size: 13px; color: #0f172a; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; outline: none;" placeholder="उदा. 429817291829" />
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button type="button" onclick="closePaymentConfirmModal()" style="flex: 1; padding: 11px; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 13px; border: none; border-radius: 10px; cursor: pointer;" id="btnCancelConfirm">रद्द करें</button>
+        <button type="button" id="btnSubmitPaymentConfirm" onclick="submitPaymentConfirmation()" style="flex: 2; padding: 11px; background: #16a34a; color: #ffffff; font-weight: 800; font-size: 13px; border: none; border-radius: 10px; cursor: pointer; box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);">✓ पुष्टि भेजें</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Client Script for Live Firebase REST Data & Bilingual Render -->
   <script>
     const FIREBASE_RTDB_BASE = 'https://diaryapp-28278-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -2127,6 +2165,28 @@
 
     function openPaymentConfirmModal() {
       const modal = document.getElementById('confirmPaymentModal');
+      if (!modal) {
+        console.error('confirmPaymentModal element not found');
+        return;
+      }
+      const t = I18N[currentLang] || I18N.hi;
+      const titleEl = document.getElementById('confirmPaymentModalTitle');
+      if (titleEl) titleEl.innerText = t.confirmPaymentModalTitle || '📲 भुगतान पुष्टि भेजें';
+      const subEl = document.getElementById('confirmPaymentModalSub');
+      if (subEl) subEl.innerText = t.confirmPaymentModalSub || 'डेयरी को सूचित करें ताकि आपका कार्ड तुरंत अपडेट हो जाए।';
+      const lblCust = document.getElementById('lblCustName');
+      if (lblCust) lblCust.innerText = t.lblCustName || 'ग्राहक का नाम';
+      const lblAmt = document.getElementById('lblPayAmount');
+      if (lblAmt) lblAmt.innerText = t.lblPayAmount || 'भुगतान की गई राशि (₹) *';
+      const lblDate = document.getElementById('lblPayDate');
+      if (lblDate) lblDate.innerText = t.lblPayDate || 'भुगतान की तारीख *';
+      const lblUtr = document.getElementById('lblPayUtr');
+      if (lblUtr) lblUtr.innerText = t.lblPayUtr || 'बैंक UTR / रेफरेंस नंबर (वैकल्पिक)';
+      const btnCancel = document.getElementById('btnCancelConfirm');
+      if (btnCancel) btnCancel.innerText = t.btnCancelConfirm || 'रद्द करें';
+      const btnSubmit = document.getElementById('btnSubmitPaymentConfirm');
+      if (btnSubmit) btnSubmit.innerText = t.btnSubmitPaymentConfirm || '✓ पुष्टि भेजें';
+
       const nameEl = document.getElementById('confirmCustNameDisplay');
       const amtInput = document.getElementById('confirmPayAmountInput');
       const dateInput = document.getElementById('confirmPayDateInput');
