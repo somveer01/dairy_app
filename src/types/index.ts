@@ -133,6 +133,7 @@ export interface OnlinePaymentRequest {
   displayDate?: string; // DD-MMM-YYYY
   status: 'pending' | 'accepted' | 'rejected';
   utrOrNote?: string;
+  receiptImage?: string; // Compressed base64 data URL
   requestedAt: number;
   respondedAt?: number;
   rejectReason?: string;

@@ -45,6 +45,7 @@ export const PaymentRequestService = {
               displayDate: item.displayDate || '',
               status: item.status || 'pending',
               utrOrNote: item.utrOrNote || '',
+              receiptImage: item.receiptImage || '',
               requestedAt: item.requestedAt || 0,
               respondedAt: item.respondedAt,
               rejectReason: item.rejectReason

@@ -12,7 +12,8 @@ import {
   Linking,
   FlatList,
   BackHandler,
-  ToastAndroid
+  ToastAndroid,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
@@ -500,6 +501,8 @@ export const DashboardScreen = ({ navigation }: any) => {
   const [rejectPromptModalVisible, setRejectPromptModalVisible] = useState(false);
   const [requestToReject, setRequestToReject] = useState<OnlinePaymentRequest | null>(null);
   const [rejectReasonInput, setRejectReasonInput] = useState('');
+  const [receiptModalVisible, setReceiptModalVisible] = useState(false);
+  const [viewingReceiptImage, setViewingReceiptImage] = useState<string | null>(null);
 
   const pendingRequestsList = useMemo(() => {
     return (onlinePaymentRequests || []).filter(r => r.status === 'pending');
@@ -1869,6 +1872,31 @@ export const DashboardScreen = ({ navigation }: any) => {
                           </View>
                         ) : null}
 
+                        {req.receiptImage ? (
+                          <TouchableOpacity
+                            style={styles.onlinePayViewReceiptBtn}
+                            onPress={() => {
+                              setViewingReceiptImage(req.receiptImage!);
+                              setReceiptModalVisible(true);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Image
+                              source={{ uri: req.receiptImage }}
+                              style={styles.onlinePayReceiptThumb}
+                            />
+                            <View style={{ flex: 1, paddingHorizontal: 8 }}>
+                              <Text style={styles.onlinePayViewReceiptBtnText}>
+                                📸 {isHindi ? 'पेमेंट रसीद / स्क्रीनशॉट देखें' : 'View Payment Receipt'}
+                              </Text>
+                              <Text style={{ fontSize: 10, color: '#047857', marginTop: 1 }}>
+                                {isHindi ? 'बड़ी फ़ोटो देखने के लिए यहाँ टैप करें' : 'Tap to open full preview'}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 15 }}>🔍</Text>
+                          </TouchableOpacity>
+                        ) : null}
+
                         {/* Action Buttons: Accept & Reject */}
                         <View style={styles.onlinePayReqActionRow}>
                           <TouchableOpacity
@@ -1942,6 +1970,20 @@ export const DashboardScreen = ({ navigation }: any) => {
                             <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>
                               ⚠️ {req.rejectReason}
                             </Text>
+                          ) : null}
+                          {req.receiptImage ? (
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 }}
+                              onPress={() => {
+                                setViewingReceiptImage(req.receiptImage!);
+                                setReceiptModalVisible(true);
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={{ fontSize: 11, color: '#0284c7', fontWeight: '800' }}>
+                                📸 {isHindi ? 'रसीद देखें' : 'View Receipt'}
+                              </Text>
+                            </TouchableOpacity>
                           ) : null}
                         </View>
                         <TouchableOpacity
@@ -2017,6 +2059,51 @@ export const DashboardScreen = ({ navigation }: any) => {
                 <Text style={styles.modalSaveBtnText}>{isHindi ? 'अस्वीकार करें' : 'Reject'}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Full Screen Receipt Image Preview Modal */}
+      <Modal
+        visible={receiptModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReceiptModalVisible(false)}
+      >
+        <View style={styles.receiptModalOverlay}>
+          <View style={styles.receiptModalBox}>
+            <View style={styles.receiptModalHeader}>
+              <Text style={styles.receiptModalTitle}>
+                📸 {isHindi ? 'पेमेंट स्क्रीनशॉट / रसीद' : 'Payment Screenshot'}
+              </Text>
+              <TouchableOpacity
+                style={styles.receiptModalCloseBtn}
+                onPress={() => setReceiptModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.receiptModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={{ maxHeight: 460, marginVertical: 8 }}
+              contentContainerStyle={{ alignItems: 'center', justifyContent: 'center' }}
+              showsVerticalScrollIndicator={false}
+            >
+              {viewingReceiptImage ? (
+                <Image
+                  source={{ uri: viewingReceiptImage }}
+                  style={styles.receiptFullImage}
+                  resizeMode="contain"
+                />
+              ) : null}
+            </ScrollView>
+            <TouchableOpacity
+              style={styles.receiptDoneBtn}
+              onPress={() => setReceiptModalVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.receiptDoneBtnText}>{isHindi ? 'बंद करें (Close)' : 'Close'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -3015,5 +3102,83 @@ const styles = StyleSheet.create({
   },
   onlinePayStatusTextRejected: {
     color: '#dc2626'
+  },
+
+  // Receipt Image Preview in Request Card
+  onlinePayViewReceiptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 8,
+    padding: 6,
+    marginTop: 8
+  },
+  onlinePayReceiptThumb: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: '#e2e8f0'
+  },
+  onlinePayViewReceiptBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803d'
+  },
+
+  // Full Screen Receipt Modal
+  receiptModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  receiptModalBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 420,
+    padding: 16,
+    maxHeight: '92%'
+  },
+  receiptModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  receiptModalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a'
+  },
+  receiptModalCloseBtn: {
+    padding: 4
+  },
+  receiptModalCloseText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#64748b'
+  },
+  receiptFullImage: {
+    width: 320,
+    height: 420,
+    borderRadius: 8
+  },
+  receiptDoneBtn: {
+    backgroundColor: '#0f172a',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 8
+  },
+  receiptDoneBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 13
   }
 });
