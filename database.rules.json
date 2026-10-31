@@ -15,6 +15,14 @@
         }
       }
     },
+    "payment_requests": {
+      "$supplierId": {
+        ".read": true,
+        "$requestId": {
+          ".write": "data.val() === null || (auth != null && ((auth.token.email !== null && ('supp_' + auth.token.email.replace('@dairyapp.local', '')) === $supplierId) || (auth.token.phone_number !== null && auth.token.phone_number.endsWith($supplierId.replace('supp_', ''))) || root.child('system/admins/' + auth.uid).val() === true))"
+        }
+      }
+    },
     "system": {
       "settings": {
         ".read": true,
