@@ -34,13 +34,13 @@ export const VoiceSearchButton: React.FC<VoiceSearchButtonProps> = ({
     };
   }, []);
 
-  const handleVoiceSearch = () => {
+  const handleVoiceSearch = async () => {
     if (Platform.OS !== 'web' && typeof window === 'undefined') {
       showAlert(
         lang === 'hi' ? 'वॉइस सर्च' : 'Voice Search',
         lang === 'hi'
-          ? 'वॉइस सर्च वेब ब्राउज़र (Chrome) में समर्थित है।'
-          : 'Voice search is supported in Chrome browser.'
+          ? 'वॉइस सर्च मोबाइल ऐप व Chrome ब्राउज़र में उपलब्ध है।'
+          : 'Voice search is supported in app & Chrome browser.'
       );
       return;
     }
@@ -52,8 +52,8 @@ export const VoiceSearchButton: React.FC<VoiceSearchButtonProps> = ({
       showAlert(
         lang === 'hi' ? 'वॉइस सर्च समर्थित नहीं' : 'Voice Search Not Supported',
         lang === 'hi'
-          ? 'आपके ब्राउज़र में वॉइस सर्च उपलब्ध नहीं है। कृपया Google Chrome का उपयोग करें।'
-          : 'Voice search is not supported in this browser. Please use Google Chrome.'
+          ? 'आपके डिवाइस में वॉइस सर्च समर्थित नहीं है। कृपया Google Chrome का उपयोग करें।'
+          : 'Voice search is not supported on this device. Please use Google Chrome.'
       );
       return;
     }
@@ -67,6 +67,25 @@ export const VoiceSearchButton: React.FC<VoiceSearchButtonProps> = ({
       }
       setIsListening(false);
       return;
+    }
+
+    // Proactively request Android OS microphone permission via getUserMedia
+    // This triggers the native Android system prompt: "Allow Dairy App to record audio?"
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Immediately stop the temporary stream so the mic is released for speech recognition
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err: any) {
+        console.warn('Microphone permission check:', err);
+        showAlert(
+          lang === 'hi' ? 'माइक की अनुमति (Permission)' : 'Microphone Permission',
+          lang === 'hi'
+            ? 'माइक से नाम खोजने के लिए अनुमति की आवश्यकता है।\n\nकृपया अपने फ़ोन की सेटिंग्स में जाएँ:\nApps ➔ Dairy App (या Chrome) ➔ Permissions ➔ Microphone ➔ "Allow" (अनुमति दें) चुनें।'
+            : 'Microphone permission is needed for voice search.\n\nPlease go to Phone Settings ➔ Apps ➔ Dairy App ➔ Permissions ➔ Microphone ➔ "Allow".'
+        );
+        return;
+      }
     }
 
     try {
@@ -100,10 +119,10 @@ export const VoiceSearchButton: React.FC<VoiceSearchButtonProps> = ({
         const error = event.error;
         if (error === 'not-allowed' || error === 'service-not-allowed') {
           showAlert(
-            lang === 'hi' ? 'माइक की अनुमति दें' : 'Microphone Permission Required',
+            lang === 'hi' ? 'माइक की अनुमति (Permission)' : 'Microphone Permission',
             lang === 'hi'
-              ? 'कृपया ब्राउज़र सेटिंग्स में माइक्रोफ़ोन की अनुमति (Permission) दें ताकि आप बोलकर नाम खोज सकें।'
-              : 'Please allow microphone access in browser settings to use voice search.'
+              ? 'माइक से नाम खोजने के लिए अनुमति की आवश्यकता है।\n\nकृपया अपने फ़ोन की सेटिंग्स में जाएँ:\nApps ➔ Dairy App (या Chrome) ➔ Permissions ➔ Microphone ➔ "Allow" (अनुमति दें) चुनें।'
+              : 'Microphone permission is needed for voice search.\n\nPlease go to Phone Settings ➔ Apps ➔ Dairy App ➔ Permissions ➔ Microphone ➔ "Allow".'
           );
         } else if (error !== 'no-speech' && error !== 'aborted') {
           console.warn('Speech recognition error:', error);
