@@ -25,6 +25,7 @@ import { CardSyncService } from '../../services/cardSyncService';
 import { Customer, CustomerShift, MilkType, SubSupplier } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { parseWhatsAppText, ParsedWhatsAppCustomer, extractWhatsAppGroupName } from '../../utils/whatsappParser';
+import { filterBySmartSearch } from '../../utils/searchUtils';
 
 interface PhoneContactItem {
   id: string;
@@ -1285,29 +1286,26 @@ export const CustomerListScreen = () => {
     showAlert(lang === 'hi' ? 'सफलता (Success)' : 'Success', lang === 'hi' ? msgHi : msgEn);
   };
 
-  const filteredCustomers = customers.filter(c => {
+    const shiftFilteredCustomers = customers.filter(c => {
     if (c.isDeleted) return false;
     const cShift = c.shift || 'All';
     if (shiftFilter === 'Morning' && cShift !== 'Morning' && cShift !== 'All') return false;
     if (shiftFilter === 'Evening' && cShift !== 'Evening' && cShift !== 'All') return false;
-
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      c.phone.includes(search) ||
-      (c.address && c.address.toLowerCase().includes(q)) ||
-      (c.routeGroup && c.routeGroup.toLowerCase().includes(q))
-    );
+    return true;
   });
 
-  const filteredSubSuppliers = subSuppliers.filter(
-    s =>
-      !s.isDeleted &&
-      (s.name.toLowerCase().includes(search.toLowerCase()) ||
-        s.phone.includes(search) ||
-        (s.address && s.address.toLowerCase().includes(search.toLowerCase())))
-  );
+  const filteredCustomers = filterBySmartSearch(shiftFilteredCustomers, search, c => ({
+    name: c.name,
+    phone: c.phone,
+    address: c.routeGroup ? `${c.address || ''} ${c.routeGroup}` : c.address
+  }));
+
+  const activeSubSuppliers = subSuppliers.filter(s => !s.isDeleted);
+  const filteredSubSuppliers = filterBySmartSearch(activeSubSuppliers, search, s => ({
+    name: s.name,
+    phone: s.phone,
+    address: s.address
+  }));
 
   const customerBalanceMap = useMemo(() => {
     const deliveriesMap = new Map<string, number>();

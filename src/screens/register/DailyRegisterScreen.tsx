@@ -22,6 +22,7 @@ import { WhatsAppService } from '../../services/whatsappService';
 import { MilkEntry, MilkInwardEntry, MilkType, SessionType, CustomerShift, Customer, SubSupplier } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { formatToDisplayDate, toLocalIso } from '../../utils/dateUtils';
+import { filterBySmartSearch } from '../../utils/searchUtils';
 
 export const DailyRegisterScreen = () => {
   const {
@@ -226,13 +227,11 @@ export const DailyRegisterScreen = () => {
       return true; // 'Custom' = All tab shows 100% of customers
     });
     if (searchFilter.trim()) {
-      const q = searchFilter.trim().toLowerCase();
-      list = list.filter(
-        c =>
-          c.name.toLowerCase().includes(q) ||
-          c.phone.includes(q) ||
-          (c.routeGroup && c.routeGroup.toLowerCase().includes(q))
-      );
+      return filterBySmartSearch(list, searchFilter, c => ({
+        name: c.name,
+        phone: c.phone,
+        address: c.routeGroup ? `${c.address || ''} ${c.routeGroup}` : c.address
+      }));
     }
     return list;
   }, [customers, searchFilter, activeSession]);
@@ -271,10 +270,11 @@ export const DailyRegisterScreen = () => {
   const filteredSubSuppliers = useMemo(() => {
     let list = subSuppliers.filter(s => !s.isDeleted);
     if (searchFilter.trim()) {
-      const q = searchFilter.trim().toLowerCase();
-      list = list.filter(
-        s => s.name.toLowerCase().includes(q) || s.phone.includes(q)
-      );
+      return filterBySmartSearch(list, searchFilter, s => ({
+        name: s.name,
+        phone: s.phone,
+        address: s.address
+      }));
     }
     return list;
   }, [subSuppliers, searchFilter]);

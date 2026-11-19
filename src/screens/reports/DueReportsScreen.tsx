@@ -32,6 +32,7 @@ import {
   MilkInwardEntry
 } from '../../types';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
+import { filterBySmartSearch } from '../../utils/searchUtils';
 import { formatToDisplayDate, parseToIsoDate, getTodayDisplayDate, shiftDisplayDate } from '../../utils/dateUtils';
 
 export type ReportMode = 'month' | 'custom' | 'all';
@@ -554,21 +555,19 @@ export const DueReportsScreen = () => {
 
   // Filtered by Search Query (Name/Phone/Address) and Due Status
   const filteredSummaries = useMemo(() => {
-    return allDueSummaries.filter(item => {
-      const query = searchQuery.trim().toLowerCase();
-      if (query) {
-        const matchName = item.customer.name.toLowerCase().includes(query);
-        const matchPhone = item.customer.phone.includes(query);
-        const matchAddress = item.customer.address ? item.customer.address.toLowerCase().includes(query) : false;
-        if (!matchName && !matchPhone && !matchAddress) return false;
-      }
+    let list = allDueSummaries;
+    if (dueFilter === 'dueOnly') list = list.filter(item => item.netDue > 0);
+    else if (dueFilter === 'advanceOnly') list = list.filter(item => (item.advanceBalance || 0) > 0);
+    else if (dueFilter === 'paidOnly') list = list.filter(item => item.netDue <= 0 && (!item.advanceBalance || item.advanceBalance <= 0));
 
-      if (dueFilter === 'dueOnly' && item.netDue <= 0) return false;
-      if (dueFilter === 'advanceOnly' && (!item.advanceBalance || item.advanceBalance <= 0)) return false;
-      if (dueFilter === 'paidOnly' && (item.netDue > 0 || (item.advanceBalance || 0) > 0)) return false;
-
-      return true;
-    });
+    if (searchQuery.trim()) {
+      return filterBySmartSearch(list, searchQuery, item => ({
+        name: item.customer.name,
+        phone: item.customer.phone,
+        address: item.customer.address
+      }));
+    }
+    return list;
   }, [allDueSummaries, searchQuery, dueFilter]);
 
   const totalPeriodDue = useMemo(() => {
@@ -669,20 +668,18 @@ export const DueReportsScreen = () => {
   }, [subSuppliers, milkInwardEntries, subSupplierPayments, dateRange, reportMode]);
 
   const filteredSubSummaries = useMemo(() => {
-    return allSubDueSummaries.filter(item => {
-      const query = searchQuery.trim().toLowerCase();
-      if (query) {
-        const matchName = item.subSupplier.name.toLowerCase().includes(query);
-        const matchPhone = item.subSupplier.phone.includes(query);
-        const matchAddress = item.subSupplier.address ? item.subSupplier.address.toLowerCase().includes(query) : false;
-        if (!matchName && !matchPhone && !matchAddress) return false;
-      }
+    let list = allSubDueSummaries;
+    if (dueFilter === 'dueOnly') list = list.filter(item => item.netPayable > 0);
+    else if (dueFilter === 'paidOnly') list = list.filter(item => item.netPayable <= 0);
 
-      if (dueFilter === 'dueOnly' && item.netPayable <= 0) return false;
-      if (dueFilter === 'paidOnly' && item.netPayable > 0) return false;
-
-      return true;
-    });
+    if (searchQuery.trim()) {
+      return filterBySmartSearch(list, searchQuery, item => ({
+        name: item.subSupplier.name,
+        phone: item.subSupplier.phone,
+        address: item.subSupplier.address
+      }));
+    }
+    return list;
   }, [allSubDueSummaries, searchQuery, dueFilter]);
 
   const totalPeriodSubPayable = useMemo(() => {
