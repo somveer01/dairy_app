@@ -33,7 +33,6 @@ import {
 } from '../../types';
 import { showAlert, confirmAction } from '../../utils/alertUtils';
 import { filterBySmartSearch } from '../../utils/searchUtils';
-import { VoiceSearchButton } from '../../components/VoiceSearchButton';
 import { formatToDisplayDate, parseToIsoDate, getTodayDisplayDate, shiftDisplayDate } from '../../utils/dateUtils';
 
 export type ReportMode = 'month' | 'custom' | 'all';
