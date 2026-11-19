@@ -23,6 +23,7 @@ import { MilkEntry, MilkInwardEntry, MilkType, SessionType, CustomerShift, Custo
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { formatToDisplayDate, toLocalIso } from '../../utils/dateUtils';
 import { filterBySmartSearch } from '../../utils/searchUtils';
+import { VoiceSearchButton } from '../../components/VoiceSearchButton';
 
 export const DailyRegisterScreen = () => {
   const {

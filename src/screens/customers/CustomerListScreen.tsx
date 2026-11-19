@@ -26,6 +26,7 @@ import { Customer, CustomerShift, MilkType, SubSupplier } from '../../types';
 import { confirmAction, showAlert } from '../../utils/alertUtils';
 import { parseWhatsAppText, ParsedWhatsAppCustomer, extractWhatsAppGroupName } from '../../utils/whatsappParser';
 import { filterBySmartSearch } from '../../utils/searchUtils';
+import { VoiceSearchButton } from '../../components/VoiceSearchButton';
 
 interface PhoneContactItem {
   id: string;
@@ -1419,6 +1420,7 @@ export const CustomerListScreen = () => {
             value={search}
             onChangeText={setSearch}
           />
+          <VoiceSearchButton onResult={setSearch} lang={lang} size={36} />
         </View>
 
         {/* Action Buttons Row */}
@@ -2650,9 +2652,13 @@ const styles = StyleSheet.create({
     fontWeight: '700'
   },
   searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 8
   },
   searchInput: {
+    flex: 1,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#cbd5e1',
